@@ -5,12 +5,31 @@
 #
 # On the VPS:
 #   cp /opt/nexus/caddy/nexus.caddy deploy/caddy-optional/nexus.caddy
-#   docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d
+#   docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d --force-recreate caddy
 #
 # DNS: DuckDNS host `0nexus` → 161.97.116.30
+#
+# Do not gzip text/event-stream (encode's default text/* match includes it).
+# Drop Alt-Svc so Chrome does not upgrade this host to HTTP/3 (SSE + h3).
 
 0nexus.duckdns.org {
-	encode gzip
+	header {
+		-Alt-Svc
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	encode {
+		gzip
+		match {
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/javascript*
+			header Content-Type text/plain*
+			header Content-Type application/javascript*
+			header Content-Type application/json*
+			header Content-Type image/svg+xml*
+		}
+	}
 
 	handle /api/* {
 		reverse_proxy host.docker.internal:8080 {

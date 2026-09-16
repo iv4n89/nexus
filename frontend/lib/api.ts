@@ -1,3 +1,17 @@
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+export function isAuthError(error: unknown): boolean {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403)
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const csrf = document.cookie
     .split('; ')
@@ -15,7 +29,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.error?.code ?? res.statusText)
+    throw new ApiError(body?.error?.code ?? res.statusText, res.status)
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>

@@ -45,7 +45,7 @@ export function useActivityEvents(limit: number) {
   }, [query.data, limit])
 
   useEventSource(
-    '/api/events/stream',
+    query.isSuccess ? '/api/events/stream' : null,
     (data) => {
       try {
         const event = JSON.parse(data) as ActivityEvent

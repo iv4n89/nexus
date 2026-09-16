@@ -20,6 +20,7 @@ export function useEventSource(
     }
     source.addEventListener(eventName, handler)
     return () => {
+      source.removeEventListener(eventName, handler)
       source.close()
     }
   }, [url, eventName])
