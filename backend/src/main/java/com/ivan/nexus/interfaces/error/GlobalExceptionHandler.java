@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -24,6 +25,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied() {
         return envelope(HttpStatus.FORBIDDEN, NexusErrorCode.FORBIDDEN.name(), "Forbidden");
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials() {
+        return envelope(HttpStatus.UNAUTHORIZED, NexusErrorCode.AUTH_INVALID.name(), "Invalid credentials");
     }
 
     @ExceptionHandler(Exception.class)
