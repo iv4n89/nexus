@@ -5,8 +5,14 @@ import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.ContainerConfig;
+import com.github.dockerjava.api.model.ContainerNetwork;
 import com.github.dockerjava.api.model.ContainerPort;
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.NetworkSettings;
+import com.github.dockerjava.api.model.Ports;
+import com.ivan.nexus.application.project.ContainerInspect;
 import com.ivan.nexus.application.project.ContainerInventory;
+import com.ivan.nexus.application.project.PublishedPort;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -17,6 +23,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,7 +63,20 @@ public class DockerContainerInventory implements ContainerInventory {
     @Override
     public Optional<ContainerSnapshot> findById(String containerId) {
         try {
-            return Optional.of(toSnapshot(dockerClient.inspectContainerCmd(containerId).exec()));
+            InspectContainerResponse inspect = dockerClient.inspectContainerCmd(containerId)
+                    .exec();
+            return Optional.of(toSnapshot(inspect));
+        } catch (NotFoundException ex) {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public Optional<ContainerInspect> inspect(String containerId) {
+        try {
+            InspectContainerResponse inspect = dockerClient.inspectContainerCmd(containerId)
+                    .exec();
+            return Optional.of(toInspect(inspect));
         } catch (NotFoundException ex) {
             return Optional.empty();
         }
@@ -123,6 +143,92 @@ public class DockerContainerInventory implements ContainerInventory {
             mapped.add(new ContainerSnapshot.PortMapping(port.getPublicPort(), port.getPrivatePort()));
         }
         return mapped;
+    }
+
+    private static ContainerInspect toInspect(InspectContainerResponse inspect) {
+        ContainerConfig config = inspect.getConfig();
+        Map<String, String> labels = config != null && config.getLabels() != null ? config.getLabels() : Map.of();
+        return new ContainerInspect(
+                inspect.getId(),
+                stripLeadingSlash(inspect.getName()),
+                config != null ? config.getImage() : null,
+                labels,
+                parseEnv(config != null ? config.getEnv() : null),
+                mapPublishedPorts(inspect.getNetworkSettings()),
+                mapNetworkIps(inspect.getNetworkSettings()));
+    }
+
+    private static Map<String, String> parseEnv(String[] env) {
+        if (env == null || env.length == 0) {
+            return Map.of();
+        }
+        Map<String, String> values = new LinkedHashMap<>();
+        for (String entry : env) {
+            if (entry == null) {
+                continue;
+            }
+            int eq = entry.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            values.put(entry.substring(0, eq), entry.substring(eq + 1));
+        }
+        return values;
+    }
+
+    private static List<PublishedPort> mapPublishedPorts(NetworkSettings settings) {
+        if (settings == null || settings.getPorts() == null || settings.getPorts().getBindings() == null) {
+            return List.of();
+        }
+        List<PublishedPort> mapped = new ArrayList<>();
+        for (Map.Entry<ExposedPort, Ports.Binding[]> entry : settings.getPorts().getBindings().entrySet()) {
+            if (entry.getKey() == null) {
+                continue;
+            }
+            int privatePort = entry.getKey().getPort();
+            Ports.Binding[] bindings = entry.getValue();
+            if (bindings == null || bindings.length == 0) {
+                mapped.add(new PublishedPort(privatePort, null, null));
+                continue;
+            }
+            for (Ports.Binding binding : bindings) {
+                if (binding == null) {
+                    mapped.add(new PublishedPort(privatePort, null, null));
+                    continue;
+                }
+                mapped.add(new PublishedPort(privatePort, parseHostPort(binding.getHostPortSpec()), binding.getHostIp()));
+            }
+        }
+        return mapped;
+    }
+
+    private static Integer parseHostPort(String spec) {
+        if (spec == null || spec.isBlank()) {
+            return null;
+        }
+        String first = spec.contains("-") ? spec.substring(0, spec.indexOf('-')) : spec;
+        try {
+            return Integer.valueOf(first);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private static List<String> mapNetworkIps(NetworkSettings settings) {
+        if (settings == null || settings.getNetworks() == null) {
+            return List.of();
+        }
+        List<String> ips = new ArrayList<>();
+        for (ContainerNetwork network : settings.getNetworks().values()) {
+            if (network == null) {
+                continue;
+            }
+            String ip = network.getIpAddress();
+            if (ip != null && !ip.isBlank()) {
+                ips.add(ip);
+            }
+        }
+        return ips;
     }
 
     private static String firstName(String[] names) {

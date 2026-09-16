@@ -8,7 +8,14 @@ import com.github.dockerjava.api.command.ListContainersCmd;
 import com.github.dockerjava.api.command.PingCmd;
 import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Container;
+import com.github.dockerjava.api.model.ContainerConfig;
+import com.github.dockerjava.api.model.ContainerNetwork;
 import com.github.dockerjava.api.model.ContainerPort;
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.NetworkSettings;
+import com.github.dockerjava.api.model.Ports;
+import com.ivan.nexus.application.project.ContainerInspect;
+import com.ivan.nexus.application.project.PublishedPort;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -100,6 +107,36 @@ class DockerContainerInventoryTest {
         assertThat(snapshot.restartCount()).isZero();
         assertThat(snapshot.health()).isNull();
         assertThat(snapshot.startedAt()).isNull();
+    }
+
+    @Test
+    void inspectMapsEnvAndPublishedPortsWithoutPuttingEnvOnSnapshot() {
+        InspectContainerResponse inspect = mock(InspectContainerResponse.class);
+        ContainerConfig config = mock(ContainerConfig.class);
+        NetworkSettings networks = mock(NetworkSettings.class);
+        Ports ports = new Ports();
+        ports.bind(ExposedPort.tcp(5432), Ports.Binding.bindPort(15432));
+        ContainerNetwork bridge = mock(ContainerNetwork.class);
+        when(inspect.getId()).thenReturn(CONTAINER_ID);
+        when(inspect.getName()).thenReturn("/lab-db-1");
+        when(inspect.getConfig()).thenReturn(config);
+        when(config.getImage()).thenReturn("postgres:16-alpine");
+        when(config.getLabels()).thenReturn(Map.of("nexus.project", "lab"));
+        when(config.getEnv()).thenReturn(new String[]{"POSTGRES_PASSWORD=s3cret", "POSTGRES_DB=lab"});
+        when(inspect.getNetworkSettings()).thenReturn(networks);
+        when(networks.getPorts()).thenReturn(ports);
+        when(networks.getNetworks()).thenReturn(Map.of("bridge", bridge));
+        when(bridge.getIpAddress()).thenReturn("172.18.0.2");
+        when(dockerClient.inspectContainerCmd(CONTAINER_ID)).thenReturn(inspectContainerCmd);
+        when(inspectContainerCmd.exec()).thenReturn(inspect);
+
+        ContainerInspect mapped = inventory.inspect(CONTAINER_ID).orElseThrow();
+
+        assertThat(mapped.env()).containsEntry("POSTGRES_PASSWORD", "s3cret");
+        assertThat(mapped.publishedPorts()).contains(new PublishedPort(5432, 15432, null));
+        assertThat(mapped.networkIps()).containsExactly("172.18.0.2");
+        assertThat(Arrays.stream(ContainerSnapshot.class.getRecordComponents()).map(RecordComponent::getName))
+                .doesNotContain("env");
     }
 
     @Test

@@ -9,4 +9,8 @@ public interface ContainerInventory {
     List<ContainerSnapshot> listAll();
 
     Optional<ContainerSnapshot> findById(String containerId);
+
+    default Optional<ContainerInspect> inspect(String containerId) {
+        return Optional.empty();
+    }
 }

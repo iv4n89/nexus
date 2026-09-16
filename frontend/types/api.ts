@@ -146,3 +146,41 @@ export type ActivityEvent = {
   message: string
   metadata: Record<string, unknown>
 }
+
+export type DatabaseInstance = {
+  id: string
+  service: string
+  engine: 'POSTGRES' | 'MYSQL' | 'MONGO'
+  status: 'READY' | 'UNREACHABLE'
+  defaultDatabase: string
+}
+
+export type DatabaseTable = {
+  name: string
+  type: 'table' | 'view' | string
+  primaryKey: string[]
+}
+
+export type DatabaseSchema = {
+  name: string
+  tables: DatabaseTable[]
+}
+
+export type MongoDatabase = {
+  name: string
+  collections: string[]
+}
+
+export type DatabaseMetadata = {
+  engine: 'POSTGRES' | 'MYSQL' | 'MONGO'
+  schemas?: DatabaseSchema[]
+  databases?: MongoDatabase[]
+}
+
+export type QueryResult = {
+  columns: string[]
+  rows: unknown[][]
+  truncated: boolean
+  durationMs: number
+  rowCount: number
+}

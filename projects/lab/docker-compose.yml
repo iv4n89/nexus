@@ -14,3 +14,31 @@ services:
     labels:
       nexus.project: "lab"
       nexus.service: "web"
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lab
+      POSTGRES_PASSWORD: lab
+      POSTGRES_DB: lab
+    ports:
+      - "15432:5432"
+    labels:
+      nexus.project: lab
+      nexus.service: db
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: lab
+      MYSQL_DATABASE: lab
+    ports:
+      - "13306:3306"
+    labels:
+      nexus.project: lab
+      nexus.service: mysql
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    labels:
+      nexus.project: lab
+      nexus.service: mongo

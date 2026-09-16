@@ -34,7 +34,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
       </header>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">{children}</main>
+      <main className={`mx-auto w-full flex-1 px-6 py-10 ${pathname.includes('/database') ? 'max-w-6xl' : 'max-w-3xl'}`}>
+        {children}
+      </main>
     </div>
   )
 }
