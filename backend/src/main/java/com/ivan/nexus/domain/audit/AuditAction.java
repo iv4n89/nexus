@@ -6,5 +6,7 @@ public enum AuditAction {
     ROLLBACK,
     SERVICE_RESTART,
     CONFIG_CHANGE,
-    ALERT_ACKNOWLEDGE
+    ALERT_ACKNOWLEDGE,
+    DB_QUERY,
+    DB_CELL_EDIT
 }

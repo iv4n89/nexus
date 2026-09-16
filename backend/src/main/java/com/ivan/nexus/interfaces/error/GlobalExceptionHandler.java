@@ -45,11 +45,13 @@ public class GlobalExceptionHandler {
 
     private static HttpStatus statusFor(NexusErrorCode code) {
         return switch (code) {
-            case PROJECT_NOT_FOUND, CONTAINER_NOT_FOUND, DEPLOYMENT_NOT_FOUND, ALERT_NOT_FOUND, MANIFEST_NOT_FOUND
-                    -> HttpStatus.NOT_FOUND;
-            case DEPLOYMENT_IN_PROGRESS, INVALID_TRANSITION -> HttpStatus.CONFLICT;
-            case MANIFEST_INVALID, OPERATION_NOT_ALLOWED, AUTH_INVALID -> HttpStatus.BAD_REQUEST;
-            case FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case PROJECT_NOT_FOUND, CONTAINER_NOT_FOUND, DEPLOYMENT_NOT_FOUND, ALERT_NOT_FOUND, MANIFEST_NOT_FOUND,
+                    DATABASE_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case DEPLOYMENT_IN_PROGRESS, INVALID_TRANSITION, CONFIRMATION_REQUIRED -> HttpStatus.CONFLICT;
+            case MANIFEST_INVALID, OPERATION_NOT_ALLOWED, AUTH_INVALID, QUERY_FAILED -> HttpStatus.BAD_REQUEST;
+            case FORBIDDEN, QUERY_NOT_ALLOWED -> HttpStatus.FORBIDDEN;
+            case DATABASE_UNREACHABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case QUERY_TIMEOUT -> HttpStatus.GATEWAY_TIMEOUT;
         };
     }
 }

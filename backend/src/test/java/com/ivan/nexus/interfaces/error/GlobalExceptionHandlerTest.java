@@ -55,6 +55,20 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void databaseNotFoundReturns404() throws Exception {
+        mockMvc.perform(get("/test/database-not-found"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("DATABASE_NOT_FOUND"));
+    }
+
+    @Test
+    void queryTimeoutReturns504() throws Exception {
+        mockMvc.perform(get("/test/query-timeout"))
+                .andExpect(status().isGatewayTimeout())
+                .andExpect(jsonPath("$.error.code").value("QUERY_TIMEOUT"));
+    }
+
+    @Test
     void unexpectedExceptionReturns500InternalErrorWithoutLeakage() throws Exception {
         String body = mockMvc.perform(get("/test/boom"))
                 .andExpect(status().isInternalServerError())
@@ -86,6 +100,16 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/boom")
         void boom() {
             throw new IllegalStateException("secret failure details");
+        }
+
+        @GetMapping("/test/database-not-found")
+        void databaseNotFound() {
+            throw new DomainException(NexusErrorCode.DATABASE_NOT_FOUND, "Database not found");
+        }
+
+        @GetMapping("/test/query-timeout")
+        void queryTimeout() {
+            throw new DomainException(NexusErrorCode.QUERY_TIMEOUT, "Query timed out");
         }
     }
 }
