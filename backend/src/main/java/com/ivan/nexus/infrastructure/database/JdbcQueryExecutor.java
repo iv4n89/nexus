@@ -7,6 +7,8 @@ import com.ivan.nexus.domain.database.SqlIdentifierQuoter;
 import com.ivan.nexus.domain.database.StatementClass;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.sql.Connection;
@@ -28,8 +30,11 @@ import java.util.Set;
 
 @Component
 public class JdbcQueryExecutor {
+    private static final Logger log = LoggerFactory.getLogger(JdbcQueryExecutor.class);
     private static final int CONNECT_TIMEOUT_SECONDS = 5;
+    private static final int SOCKET_TIMEOUT_SECONDS = 15;
     private static final int QUERY_TIMEOUT_SECONDS = 10;
+    static final int MAX_CELL_CHARS = 8192;
 
     public QueryResult query(
             DatabaseEngine engine,
@@ -43,6 +48,7 @@ public class JdbcQueryExecutor {
         try (Connection conn = DriverManager.getConnection(url, props);
              Statement stmt = conn.createStatement()) {
             stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+            stmt.setMaxFieldSize(MAX_CELL_CHARS);
             if (statementClass == StatementClass.READ) {
                 stmt.setMaxRows(limit + 1);
                 try (ResultSet rs = stmt.executeQuery(sql)) {
@@ -68,7 +74,12 @@ public class JdbcQueryExecutor {
         } catch (DomainException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new DomainException(NexusErrorCode.DATABASE_UNREACHABLE, "Cannot connect");
+            log.warn("Database query failed: {}", ex.toString());
+            throw new DomainException(
+                    NexusErrorCode.QUERY_FAILED,
+                    SecretSanitizer.strip(
+                            target.password(),
+                            ex.getMessage() == null ? "Query failed" : ex.getMessage()));
         }
     }
 
@@ -227,11 +238,27 @@ public class JdbcQueryExecutor {
         return new QueryResult(columns, rows, truncated, durationMs, rows.size());
     }
 
-    private static Object cell(Object value) {
-        if (value == null || value instanceof Number || value instanceof Boolean || value instanceof String) {
+    static Object cell(Object value) {
+        if (value == null || value instanceof Boolean) {
             return value;
         }
-        return value.toString();
+        if (value instanceof Number number) {
+            if (number instanceof Double d && (d.isNaN() || d.isInfinite())) {
+                return d.toString();
+            }
+            if (number instanceof Float f && (f.isNaN() || f.isInfinite())) {
+                return f.toString();
+            }
+            return value;
+        }
+        if (value instanceof byte[] bytes) {
+            return "<binary " + bytes.length + " bytes>";
+        }
+        String text = value instanceof String s ? s : String.valueOf(value);
+        if (text.length() < MAX_CELL_CHARS) {
+            return text;
+        }
+        return text.substring(0, MAX_CELL_CHARS - 1) + "…";
     }
 
     private static Properties connectionProperties(DatabaseEngine engine, ResolvedTarget target) {
@@ -243,6 +270,7 @@ public class JdbcQueryExecutor {
             props.setProperty("password", target.password());
         }
         props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SECONDS));
+        props.setProperty("socketTimeout", String.valueOf(SOCKET_TIMEOUT_SECONDS));
         if (engine == DatabaseEngine.POSTGRES) {
             props.setProperty("options", "-c statement_timeout=10000");
         }

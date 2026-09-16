@@ -150,7 +150,13 @@ export function DatabasePage({ projectId }: { projectId: string }) {
               </button>
             </div>
             {tab === 'browse' ? (
-              preview.data ? (
+              selection == null ? (
+                <p className="text-sm text-[#888]">Select a table or collection</p>
+              ) : preview.isPending ? (
+                <p className="text-sm text-[#888]">Loading…</p>
+              ) : preview.isError ? (
+                <p className="text-sm text-[#ff4d4f]">{preview.error.message}</p>
+              ) : preview.data ? (
                 <>
                   {preview.data.truncated ? (
                     <p className="text-sm text-[#888]">Result truncated at {preview.data.rowCount} rows</p>
