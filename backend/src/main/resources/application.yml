@@ -22,3 +22,5 @@ management:
 nexus:
   docker:
     host: ${DOCKER_HOST:unix:///var/run/docker.sock}
+  manifest:
+    allowed-root: ${NEXUS_MANIFEST_ROOT:/home/ibetanzos/dev/nexus_project/projects}
