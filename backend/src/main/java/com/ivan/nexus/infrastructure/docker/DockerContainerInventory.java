@@ -1,0 +1,164 @@
+package com.ivan.nexus.infrastructure.docker;
+
+import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.command.InspectContainerResponse;
+import com.github.dockerjava.api.exception.NotFoundException;
+import com.github.dockerjava.api.model.Container;
+import com.github.dockerjava.api.model.ContainerConfig;
+import com.github.dockerjava.api.model.ContainerPort;
+import com.ivan.nexus.application.project.ContainerInventory;
+import com.ivan.nexus.domain.container.ContainerSnapshot;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@Component
+public class DockerContainerInventory implements ContainerInventory {
+    private static final Logger log = LoggerFactory.getLogger(DockerContainerInventory.class);
+
+    private final DockerClient dockerClient;
+
+    public DockerContainerInventory(DockerClient dockerClient) {
+        this.dockerClient = dockerClient;
+    }
+
+    @PostConstruct
+    void ping() {
+        try {
+            dockerClient.pingCmd().exec();
+        } catch (Exception ex) {
+            log.error("Docker Engine ping failed; inventory will be unavailable until the daemon is reachable", ex);
+        }
+    }
+
+    @Override
+    public List<ContainerSnapshot> listAll() {
+        List<Container> containers = dockerClient.listContainersCmd().withShowAll(true).exec();
+        if (containers == null || containers.isEmpty()) {
+            return List.of();
+        }
+        List<ContainerSnapshot> snapshots = new ArrayList<>(containers.size());
+        for (Container container : containers) {
+            snapshots.add(toSnapshot(container));
+        }
+        return List.copyOf(snapshots);
+    }
+
+    @Override
+    public Optional<ContainerSnapshot> findById(String containerId) {
+        try {
+            return Optional.of(toSnapshot(dockerClient.inspectContainerCmd(containerId).exec()));
+        } catch (NotFoundException ex) {
+            return Optional.empty();
+        }
+    }
+
+    private ContainerSnapshot toSnapshot(Container listed) {
+        InspectContainerResponse inspect = null;
+        try {
+            inspect = dockerClient.inspectContainerCmd(listed.getId()).exec();
+        } catch (Exception ex) {
+            log.warn("Failed to inspect container {}; using list data only", listed.getId(), ex);
+        }
+        return mapListed(listed, inspect);
+    }
+
+    private static ContainerSnapshot mapListed(Container listed, InspectContainerResponse inspect) {
+        InspectContainerResponse.ContainerState state = inspect != null ? inspect.getState() : null;
+        Instant created = listed.getCreated() != null
+                ? Instant.ofEpochSecond(listed.getCreated())
+                : parseInstant(inspect != null ? inspect.getCreated() : null);
+        int restartCount = inspect != null && inspect.getRestartCount() != null ? inspect.getRestartCount() : 0;
+        return new ContainerSnapshot(
+                listed.getId(),
+                firstName(listed.getNames()),
+                listed.getImage(),
+                listed.getStatus(),
+                listed.getState(),
+                healthStatus(state),
+                created,
+                listed.getLabels(),
+                mapPorts(listed.getPorts()),
+                restartCount,
+                state != null ? parseInstant(state.getStartedAt()) : null);
+    }
+
+    private static ContainerSnapshot toSnapshot(InspectContainerResponse inspect) {
+        ContainerConfig config = inspect.getConfig();
+        InspectContainerResponse.ContainerState state = inspect.getState();
+        String status = state != null ? state.getStatus() : null;
+        Map<String, String> labels = config != null ? config.getLabels() : Map.of();
+        return new ContainerSnapshot(
+                inspect.getId(),
+                stripLeadingSlash(inspect.getName()),
+                config != null ? config.getImage() : null,
+                status,
+                status,
+                healthStatus(state),
+                parseInstant(inspect.getCreated()),
+                labels,
+                List.of(),
+                inspect.getRestartCount() != null ? inspect.getRestartCount() : 0,
+                state != null ? parseInstant(state.getStartedAt()) : null);
+    }
+
+    private static List<ContainerSnapshot.PortMapping> mapPorts(ContainerPort[] ports) {
+        if (ports == null || ports.length == 0) {
+            return List.of();
+        }
+        List<ContainerSnapshot.PortMapping> mapped = new ArrayList<>();
+        for (ContainerPort port : ports) {
+            if (port == null || port.getPrivatePort() == null) {
+                continue;
+            }
+            mapped.add(new ContainerSnapshot.PortMapping(port.getPublicPort(), port.getPrivatePort()));
+        }
+        return mapped;
+    }
+
+    private static String firstName(String[] names) {
+        if (names == null || names.length == 0) {
+            return "";
+        }
+        return stripLeadingSlash(names[0]);
+    }
+
+    private static String stripLeadingSlash(String name) {
+        if (name != null && name.startsWith("/")) {
+            return name.substring(1);
+        }
+        return name == null ? "" : name;
+    }
+
+    private static String healthStatus(InspectContainerResponse.ContainerState state) {
+        if (state == null || state.getHealth() == null) {
+            return null;
+        }
+        return state.getHealth().getStatus();
+    }
+
+    private static Instant parseInstant(String value) {
+        if (value == null || value.isBlank() || value.startsWith("0001-01-01")) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException ignored) {
+            try {
+                return OffsetDateTime.parse(value).toInstant();
+            } catch (DateTimeParseException ex) {
+                log.warn("Unable to parse Docker timestamp '{}'", value);
+                return null;
+            }
+        }
+    }
+}
