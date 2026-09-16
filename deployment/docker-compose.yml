@@ -7,8 +7,10 @@
 # Path identity: host /srv/projects is bind-mounted at the same path so
 # nexus.yml workingDirectory values match ProcessBuilder cwd.
 # Backend uses host networking so the API can reach published project
-# database ports on 127.0.0.1. Public HTTP is the edge nginx on the VPS
-# (ava-assistant), vhost 0nexus.duckdns.org.
+# database ports on 127.0.0.1. Public HTTP/TLS is Ava's Caddy
+# (ava-assistant.duckdns.org vs 0nexus.duckdns.org). Caddy runs in Docker
+# and proxies to host.docker.internal:3000/:8080, so those ports bind on
+# the host (not 127.0.0.1-only). Keep 80/443 as the only public entry.
 #
 # VPS deploys pull GHCR images and must use `docker compose up --no-build`.
 # Local: `docker compose --env-file .env up -d --build`.
@@ -38,7 +40,6 @@ services:
     network_mode: host
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      SERVER_ADDRESS: "127.0.0.1"
       DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/nexus
       DATABASE_USERNAME: nexus
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-nexus}
@@ -86,7 +87,7 @@ services:
       start_period: 20s
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
 
 volumes:
   nexus_pg:

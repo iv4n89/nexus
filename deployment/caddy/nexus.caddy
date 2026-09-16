@@ -1,0 +1,31 @@
+# Same Caddy that terminates TLS for ava-assistant.duckdns.org.
+# Caddy is in Docker: proxy to host.docker.internal (not 127.0.0.1) so it
+# reaches Nexus published on the VPS. Ava's Caddy service needs
+# extra_hosts: ["host.docker.internal:host-gateway"] if it does not already.
+#
+# On the VPS:
+#   cp /opt/nexus/caddy/nexus.caddy deploy/caddy-optional/nexus.caddy
+#   docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d
+#
+# DNS: DuckDNS host `0nexus` → 161.97.116.30
+
+0nexus.duckdns.org {
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy host.docker.internal:8080 {
+			flush_interval -1
+			transport http {
+				read_timeout 3600s
+			}
+		}
+	}
+
+	handle /actuator/health {
+		reverse_proxy host.docker.internal:8080
+	}
+
+	handle {
+		reverse_proxy host.docker.internal:3000
+	}
+}

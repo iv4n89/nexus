@@ -87,14 +87,14 @@ jobs:
           install -m 600 /dev/null "${KEY}"
           printf '%s\n' "${NEXUS_SSH_PRIVATE_KEY}" > "${KEY}"
           SSH_OPTS=(-i "${KEY}" -o IdentitiesOnly=yes -o UserKnownHostsFile="${GITHUB_WORKSPACE}/deployment/known_hosts")
-          ssh "${SSH_OPTS[@]}" "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}" "mkdir -p '${NEXUS_REMOTE_DIR}/nginx'"
+          ssh "${SSH_OPTS[@]}" "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}" "mkdir -p '${NEXUS_REMOTE_DIR}/caddy'"
           scp "${SSH_OPTS[@]}" \
             deployment/docker-compose.yml \
             deployment/remote-deploy.sh \
             "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}:${NEXUS_REMOTE_DIR}/"
           scp "${SSH_OPTS[@]}" \
-            deployment/nginx/0nexus.duckdns.org.conf \
-            "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}:${NEXUS_REMOTE_DIR}/nginx/0nexus.duckdns.org.conf"
+            deployment/caddy/nexus.caddy \
+            "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}:${NEXUS_REMOTE_DIR}/caddy/nexus.caddy"
           ssh "${SSH_OPTS[@]}" "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}" "chmod 700 '${NEXUS_REMOTE_DIR}' '${NEXUS_REMOTE_DIR}/remote-deploy.sh'"
           {
             printf 'GHCR_USER=%s\n' "${GHCR_USER}"
