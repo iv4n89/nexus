@@ -87,6 +87,12 @@ dump_backend_diagnostics
 docker compose --env-file .env --env-file .env.runtime pull
 docker compose --env-file .env --env-file .env.runtime up -d --no-build --remove-orphans --wait
 
+echo "Removing leftover nexus nginx (Ava Caddy owns :80/:443)"
+docker ps -aq \
+  --filter label=com.docker.compose.project=nexus \
+  --filter label=com.docker.compose.service=nginx \
+  | xargs -r docker rm -f || true
+
 # Caddy (Docker) reaches Next via docker-proxy :3000, which bypasses UFW.
 # Host-networked Spring on :8080 does not — allow Docker bridges only.
 allow_docker_to_host_api() {
