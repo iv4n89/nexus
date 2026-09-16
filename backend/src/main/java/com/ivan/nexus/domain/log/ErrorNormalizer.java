@@ -15,7 +15,7 @@ public final class ErrorNormalizer {
     private static final Pattern JSON_INFO_LEVEL = Pattern.compile("\"level\"\\s*:\\s*\"info\"", Pattern.CASE_INSENSITIVE);
     private static final Pattern BIND_ADDRESS_IN_USE = Pattern.compile("bind\\(\\) to .* failed \\(98: Address in use\\)");
     private static final Pattern INFRA_NOISE = Pattern.compile(
-            "MongoSocketOpenException|AsyncRequestNotUsableException|^\\s*Caused by: java\\.net\\.ConnectException: Connection refused\\s*$");
+            "MongoSocketOpenException|AsyncRequestNotUsableException|ResponseBodyEmitter has already completed|^\\s*Caused by: java\\.net\\.ConnectException: Connection refused\\s*$");
     private static final Pattern ISO_TIMESTAMP = Pattern.compile(
             "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?");
     private static final Pattern UUID = Pattern.compile(

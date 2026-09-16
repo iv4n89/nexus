@@ -10,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -66,35 +65,25 @@ public class ActivityHub {
     }
 
     private void sendActivity(SseEmitter emitter, String json) {
-        synchronized (emitter) {
-            try {
-                SseEmitter.SseEventBuilder event = SseEmitter.event();
-                event.name("activity");
-                event.data(json);
-                emitter.send(event);
-            } catch (IOException | IllegalStateException ex) {
-                drop(emitter);
-            }
+        SseEmitter.SseEventBuilder event = SseEmitter.event();
+        event.name("activity");
+        event.data(json);
+        if (!SseEmitters.send(emitter, event)) {
+            emitters.remove(emitter);
         }
     }
 
     private void sendHeartbeat(SseEmitter emitter) {
-        synchronized (emitter) {
-            try {
-                SseEmitter.SseEventBuilder ping = SseEmitter.event();
-                ping.comment("ping");
-                emitter.send(ping);
-            } catch (IOException | IllegalStateException ex) {
-                drop(emitter);
-            }
+        SseEmitter.SseEventBuilder ping = SseEmitter.event();
+        ping.comment("ping");
+        if (!SseEmitters.send(emitter, ping)) {
+            emitters.remove(emitter);
         }
     }
 
     private void drop(SseEmitter emitter) {
         emitters.remove(emitter);
-        synchronized (emitter) {
-            emitter.complete();
-        }
+        SseEmitters.complete(emitter);
     }
 
     @PreDestroy

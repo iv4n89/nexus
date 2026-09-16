@@ -84,5 +84,8 @@ class ErrorNormalizerTest {
         assertThat(ErrorNormalizer.normalize(
                 "Caused by: java.net.ConnectException: Connection refused"))
                 .isEmpty();
+        assertThat(ErrorNormalizer.normalize(
+                "java.lang.IllegalStateException: ResponseBodyEmitter has already completed"))
+                .isEmpty();
     }
 }

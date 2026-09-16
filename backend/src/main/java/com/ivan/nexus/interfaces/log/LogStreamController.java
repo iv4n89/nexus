@@ -4,6 +4,7 @@ import com.ivan.nexus.application.log.LogProvider;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
+import com.ivan.nexus.infrastructure.sse.SseEmitters;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -107,35 +107,19 @@ public class LogStreamController {
     }
 
     private static void sendLog(SseEmitter emitter, String line) {
-        synchronized (emitter) {
-            try {
-                emitter.send(SseEmitter.event().name("log").data(line));
-            } catch (IOException ex) {
-                complete(emitter);
-            }
-        }
+        SseEmitters.send(emitter, SseEmitter.event().name("log").data(line));
     }
 
     private static void sendHeartbeat(SseEmitter emitter) {
-        synchronized (emitter) {
-            try {
-                emitter.send(SseEmitter.event().comment("ping"));
-            } catch (IOException ex) {
-                complete(emitter);
-            }
-        }
+        SseEmitters.send(emitter, SseEmitter.event().comment("ping"));
     }
 
     private static void complete(SseEmitter emitter) {
-        synchronized (emitter) {
-            emitter.complete();
-        }
+        SseEmitters.complete(emitter);
     }
 
     private static void completeWithError(SseEmitter emitter, Exception ex) {
-        synchronized (emitter) {
-            emitter.completeWithError(ex);
-        }
+        SseEmitters.completeWithError(emitter, ex);
     }
 
     private static void closeQuietly(String containerId, AutoCloseable handle) {

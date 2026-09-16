@@ -91,6 +91,12 @@ class GlobalExceptionHandlerTest {
                 .andExpect(status().isNoContent());
     }
 
+    @Test
+    void completedSseEmitterDoesNotReturnInternalErrorEnvelope() throws Exception {
+        mockMvc.perform(get("/test/sse-already-completed"))
+                .andExpect(status().isNoContent());
+    }
+
     @RestController
     static class ErrorFixtureController {
         @GetMapping("/test/not-found")
@@ -121,6 +127,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/broken-pipe")
         void brokenPipe() throws Exception {
             throw new java.io.IOException("Broken pipe");
+        }
+
+        @GetMapping("/test/sse-already-completed")
+        void sseAlreadyCompleted() {
+            throw new IllegalStateException("ResponseBodyEmitter has already completed");
         }
     }
 }

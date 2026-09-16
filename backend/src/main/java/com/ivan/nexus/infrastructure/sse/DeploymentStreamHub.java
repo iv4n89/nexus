@@ -8,7 +8,6 @@ import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaReposit
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -75,19 +74,11 @@ public class DeploymentStreamHub {
     }
 
     private static void send(SseEmitter emitter, String line) {
-        synchronized (emitter) {
-            try {
-                emitter.send(SseEmitter.event().name("log").data(line));
-            } catch (IOException ex) {
-                completeEmitter(emitter);
-            }
-        }
+        SseEmitters.send(emitter, SseEmitter.event().name("log").data(line));
     }
 
     private static void completeEmitter(SseEmitter emitter) {
-        synchronized (emitter) {
-            emitter.complete();
-        }
+        SseEmitters.complete(emitter);
     }
 
     private static boolean isTerminal(DeploymentStatus status) {
