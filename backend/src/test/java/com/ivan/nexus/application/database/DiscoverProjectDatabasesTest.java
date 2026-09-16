@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class DiscoverProjectDatabasesTest {
 
     @Test
-    void discoversReadyLabPostgresAndSkipsNginxAndNexus() {
+    void discoversReadyLabPostgresAndNexusComposePostgres() {
         DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory(
                 inspect(
                         "aaaaaaaaaaaa0000",
@@ -47,9 +47,12 @@ class DiscoverProjectDatabasesTest {
                         "cccccccccccc0000",
                         "nexus-postgres-1",
                         "postgres:16-alpine",
-                        Map.of("nexus.project", "nexus", "com.docker.compose.project", "nexus"),
-                        Map.of("POSTGRES_PASSWORD", "nexus"),
-                        List.of(new PublishedPort(5432, 5432, "0.0.0.0")),
+                        Map.of(
+                                "nexus.project", "nexus",
+                                "com.docker.compose.project", "nexus",
+                                "com.docker.compose.service", "postgres"),
+                        Map.of("POSTGRES_PASSWORD", "nexus", "POSTGRES_DB", "nexus", "POSTGRES_USER", "nexus"),
+                        List.of(new PublishedPort(5432, 5432, "127.0.0.1")),
                         List.of())));
 
         List<DatabaseInstance> instances = discover.execute("lab");
@@ -61,6 +64,12 @@ class DiscoverProjectDatabasesTest {
         assertEquals(DatabaseEngine.POSTGRES, db.engine());
         assertEquals(DatabaseStatus.READY, db.status());
         assertEquals("lab", db.defaultDatabase());
+
+        List<DatabaseInstance> nexus = discover.execute("nexus");
+        assertEquals(1, nexus.size());
+        assertEquals("postgres", nexus.getFirst().service());
+        assertEquals(DatabaseEngine.POSTGRES, nexus.getFirst().engine());
+        assertEquals(DatabaseStatus.READY, nexus.getFirst().status());
     }
 
     @Test
