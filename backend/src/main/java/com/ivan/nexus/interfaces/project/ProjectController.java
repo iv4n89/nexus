@@ -8,6 +8,7 @@ import com.ivan.nexus.domain.project.Project;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -44,6 +45,13 @@ public class ProjectController {
                 result.project(),
                 result.containers().stream().map(GetProjectServices::toService).toList(),
                 getRecentErrors.execute(id));
+    }
+
+    @GetMapping("/{id}/errors")
+    public List<RecentErrorResponse> errors(
+            @PathVariable String id, @RequestParam(required = false) String serviceId) {
+        getProject.execute(id);
+        return getRecentErrors.execute(id, serviceId).stream().map(RecentErrorResponse::from).toList();
     }
 
     @GetMapping("/{id}/services")
@@ -94,9 +102,15 @@ public class ProjectController {
         }
     }
 
-    public record RecentErrorResponse(String sampleMessage, long count, Instant lastSeen) {
+    public record RecentErrorResponse(
+            String serviceId, String sampleMessage, long count, Instant firstSeen, Instant lastSeen) {
         static RecentErrorResponse from(GetRecentErrors.RecentError error) {
-            return new RecentErrorResponse(error.sampleMessage(), error.count(), error.lastSeen());
+            return new RecentErrorResponse(
+                    error.serviceId(),
+                    error.sampleMessage(),
+                    error.count(),
+                    error.firstSeen(),
+                    error.lastSeen());
         }
     }
 

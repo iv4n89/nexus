@@ -7,10 +7,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StatusDot, toneFromHealthAndState } from '@/components/status-dot'
 import { me } from '@/features/auth/api'
 import { RollbackDialog } from '@/features/deployments/rollback-dialog'
+import { ErrorList, logsHref } from '@/features/logs/error-list'
 import { api } from '@/lib/api'
 import { containersForProject, displayName, projectLabel, serviceLabel } from '@/lib/docker'
 import { formatBytes, formatClock, formatElapsed, formatPercent, healthOkLabel } from '@/lib/format'
-import type { Alert, AuthUser, Container, DeployAccepted, Deployment, ProjectDetail, ProjectMetrics } from '@/types/api'
+import type {
+  Alert,
+  AuthUser,
+  Container,
+  DeployAccepted,
+  Deployment,
+  ProjectDetail,
+  ProjectMetrics,
+  RecentError,
+} from '@/types/api'
 
 type ServiceRow = {
   key: string
@@ -80,6 +90,11 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
     queryFn: () => api<Container[]>('/api/containers'),
   })
   const queryClient = useQueryClient()
+  const errors = useQuery({
+    queryKey: ['projects', projectId, 'errors'],
+    queryFn: () => api<RecentError[]>(`/api/projects/${projectId}/errors`),
+    refetchInterval: 30_000,
+  })
   const alerts = useQuery({
     queryKey: ['alerts'],
     queryFn: () => api<Alert[]>('/api/alerts'),
@@ -103,7 +118,7 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
   const canDeploy = auth.data?.role === 'ADMIN' && project.data.deployable
   const canRollback = canDeploy
   const canAcknowledge = auth.data?.role === 'ADMIN'
-  const recentErrors = project.data.recentErrors ?? []
+  const recentErrors = errors.data ?? project.data.recentErrors ?? []
   const projectAlerts = (alerts.data ?? []).filter((alert) => alert.projectId === projectId)
   const currentDeployment = history.data?.[0]
   const previousDeployment = history.data?.[1]
@@ -154,7 +169,7 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
           <span className="text-[#888]">Status: </span>
           {project.data.status}
         </p>
-        <Link href={`/projects/${projectId}/logs`} className="text-sm">
+        <Link href={logsHref(projectId, { level: 'ERROR' })} className="text-sm">
           LOGS
         </Link>
         <Link href={`/projects/${projectId}/database`} className="text-sm">
@@ -250,24 +265,18 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
       </section>
 
       <section>
-        <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Errors</h2>
-        {recentErrors.length === 0 ? (
-          <p className="text-sm text-[#888]">No recent errors</p>
+        <div className="mb-4 flex items-baseline justify-between gap-4">
+          <h2 className="text-sm tracking-[0.25em] text-[#f5f5f5]">Errors</h2>
+          <Link href={logsHref(projectId, { level: 'ERROR' })} className="text-sm text-[#ff4d4f]">
+            VIEW LOGS
+          </Link>
+        </div>
+        {errors.isPending && !errors.data ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : errors.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{errors.error.message}</p>
         ) : (
-          <ul>
-            {recentErrors.map((error) => (
-              <li
-                key={`${error.sampleMessage}-${error.lastSeen}`}
-                className="border-b border-[#2a2a2a] py-3 font-mono text-sm last:border-b-0"
-              >
-                <div className="flex items-baseline justify-between gap-4">
-                  <span className="min-w-0 break-all">{error.sampleMessage}</span>
-                  <span className="shrink-0 text-[#888]">×{error.count}</span>
-                </div>
-                <p className="mt-1 text-[#888]">{formatClock(error.lastSeen)}</p>
-              </li>
-            ))}
-          </ul>
+          <ErrorList projectId={projectId} errors={recentErrors} />
         )}
       </section>
 

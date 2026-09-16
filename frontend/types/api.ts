@@ -21,9 +21,15 @@ export type ProjectDetail = Project & {
 }
 
 export type RecentError = {
+  serviceId: string
   sampleMessage: string
   count: number
+  firstSeen: string
   lastSeen: string
+}
+
+export type LogSnapshot = {
+  lines: string[]
 }
 
 export type AuthUser = {

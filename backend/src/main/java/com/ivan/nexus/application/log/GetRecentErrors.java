@@ -1,5 +1,6 @@
 package com.ivan.nexus.application.log;
 
+import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintEntity;
 import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
 import org.springframework.stereotype.Service;
 
@@ -16,10 +17,33 @@ public class GetRecentErrors {
 
     public List<RecentError> execute(String projectId) {
         return fingerprints.findTop10ByProjectIdOrderByLastSeenDesc(projectId).stream()
-                .map(entity -> new RecentError(entity.getSampleMessage(), entity.getCount(), entity.getLastSeen()))
+                .map(GetRecentErrors::toRecentError)
                 .toList();
     }
 
-    public record RecentError(String sampleMessage, long count, Instant lastSeen) {
+    public List<RecentError> execute(String projectId, String serviceId) {
+        if (serviceId == null || serviceId.isBlank()) {
+            return fingerprints.findTop50ByProjectIdOrderByLastSeenDesc(projectId).stream()
+                    .map(GetRecentErrors::toRecentError)
+                    .toList();
+        }
+        return fingerprints
+                .findTop50ByProjectIdAndServiceIdOrderByLastSeenDesc(projectId, serviceId)
+                .stream()
+                .map(GetRecentErrors::toRecentError)
+                .toList();
+    }
+
+    private static RecentError toRecentError(LogErrorFingerprintEntity entity) {
+        return new RecentError(
+                entity.getServiceId(),
+                entity.getSampleMessage(),
+                entity.getCount(),
+                entity.getFirstSeen(),
+                entity.getLastSeen());
+    }
+
+    public record RecentError(
+            String serviceId, String sampleMessage, long count, Instant firstSeen, Instant lastSeen) {
     }
 }

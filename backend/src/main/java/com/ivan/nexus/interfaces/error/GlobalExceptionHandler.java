@@ -10,8 +10,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import java.time.Instant;
+import java.util.Locale;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -32,10 +34,38 @@ public class GlobalExceptionHandler {
         return envelope(HttpStatus.UNAUTHORIZED, NexusErrorCode.AUTH_INVALID.name(), "Invalid credentials");
     }
 
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleDisconnectedClient() {
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception ex) {
+        if (isClientDisconnect(ex)) {
+            return ResponseEntity.noContent().build();
+        }
         log.error("Unhandled exception", ex);
         return envelope(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal error");
+    }
+
+    static boolean isClientDisconnect(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String name = current.getClass().getName();
+            if (name.contains("ClientAbortException") || name.contains("AsyncRequestNotUsableException")) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase(Locale.ROOT);
+                if (lower.contains("broken pipe")
+                        || lower.contains("connection reset by peer")
+                        || lower.contains("async request")) {
+                    return true;
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static ResponseEntity<ErrorResponse> envelope(HttpStatus status, String code, String message) {

@@ -5,10 +5,11 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { StatusDot, toneFromHealthAndState } from '@/components/status-dot'
 import { me } from '@/features/auth/api'
+import { ErrorList, logsHref } from '@/features/logs/error-list'
 import { api } from '@/lib/api'
-import { stripSlash } from '@/lib/docker'
+import { serviceLabel, stripSlash } from '@/lib/docker'
 import { formatBytes, formatPercent, formatPort, formatUptime } from '@/lib/format'
-import type { AuthUser, Container, ContainerMetrics } from '@/types/api'
+import type { AuthUser, Container, ContainerMetrics, RecentError } from '@/types/api'
 
 export function ContainerView({
   projectId,
@@ -30,6 +31,16 @@ export function ContainerView({
   const auth = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: (): Promise<AuthUser> => me(),
+  })
+  const serviceId = container.data ? (serviceLabel(container.data) ?? stripSlash(container.data.name)) : undefined
+  const errors = useQuery({
+    queryKey: ['projects', projectId, 'errors', serviceId],
+    enabled: serviceId != null,
+    queryFn: () =>
+      api<RecentError[]>(
+        `/api/projects/${encodeURIComponent(projectId)}/errors?serviceId=${encodeURIComponent(serviceId!)}`,
+      ),
+    refetchInterval: 30_000,
   })
   const canRestart = auth.data?.role === 'ADMIN'
 
@@ -68,6 +79,7 @@ export function ContainerView({
       </Link>
 
       <h1 className="text-xl">{stripSlash(data.name)}</h1>
+      {serviceId ? <p className="font-mono text-sm text-[#888]">{serviceId}</p> : null}
 
       <div className="flex flex-col gap-2">
         <button
@@ -83,6 +95,9 @@ export function ContainerView({
           RESTART
         </button>
         {restartError ? <p className="text-sm text-[#ff4d4f]">{restartError}</p> : null}
+        <Link href={logsHref(projectId, { serviceId, level: 'ERROR' })} className="w-fit text-sm text-[#ff4d4f]">
+          LOGS
+        </Link>
       </div>
 
       <dl className="grid max-w-lg grid-cols-[7rem_1fr] gap-y-3 font-mono text-sm">
@@ -143,6 +158,22 @@ export function ContainerView({
             : data.ports.map((port) => formatPort(port)).join(', ')}
         </dd>
       </dl>
+
+      <section>
+        <div className="mb-4 flex items-baseline justify-between gap-4">
+          <h2 className="text-sm tracking-[0.25em] text-[#f5f5f5]">Errors</h2>
+          <Link href={logsHref(projectId, { serviceId, level: 'ERROR' })} className="text-sm text-[#ff4d4f]">
+            VIEW LOGS
+          </Link>
+        </div>
+        {errors.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : errors.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{errors.error.message}</p>
+        ) : (
+          <ErrorList projectId={projectId} errors={errors.data ?? []} showService={false} />
+        )}
+      </section>
     </div>
   )
 }
