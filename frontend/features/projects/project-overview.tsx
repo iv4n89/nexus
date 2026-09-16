@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StatusDot, toneFromHealthAndState } from '@/components/status-dot'
 import { me } from '@/features/auth/api'
+import { RollbackDialog } from '@/features/deployments/rollback-dialog'
 import { api } from '@/lib/api'
 import { containersForProject, displayName, projectLabel, serviceLabel } from '@/lib/docker'
 import { formatBytes, formatClock, formatElapsed, formatPercent, healthOkLabel } from '@/lib/format'
@@ -54,6 +55,9 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
   const router = useRouter()
   const [deploying, setDeploying] = useState(false)
   const [deployError, setDeployError] = useState<string | null>(null)
+  const [rollbackOpen, setRollbackOpen] = useState(false)
+  const [rollingBack, setRollingBack] = useState(false)
+  const [rollbackError, setRollbackError] = useState<string | null>(null)
 
   const project = useQuery({
     queryKey: ['projects', projectId],
@@ -97,9 +101,12 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
 
   const rows = serviceRows(projectId, project.data, containers.data)
   const canDeploy = auth.data?.role === 'ADMIN' && project.data.deployable
+  const canRollback = canDeploy
   const canAcknowledge = auth.data?.role === 'ADMIN'
   const recentErrors = project.data.recentErrors ?? []
   const projectAlerts = (alerts.data ?? []).filter((alert) => alert.projectId === projectId)
+  const currentDeployment = history.data?.[0]
+  const previousDeployment = history.data?.[1]
 
   async function onDeploy() {
     if (!canDeploy || deploying) {
@@ -118,6 +125,24 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
     } catch (error) {
       setDeploying(false)
       setDeployError(error instanceof Error ? error.message : 'DEPLOY_FAILED')
+    }
+  }
+
+  async function onRollbackConfirm() {
+    if (!canRollback || rollingBack) {
+      return
+    }
+    setRollbackError(null)
+    setRollingBack(true)
+    try {
+      const accepted = await api<DeployAccepted>(`/api/projects/${projectId}/rollback`, {
+        method: 'POST',
+      })
+      setRollbackOpen(false)
+      router.push(`/projects/${projectId}/deployments/${accepted.id}`)
+    } catch (error) {
+      setRollingBack(false)
+      setRollbackError(error instanceof Error ? error.message : 'ROLLBACK_FAILED')
     }
   }
 
@@ -147,13 +172,39 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
           </button>
           <button
             type="button"
-            disabled
-            className="cursor-not-allowed border border-[#2a2a2a] px-4 py-2 text-sm text-[#888]"
+            disabled={!canRollback || rollingBack}
+            onClick={() => {
+              if (!canRollback || rollingBack) {
+                return
+              }
+              setRollbackError(null)
+              setRollbackOpen(true)
+            }}
+            className={
+              canRollback && !rollingBack
+                ? 'border border-[#f5f5f5] px-4 py-2 text-sm text-[#f5f5f5]'
+                : 'cursor-not-allowed border border-[#2a2a2a] px-4 py-2 text-sm text-[#888]'
+            }
           >
             ROLLBACK
           </button>
         </div>
         {deployError ? <p className="text-sm text-[#ff4d4f]">{deployError}</p> : null}
+        <RollbackDialog
+          open={rollbackOpen}
+          currentId={currentDeployment?.id}
+          previousId={previousDeployment?.id}
+          busy={rollingBack}
+          error={rollbackError}
+          onCancel={() => {
+            if (rollingBack) {
+              return
+            }
+            setRollbackOpen(false)
+            setRollbackError(null)
+          }}
+          onConfirm={() => void onRollbackConfirm()}
+        />
       </section>
 
       <hr className="border-[#2a2a2a]" />

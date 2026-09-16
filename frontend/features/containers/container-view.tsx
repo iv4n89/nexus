@@ -1,12 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { StatusDot, toneFromHealthAndState } from '@/components/status-dot'
+import { me } from '@/features/auth/api'
 import { api } from '@/lib/api'
 import { stripSlash } from '@/lib/docker'
 import { formatBytes, formatPercent, formatPort, formatUptime } from '@/lib/format'
-import type { Container, ContainerMetrics } from '@/types/api'
+import type { AuthUser, Container, ContainerMetrics } from '@/types/api'
 
 export function ContainerView({
   projectId,
@@ -15,6 +17,8 @@ export function ContainerView({
   projectId: string
   containerId: string
 }) {
+  const [restarting, setRestarting] = useState(false)
+  const [restartError, setRestartError] = useState<string | null>(null)
   const container = useQuery({
     queryKey: ['containers', containerId],
     queryFn: () => api<Container>(`/api/containers/${containerId}`),
@@ -23,6 +27,11 @@ export function ContainerView({
     queryKey: ['containers', containerId, 'stats'],
     queryFn: () => api<ContainerMetrics>(`/api/containers/${containerId}/stats`),
   })
+  const auth = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: (): Promise<AuthUser> => me(),
+  })
+  const canRestart = auth.data?.role === 'ADMIN'
 
   if (container.isPending) {
     return <p className="text-sm text-[#888]">Loading…</p>
@@ -33,6 +42,25 @@ export function ContainerView({
 
   const data = container.data
 
+  async function onRestart() {
+    if (!canRestart || restarting) {
+      return
+    }
+    if (!window.confirm('Restart this container?')) {
+      return
+    }
+    setRestartError(null)
+    setRestarting(true)
+    try {
+      await api(`/api/containers/${containerId}/restart`, { method: 'POST' })
+      await container.refetch()
+    } catch (error) {
+      setRestartError(error instanceof Error ? error.message : 'RESTART_FAILED')
+    } finally {
+      setRestarting(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <Link href={`/projects/${projectId}`} className="text-sm text-[#888]">
@@ -40,6 +68,22 @@ export function ContainerView({
       </Link>
 
       <h1 className="text-xl">{stripSlash(data.name)}</h1>
+
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          disabled={!canRestart || restarting}
+          onClick={() => void onRestart()}
+          className={
+            canRestart && !restarting
+              ? 'w-fit border border-[#f5f5f5] px-4 py-2 text-sm text-[#f5f5f5]'
+              : 'w-fit cursor-not-allowed border border-[#2a2a2a] px-4 py-2 text-sm text-[#888]'
+          }
+        >
+          RESTART
+        </button>
+        {restartError ? <p className="text-sm text-[#ff4d4f]">{restartError}</p> : null}
+      </div>
 
       <dl className="grid max-w-lg grid-cols-[7rem_1fr] gap-y-3 font-mono text-sm">
         <dt className="text-[#888]">Image</dt>

@@ -42,6 +42,7 @@ export type Deployment = {
   exitCode: number | null
   outputSummary: string | null
   healthOk: boolean | null
+  kind: string | null
 }
 
 export type DeployAccepted = {

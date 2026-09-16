@@ -1,10 +1,13 @@
 package com.ivan.nexus.interfaces.container;
 
+import com.ivan.nexus.application.container.RestartService;
 import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetContainerMetrics;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.metrics.ContainerMetrics;
+import com.ivan.nexus.domain.shared.DomainException;
+import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.infrastructure.security.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,8 +25,14 @@ import java.util.Optional;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -40,6 +49,9 @@ class ContainerControllerTest {
 
     @MockitoBean
     ContainerStatsProvider statsProvider;
+
+    @MockitoBean
+    RestartService restartService;
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -102,6 +114,33 @@ class ContainerControllerTest {
                 .andExpect(jsonPath("$.memoryLimitBytes").value(200))
                 .andExpect(jsonPath("$.rxBytes").value(10))
                 .andExpect(jsonPath("$.txBytes").value(20));
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminPostRestartReturns204() throws Exception {
+        mockMvc.perform(post("/api/containers/abc123/restart").with(csrf()))
+                .andExpect(status().isNoContent());
+        verify(restartService).execute("abc123", "admin");
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void viewerPostRestartReturns403() throws Exception {
+        mockMvc.perform(post("/api/containers/abc123/restart").with(csrf()))
+                .andExpect(status().isForbidden());
+        verify(restartService, never()).execute(any(), any());
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void unknownContainerRestartReturns404ContainerNotFound() throws Exception {
+        doThrow(new DomainException(NexusErrorCode.CONTAINER_NOT_FOUND, "Container not found"))
+                .when(restartService).execute("missing", "admin");
+
+        mockMvc.perform(post("/api/containers/missing/restart").with(csrf()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("CONTAINER_NOT_FOUND"));
     }
 
     @Test

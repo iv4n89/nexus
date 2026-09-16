@@ -1,6 +1,7 @@
 package com.ivan.nexus.interfaces.deployment;
 
 import com.ivan.nexus.application.deployment.DeployProject;
+import com.ivan.nexus.application.deployment.RollbackProject;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.shared.DomainException;
@@ -26,14 +27,17 @@ import java.util.UUID;
 @RestController
 public class DeploymentController {
     private final DeployProject deployProject;
+    private final RollbackProject rollbackProject;
     private final DeploymentJpaRepository deployments;
     private final DeploymentStreamHub hub;
 
     public DeploymentController(
             DeployProject deployProject,
+            RollbackProject rollbackProject,
             DeploymentJpaRepository deployments,
             DeploymentStreamHub hub) {
         this.deployProject = deployProject;
+        this.rollbackProject = rollbackProject;
         this.deployments = deployments;
         this.hub = hub;
     }
@@ -41,6 +45,13 @@ public class DeploymentController {
     @PostMapping("/api/projects/{id}/deploy")
     public ResponseEntity<AcceptedResponse> deploy(@PathVariable String id, Authentication authentication) {
         Deployment started = deployProject.execute(id, authentication.getName());
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(new AcceptedResponse(started.id(), started.status()));
+    }
+
+    @PostMapping("/api/projects/{id}/rollback")
+    public ResponseEntity<AcceptedResponse> rollback(@PathVariable String id, Authentication authentication) {
+        Deployment started = rollbackProject.execute(id, authentication.getName());
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new AcceptedResponse(started.id(), started.status()));
     }
@@ -87,7 +98,8 @@ public class DeploymentController {
             String commitSha,
             Integer exitCode,
             String outputSummary,
-            Boolean healthOk) {
+            Boolean healthOk,
+            String kind) {
         static DeploymentResponse from(DeploymentEntity entity) {
             return new DeploymentResponse(
                     entity.getId(),
@@ -99,7 +111,8 @@ public class DeploymentController {
                     entity.getCommitSha(),
                     entity.getExitCode(),
                     entity.getOutputSummary(),
-                    entity.getHealthOk());
+                    entity.getHealthOk(),
+                    entity.getKind());
         }
     }
 }
