@@ -1,0 +1,8 @@
+project:
+  id: lab
+  name: Lab
+  description: Test fixture
+  workingDirectory: /tmp/nexus-manifest-fixtures/lab
+
+services:
+  - api

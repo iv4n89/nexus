@@ -3,8 +3,11 @@ package com.ivan.nexus.application.project;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.project.Project;
 import com.ivan.nexus.domain.project.ProjectGrouping;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -14,9 +17,13 @@ import java.util.Map;
 @Service
 public class DiscoverProjects {
     private final ContainerInventory inventory;
+    private final Path allowedRoot;
 
-    public DiscoverProjects(ContainerInventory inventory) {
+    public DiscoverProjects(
+            ContainerInventory inventory,
+            @Value("${nexus.manifest.allowed-root}") String allowedRoot) {
         this.inventory = inventory;
+        this.allowedRoot = Path.of(allowedRoot).toAbsolutePath().normalize();
     }
 
     public List<Project> execute() {
@@ -35,7 +42,7 @@ public class DiscoverProjects {
         return grouped;
     }
 
-    static Project toProject(String id, List<ContainerSnapshot> containers) {
+    Project toProject(String id, List<ContainerSnapshot> containers) {
         int runningCount = 0;
         int unhealthyCount = 0;
         for (ContainerSnapshot container : containers) {
@@ -46,7 +53,17 @@ public class DiscoverProjects {
                 unhealthyCount++;
             }
         }
-        return new Project(id, id, status(runningCount, containers.size(), unhealthyCount), runningCount, containers.size());
+        return new Project(
+                id,
+                id,
+                status(runningCount, containers.size(), unhealthyCount),
+                runningCount,
+                containers.size(),
+                isDeployable(id));
+    }
+
+    boolean isDeployable(String projectId) {
+        return Files.isRegularFile(allowedRoot.resolve(projectId).resolve("nexus.yml"));
     }
 
     private static String status(int runningCount, int totalCount, int unhealthyCount) {

@@ -50,14 +50,16 @@ public class ProjectController {
             String name,
             String status,
             int runningCount,
-            int totalCount) {
+            int totalCount,
+            boolean deployable) {
         static ProjectResponse from(Project project) {
             return new ProjectResponse(
                     project.id(),
                     project.name(),
                     project.status(),
                     project.runningCount(),
-                    project.totalCount());
+                    project.totalCount(),
+                    project.deployable());
         }
     }
 
@@ -67,6 +69,7 @@ public class ProjectController {
             String status,
             int runningCount,
             int totalCount,
+            boolean deployable,
             List<ProjectServiceResponse> services) {
         static ProjectDetailResponse from(Project project, List<GetProjectServices.ServiceView> services) {
             return new ProjectDetailResponse(
@@ -75,6 +78,7 @@ public class ProjectController {
                     project.status(),
                     project.runningCount(),
                     project.totalCount(),
+                    project.deployable(),
                     services.stream().map(ProjectServiceResponse::from).toList());
         }
     }

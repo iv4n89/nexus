@@ -4,6 +4,7 @@ export type Project = {
   status: string
   runningCount: number
   totalCount: number
+  deployable: boolean
 }
 
 export type ProjectService = {
@@ -16,6 +17,29 @@ export type ProjectService = {
 
 export type ProjectDetail = Project & {
   services: ProjectService[]
+}
+
+export type AuthUser = {
+  username: string
+  role: string
+}
+
+export type Deployment = {
+  id: string
+  projectId: string
+  status: string
+  startedAt: string | null
+  finishedAt: string | null
+  triggeredBy: string
+  commitSha: string | null
+  exitCode: number | null
+  outputSummary: string | null
+  healthOk: boolean | null
+}
+
+export type DeployAccepted = {
+  id: string
+  status: string
 }
 
 export type PortMapping = { publicPort: number | null; privatePort: number }

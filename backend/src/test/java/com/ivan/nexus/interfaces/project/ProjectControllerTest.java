@@ -51,6 +51,7 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$[0].status").value("HEALTHY"))
                 .andExpect(jsonPath("$[0].runningCount").value(2))
                 .andExpect(jsonPath("$[0].totalCount").value(2))
+                .andExpect(jsonPath("$[0].deployable").value(true))
                 .andExpect(jsonPath("$[0].services").doesNotExist());
     }
 
@@ -76,6 +77,7 @@ class ProjectControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("lab"))
                 .andExpect(jsonPath("$.status").value("HEALTHY"))
+                .andExpect(jsonPath("$.deployable").value(true))
                 .andExpect(jsonPath("$.services", hasSize(2)))
                 .andExpect(jsonPath("$.services[0].id").exists())
                 .andExpect(jsonPath("$.services[0].name").exists())

@@ -1,0 +1,24 @@
+project:
+  id: lab
+  name: Lab
+  description: Test fixture
+  workingDirectory: /tmp/nexus-manifest-fixtures/lab
+
+services:
+  - api
+  - web
+
+deployment:
+  command: ./deploy.sh
+
+rollback:
+  command: ./rollback.sh
+
+health:
+  url: http://127.0.0.1:18080
+  timeoutSeconds: 5
+
+alerts:
+  errorRatePerMinute: 10
+  restartCount: 3
+  memoryPercent: 90
