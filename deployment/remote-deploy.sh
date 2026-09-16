@@ -53,7 +53,7 @@ docker compose --env-file .env --env-file .env.runtime up -d --no-build --remove
 CADDY_SRC="${ROOT}/caddy/nexus.caddy"
 if [[ -f "${CADDY_SRC}" ]]; then
   installed=
-  for root in /opt/ava-assistant /opt/ava; do
+  for root in /opt/ai_candidate_assistant /opt/ava-assistant /opt/ava; do
     if [[ -f "${root}/docker-compose.tls.yml" || -d "${root}/deploy/caddy-optional" ]]; then
       mkdir -p "${root}/deploy/caddy-optional"
       cp "${CADDY_SRC}" "${root}/deploy/caddy-optional/nexus.caddy"
