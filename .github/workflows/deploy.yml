@@ -93,8 +93,8 @@ jobs:
             deployment/remote-deploy.sh \
             "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}:${NEXUS_REMOTE_DIR}/"
           scp "${SSH_OPTS[@]}" \
-            deployment/nginx/nexus-project.duckdns.org.conf \
-            "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}:${NEXUS_REMOTE_DIR}/nginx/nexus-project.duckdns.org.conf"
+            deployment/nginx/0nexus.duckdns.org.conf \
+            "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}:${NEXUS_REMOTE_DIR}/nginx/0nexus.duckdns.org.conf"
           ssh "${SSH_OPTS[@]}" "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}" "chmod 700 '${NEXUS_REMOTE_DIR}' '${NEXUS_REMOTE_DIR}/remote-deploy.sh'"
           {
             printf 'GHCR_USER=%s\n' "${GHCR_USER}"

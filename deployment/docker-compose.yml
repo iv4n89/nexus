@@ -8,7 +8,7 @@
 # nexus.yml workingDirectory values match ProcessBuilder cwd.
 # Backend uses host networking so the API can reach published project
 # database ports on 127.0.0.1. Public HTTP is the edge nginx on the VPS
-# (ava-assistant), vhost nexus-project.duckdns.org.
+# (ava-assistant), vhost 0nexus.duckdns.org.
 #
 # VPS deploys pull GHCR images and must use `docker compose up --no-build`.
 # Local: `docker compose --env-file .env up -d --build`.

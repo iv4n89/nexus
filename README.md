@@ -83,7 +83,7 @@ Open http://localhost:3000 and sign in as `admin` / `changeme`. Copy `.env.examp
 
 Production stack: Nginx + Next.js standalone + Spring Boot + PostgreSQL. The backend mounts the **Docker socket** (host-root equivalent) and bind-mounts `/srv/projects` at the **same host path** so deploy scripts see the paths in `nexus.yml`.
 
-VPS target: `root@161.97.116.30`, stack directory `/opt/nexus`. Public host **nexus-project.duckdns.org** (same edge nginx as `ava-assistant.duckdns.org`). Postgres, Next, and the API bind to localhost.
+VPS target: `root@161.97.116.30`, stack directory `/opt/nexus`. Public host **0nexus.duckdns.org** (same edge nginx as `ava-assistant.duckdns.org`). Postgres, Next, and the API bind to localhost.
 
 ### Continuous deploy
 
@@ -110,9 +110,9 @@ cd deployment
 docker compose --env-file .env up -d --build
 ```
 
-Do not expose this stack on the public internet without authentication. The **edge** nginx (ava-assistant) proxies `/api/` (buffering off, 3600s read timeout for SSE) and `/actuator/health` only; other actuator endpoints stay internal. Vhost: `deployment/nginx/nexus-project.duckdns.org.conf`.
+Do not expose this stack on the public internet without authentication. The **edge** nginx (ava-assistant) proxies `/api/` (buffering off, 3600s read timeout for SSE) and `/actuator/health` only; other actuator endpoints stay internal. Vhost: `deployment/nginx/0nexus.duckdns.org.conf`.
 
-Create the DuckDNS name `nexus-project` pointing at `161.97.116.30`. After HTTP works, add TLS the same way as ava-assistant (`certbot -d nexus-project.duckdns.org`). Reload that nginx after copying the vhost.
+Create the DuckDNS name `0nexus` pointing at `161.97.116.30`. After HTTP works, add TLS the same way as ava-assistant (`certbot -d 0nexus.duckdns.org`). Reload that nginx after copying the vhost.
 
 ## Project manifest
 
