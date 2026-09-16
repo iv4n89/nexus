@@ -1,0 +1,24 @@
+project:
+  id: lab
+  name: Lab
+  description: Local discovery target
+  workingDirectory: /home/ibetanzos/dev/nexus_project/projects/lab
+
+services:
+  - api
+  - web
+
+deployment:
+  command: ./deploy.sh
+
+rollback:
+  command: ./rollback.sh
+
+health:
+  url: http://127.0.0.1:18080
+  timeoutSeconds: 5
+
+alerts:
+  errorRatePerMinute: 10
+  restartCount: 3
+  memoryPercent: 90
