@@ -31,6 +31,15 @@ export type AuthUser = {
   role: string
 }
 
+export type Settings = {
+  version: string
+  retention: {
+    activityDays: number
+    deploymentEventsDays: number
+    fingerprintDays: number
+  }
+}
+
 export type Deployment = {
   id: string
   projectId: string
