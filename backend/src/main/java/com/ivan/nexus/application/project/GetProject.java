@@ -21,7 +21,7 @@ public class GetProject {
         if (containers == null || containers.isEmpty()) {
             throw new DomainException(NexusErrorCode.PROJECT_NOT_FOUND, "Project not found");
         }
-        return new Result(DiscoverProjects.toProject(projectId, containers), List.copyOf(containers));
+        return new Result(discoverProjects.toProject(projectId, containers), List.copyOf(containers));
     }
 
     public record Result(Project project, List<ContainerSnapshot> containers) {

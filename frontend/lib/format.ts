@@ -43,3 +43,28 @@ export function formatPort(mapping: { publicPort: number | null; privatePort: nu
   if (mapping.publicPort == null) return String(mapping.privatePort)
   return `${mapping.publicPort} → ${mapping.privatePort}`
 }
+
+export function formatClock(iso: string | null): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleTimeString('en-GB', { hour12: false })
+}
+
+export function formatElapsed(startedAt: string | null, finishedAt: string | null): string | null {
+  if (!startedAt || !finishedAt) return null
+  const start = Date.parse(startedAt)
+  const end = Date.parse(finishedAt)
+  if (Number.isNaN(start) || Number.isNaN(end)) return null
+  const seconds = Math.max(0, Math.round((end - start) / 1000))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`
+}
+
+export function healthOkLabel(healthOk: boolean | null): string {
+  if (healthOk === true) return 'OK'
+  if (healthOk === false) return 'FAIL'
+  return '—'
+}

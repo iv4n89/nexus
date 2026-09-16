@@ -8,10 +8,23 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 
 @Component
 public class YamlManifestLoader {
     private final YAMLMapper yamlMapper = new YAMLMapper();
+
+    public ProjectManifest load(Path path) {
+        try (InputStream source = Files.newInputStream(path)) {
+            return load(source);
+        } catch (NoSuchFileException ex) {
+            throw new DomainException(NexusErrorCode.MANIFEST_NOT_FOUND, "Manifest not found");
+        } catch (IOException ex) {
+            throw new DomainException(NexusErrorCode.MANIFEST_INVALID, "Unable to read manifest");
+        }
+    }
 
     public ProjectManifest load(InputStream source) {
         try {

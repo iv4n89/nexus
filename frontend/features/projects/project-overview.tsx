@@ -1,12 +1,15 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { StatusDot, toneFromHealthAndState } from '@/components/status-dot'
+import { me } from '@/features/auth/api'
 import { api } from '@/lib/api'
 import { containersForProject, displayName, projectLabel, serviceLabel } from '@/lib/docker'
-import { formatBytes, formatPercent } from '@/lib/format'
-import type { Container, ProjectDetail, ProjectMetrics } from '@/types/api'
+import { formatBytes, formatClock, formatElapsed, formatPercent, healthOkLabel } from '@/lib/format'
+import type { AuthUser, Container, DeployAccepted, Deployment, ProjectDetail, ProjectMetrics } from '@/types/api'
 
 type ServiceRow = {
   key: string
@@ -48,9 +51,21 @@ function serviceRows(
 }
 
 export function ProjectOverview({ projectId }: { projectId: string }) {
+  const router = useRouter()
+  const [deploying, setDeploying] = useState(false)
+  const [deployError, setDeployError] = useState<string | null>(null)
+
   const project = useQuery({
     queryKey: ['projects', projectId],
     queryFn: () => api<ProjectDetail>(`/api/projects/${projectId}`),
+  })
+  const auth = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: (): Promise<AuthUser> => me(),
+  })
+  const history = useQuery({
+    queryKey: ['projects', projectId, 'deployments'],
+    queryFn: () => api<Deployment[]>(`/api/projects/${projectId}/deployments`),
   })
   const metrics = useQuery({
     queryKey: ['projects', projectId, 'metrics'],
@@ -69,6 +84,27 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
   }
 
   const rows = serviceRows(projectId, project.data, containers.data)
+  const canDeploy = auth.data?.role === 'ADMIN' && project.data.deployable
+
+  async function onDeploy() {
+    if (!canDeploy || deploying) {
+      return
+    }
+    if (!window.confirm('Deploy this project?')) {
+      return
+    }
+    setDeployError(null)
+    setDeploying(true)
+    try {
+      const accepted = await api<DeployAccepted>(`/api/projects/${projectId}/deploy`, {
+        method: 'POST',
+      })
+      router.push(`/projects/${projectId}/deployments/${accepted.id}`)
+    } catch (error) {
+      setDeploying(false)
+      setDeployError(error instanceof Error ? error.message : 'DEPLOY_FAILED')
+    }
+  }
 
   return (
     <div className="flex flex-col gap-10">
@@ -84,8 +120,13 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
         <div className="flex gap-3">
           <button
             type="button"
-            disabled
-            className="cursor-not-allowed border border-[#2a2a2a] px-4 py-2 text-sm text-[#888]"
+            disabled={!canDeploy || deploying}
+            onClick={() => void onDeploy()}
+            className={
+              canDeploy && !deploying
+                ? 'border border-[#f5f5f5] px-4 py-2 text-sm text-[#f5f5f5]'
+                : 'cursor-not-allowed border border-[#2a2a2a] px-4 py-2 text-sm text-[#888]'
+            }
           >
             DEPLOY
           </button>
@@ -97,6 +138,7 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
             ROLLBACK
           </button>
         </div>
+        {deployError ? <p className="text-sm text-[#ff4d4f]">{deployError}</p> : null}
       </section>
 
       <hr className="border-[#2a2a2a]" />
@@ -152,6 +194,44 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
             <dt className="text-[#888]">Restarts</dt>
             <dd>{metrics.data.restartCount}</dd>
           </dl>
+        )}
+      </section>
+
+      <hr className="border-[#2a2a2a]" />
+
+      <section>
+        <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">History</h2>
+        {history.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : history.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{history.error.message}</p>
+        ) : history.data.length === 0 ? (
+          <p className="text-sm text-[#888]">No deployments</p>
+        ) : (
+          <ul>
+            {history.data.map((deployment) => {
+              const duration = formatElapsed(deployment.startedAt, deployment.finishedAt)
+              return (
+                <li key={deployment.id} className="border-b border-[#2a2a2a] last:border-b-0">
+                  <Link
+                    href={`/projects/${projectId}/deployments/${deployment.id}`}
+                    className="flex flex-col gap-1 py-3 font-mono text-sm"
+                  >
+                    <span className="flex items-center justify-between">
+                      <span>{deployment.status}</span>
+                      <span className="text-[#888]">{deployment.id.slice(0, 8)}</span>
+                    </span>
+                    <span className="text-[#888]">
+                      Started {formatClock(deployment.startedAt)}
+                      {duration ? ` · Duration ${duration}` : ''}
+                    </span>
+                    <span className="text-[#888]">Triggered by {deployment.triggeredBy}</span>
+                    <span className="text-[#888]">Health {healthOkLabel(deployment.healthOk)}</span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
         )}
       </section>
     </div>

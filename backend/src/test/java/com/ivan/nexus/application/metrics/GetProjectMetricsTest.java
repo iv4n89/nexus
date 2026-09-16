@@ -61,7 +61,7 @@ class GetProjectMetricsTest {
     }
 
     private static GetProjectMetrics useCase(ContainerStatsProvider stats, ContainerSnapshot... snapshots) {
-        return new GetProjectMetrics(new GetProject(new DiscoverProjects(inventory(snapshots))), stats);
+        return new GetProjectMetrics(new GetProject(new DiscoverProjects(inventory(snapshots), "/tmp/nexus-no-manifests")), stats);
     }
 
     private static ContainerInventory inventory(ContainerSnapshot... snapshots) {

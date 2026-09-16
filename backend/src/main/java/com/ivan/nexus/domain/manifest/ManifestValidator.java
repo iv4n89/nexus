@@ -2,10 +2,14 @@ package com.ivan.nexus.domain.manifest;
 
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
+import com.ivan.nexus.infrastructure.config.NexusProperties;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
 import java.util.regex.Pattern;
 
+@Component
 public class ManifestValidator {
     private static final Pattern COMMAND_PATTERN =
             Pattern.compile("^[./a-zA-Z0-9._-]+(?:\\s+[./a-zA-Z0-9._-]+)*$");
@@ -14,6 +18,11 @@ public class ManifestValidator {
 
     public ManifestValidator(Path allowedRoot) {
         this.allowedRoot = allowedRoot.toAbsolutePath().normalize();
+    }
+
+    @Autowired
+    public ManifestValidator(NexusProperties properties) {
+        this(Path.of(properties.getManifest().getAllowedRoot()));
     }
 
     public void validate(ProjectManifest manifest) {

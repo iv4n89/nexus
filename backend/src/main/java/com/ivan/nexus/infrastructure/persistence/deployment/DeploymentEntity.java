@@ -95,6 +95,30 @@ public class DeploymentEntity {
         updatedAt = Instant.now();
     }
 
+    public void applyStatus(DeploymentStatus status) {
+        this.status = status;
+    }
+
+    public void setStartedAt(Instant startedAt) {
+        this.startedAt = startedAt;
+    }
+
+    public void setFinishedAt(Instant finishedAt) {
+        this.finishedAt = finishedAt;
+    }
+
+    public void setExitCode(Integer exitCode) {
+        this.exitCode = exitCode;
+    }
+
+    public void setOutputSummary(String outputSummary) {
+        this.outputSummary = outputSummary;
+    }
+
+    public void setHealthOk(Boolean healthOk) {
+        this.healthOk = healthOk;
+    }
+
     public UUID getId() {
         return id;
     }

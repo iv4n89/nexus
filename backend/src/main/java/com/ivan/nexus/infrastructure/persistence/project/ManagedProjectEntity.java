@@ -67,6 +67,17 @@ public class ManagedProjectEntity {
         updatedAt = Instant.now();
     }
 
+    public void applyManifest(
+            String name,
+            String description,
+            String workingDirectory,
+            String manifestPath) {
+        this.name = name;
+        this.description = description;
+        this.workingDirectory = workingDirectory;
+        this.manifestPath = manifestPath;
+    }
+
     public String getId() {
         return id;
     }
