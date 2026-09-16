@@ -42,6 +42,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("ADMIN", "VIEWER")
+                .requestMatchers(HttpMethod.POST, "/api/projects/*/database/instances/*/query")
+                    .hasAnyRole("ADMIN", "VIEWER")
+                .requestMatchers(HttpMethod.POST, "/api/projects/*/database/instances/*/cell").hasRole("ADMIN")
                 .requestMatchers("/api/**").hasRole("ADMIN")
                 .anyRequest().denyAll())
             .exceptionHandling(ex -> ex
