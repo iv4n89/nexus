@@ -83,7 +83,7 @@ Open http://localhost:3000 and sign in as `admin` / `changeme`. Copy `.env.examp
 
 Production stack: Nginx + Next.js standalone + Spring Boot + PostgreSQL. The backend mounts the **Docker socket** (host-root equivalent) and bind-mounts `/srv/projects` at the **same host path** so deploy scripts see the paths in `nexus.yml`.
 
-VPS target: `root@161.97.116.30`, stack directory `/opt/nexus`. Public host **0nexus.duckdns.org** (same Caddy as `ava-assistant.duckdns.org`). Postgres stays on localhost; the API (`:8080`) and Next (`:3000`) listen on the host so Caddy in Docker can reach `host.docker.internal`.
+VPS target: `root@161.97.116.30`, stack directory `/opt/nexus`. Public host **0nexus.duckdns.org** (same Caddy as `ava-assistant.duckdns.org`). Postgres stays on localhost; the API (`:8080`) and Next (`:3000`) listen on the host so Caddy in Docker can reach `host.docker.internal`. `remote-deploy.sh` allows Docker bridges (`172.16.0.0/12`) to host `:8080` because UFW blocks host-network processes but not docker-published `:3000`.
 
 ### Continuous deploy
 
@@ -120,7 +120,17 @@ cp /opt/nexus/caddy/nexus.caddy deploy/caddy-optional/nexus.caddy
 docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d
 ```
 
-Caddy must resolve `host.docker.internal` (`extra_hosts: host.docker.internal:host-gateway` on Linux). Then open `https://0nexus.duckdns.org`.
+Caddy must resolve `host.docker.internal` (`extra_hosts: host.docker.internal:host-gateway` on Linux). Then open `https://0nexus.duckdns.org`. After copying `nexus.caddy`, recreate the Caddy container so gzip/SSE and `Alt-Svc` changes load. If `/api/auth/csrf` returns **502**, Caddy cannot reach host `:8080` (login HTML can still load from `:3000`). On the VPS:
+
+```bash
+ufw allow from 172.16.0.0/12 to any port 8080 proto tcp comment 'nexus-api-from-caddy'
+ss -ltnp | grep 8080
+docker run --rm --network bridge --add-host=host.docker.internal:host-gateway \
+  --entrypoint curl ghcr.io/iv4n89/nexus/backend:latest \
+  -fsS --max-time 5 http://host.docker.internal:8080/actuator/health
+```
+
+Production login is `admin` plus `NEXUS_ADMIN_PASSWORD` in `/opt/nexus/.env`, not `changeme`.
 
 ## Project manifest
 

@@ -48,7 +48,42 @@ fi
 echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER:?GHCR_USER is required}" --password-stdin
 
 docker compose --env-file .env --env-file .env.runtime pull
-docker compose --env-file .env --env-file .env.runtime up -d --no-build --remove-orphans
+docker compose --env-file .env --env-file .env.runtime up -d --no-build --remove-orphans --wait
+
+# Caddy (Docker) reaches Next via docker-proxy :3000, which bypasses UFW.
+# Host-networked Spring on :8080 does not — allow Docker bridges only.
+allow_docker_to_host_api() {
+  local port=8080
+  local cidr=172.16.0.0/12
+  echo "Allowing ${cidr} → host :${port} so Caddy can reach the API"
+
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    ufw allow from "${cidr}" to any port "${port}" proto tcp comment 'nexus-api-from-caddy' || true
+  fi
+
+  if command -v iptables >/dev/null 2>&1; then
+    iptables -C INPUT -p tcp -s "${cidr}" --dport "${port}" -j ACCEPT 2>/dev/null \
+      || iptables -I INPUT 1 -p tcp -s "${cidr}" --dport "${port}" -j ACCEPT
+  fi
+}
+
+probe_caddy_to_api() {
+  echo "Probing host.docker.internal:8080 from a bridge container (Caddy's path)"
+  if docker run --rm --network bridge --add-host=host.docker.internal:host-gateway \
+    --entrypoint curl "${NEXUS_BACKEND_IMAGE}" \
+    -fsS --max-time 8 http://host.docker.internal:8080/actuator/health; then
+    echo
+    echo "Caddy→API path is open"
+    return 0
+  fi
+  echo "Caddy cannot reach host :8080. On the VPS run:" >&2
+  echo "  ufw allow from 172.16.0.0/12 to any port 8080 proto tcp" >&2
+  echo "  iptables -I INPUT 1 -p tcp -s 172.16.0.0/12 --dport 8080 -j ACCEPT" >&2
+  return 1
+}
+
+allow_docker_to_host_api
+probe_caddy_to_api
 
 CADDY_SRC="${ROOT}/caddy/nexus.caddy"
 if [[ -f "${CADDY_SRC}" ]]; then

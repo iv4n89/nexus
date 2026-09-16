@@ -9,8 +9,10 @@
 # Backend uses host networking so the API can reach published project
 # database ports on 127.0.0.1. Public HTTP/TLS is Ava's Caddy
 # (ava-assistant.duckdns.org vs 0nexus.duckdns.org). Caddy runs in Docker
-# and proxies to host.docker.internal:3000/:8080, so those ports bind on
-# the host (not 127.0.0.1-only). Keep 80/443 as the only public entry.
+# and proxies to host.docker.internal:3000/:8080. Next publishes :3000 via
+# docker-proxy (UFW does not apply). Host-networked Spring on :8080 does
+# hit INPUT, so remote-deploy opens Docker bridges → 8080. Bind 0.0.0.0
+# so host.docker.internal can connect; keep 80/443 as the only public entry.
 #
 # VPS deploys pull GHCR images and must use `docker compose up --no-build`.
 # Local: `docker compose --env-file .env up -d --build`.
@@ -40,6 +42,7 @@ services:
     network_mode: host
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SERVER_ADDRESS: "0.0.0.0"
       DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/nexus
       DATABASE_USERNAME: nexus
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-nexus}
