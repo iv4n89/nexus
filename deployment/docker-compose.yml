@@ -6,6 +6,8 @@
 # Required: NEXUS_ADMIN_PASSWORD, DOCKER_GID (stat -c '%g' /var/run/docker.sock).
 # Path identity: host /srv/projects is bind-mounted at the same path so
 # nexus.yml workingDirectory values match ProcessBuilder cwd.
+# Backend and Nginx use host networking so the API can reach published
+# project database ports on 127.0.0.1.
 
 services:
   postgres:
@@ -14,6 +16,8 @@ services:
       POSTGRES_DB: nexus
       POSTGRES_USER: nexus
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus}
+    ports:
+      - "5432:5432"
     volumes:
       - nexus_pg:/var/lib/postgresql/data
     healthcheck:
@@ -26,9 +30,10 @@ services:
   backend:
     build:
       context: ../backend
+    network_mode: host
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DATABASE_URL: jdbc:postgresql://postgres:5432/nexus
+      DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/nexus
       DATABASE_USERNAME: nexus
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-nexus}
       NEXUS_ADMIN_USERNAME: ${NEXUS_ADMIN_USERNAME:-admin}
@@ -50,8 +55,6 @@ services:
       retries: 10
       start_period: 40s
     restart: unless-stopped
-    expose:
-      - "8080"
 
   frontend:
     build:
@@ -74,13 +77,12 @@ services:
       retries: 10
       start_period: 20s
     restart: unless-stopped
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
 
   nginx:
     image: nginx:1.27-alpine
-    ports:
-      - "80:80"
+    network_mode: host
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
