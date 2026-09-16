@@ -47,6 +47,43 @@ fi
 
 echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER:?GHCR_USER is required}" --password-stdin
 
+dump_backend_diagnostics() {
+  if [[ ! -f docker-compose.yml || ! -f .env.runtime ]]; then
+    echo "Skipping backend diagnostics (compose not initialized yet)"
+    return 0
+  fi
+  echo "=== backend diagnostics (pre-pull) ==="
+  docker compose --env-file .env --env-file .env.runtime ps || true
+  docker compose --env-file .env --env-file .env.runtime logs --no-color --tail 2000 backend > /tmp/nexus-backend.log 2>/dev/null || true
+  if [[ ! -s /tmp/nexus-backend.log ]]; then
+    echo "No backend logs yet"
+    return 0
+  fi
+  redact() {
+    sed -E \
+      -e 's/[Pp]assword[=:][^[:space:]]+/password=<redacted>/g' \
+      -e 's/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/<UUID>/g' \
+      -e 's/\b([0-9]{1,3}\.){3}[0-9]{1,3}\b/<IP>/g'
+  }
+  echo -n 'ERROR: '; grep -c ' ERROR ' /tmp/nexus-backend.log || true
+  echo -n 'WARN: '; grep -c ' WARN ' /tmp/nexus-backend.log || true
+  echo -n 'Unhandled exception: '; grep -c 'Unhandled exception' /tmp/nexus-backend.log || true
+  echo -n 'Broken pipe: '; grep -ci 'broken pipe' /tmp/nexus-backend.log || true
+  echo '=== unique ERROR lines ==='
+  grep ' ERROR ' /tmp/nexus-backend.log | redact | sed -E 's/^[0-9T:.,+-Z]+ //' | sort | uniq -c | sort -nr | head -40 || true
+  echo '=== unique WARN lines ==='
+  grep ' WARN ' /tmp/nexus-backend.log | redact | sed -E 's/^[0-9T:.,+-Z]+ //' | sort | uniq -c | sort -nr | head -40 || true
+  echo '=== last 60 ERROR/WARN/Exception lines ==='
+  grep -E ' ERROR | WARN |Exception' /tmp/nexus-backend.log | tail -n 60 | redact || true
+  echo '=== fingerprints by count ==='
+  docker compose --env-file .env --env-file .env.runtime exec -T postgres \
+    psql -U nexus -d nexus -P pager=off -c \
+    "select project_id, service_id, count, left(regexp_replace(sample_message, E'[\n\r]+', ' ', 'g'), 140) as sample, last_seen from log_error_fingerprints order by count desc limit 40;" \
+    || true
+}
+
+dump_backend_diagnostics
+
 docker compose --env-file .env --env-file .env.runtime pull
 docker compose --env-file .env --env-file .env.runtime up -d --no-build --remove-orphans --wait
 
@@ -93,7 +130,12 @@ if [[ -f "${CADDY_SRC}" ]]; then
       mkdir -p "${root}/deploy/caddy-optional"
       cp "${CADDY_SRC}" "${root}/deploy/caddy-optional/nexus.caddy"
       echo "Installed ${root}/deploy/caddy-optional/nexus.caddy"
-      echo "From ${root}: docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d"
+      if [[ -f "${root}/docker-compose.prod.yml" && -f "${root}/docker-compose.tls.yml" ]]; then
+        echo "Reloading Ava Caddy so SSE gzip/h3 fixes take effect"
+        (cd "${root}" && docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d --force-recreate --no-deps caddy)
+      else
+        echo "From ${root}: docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d --force-recreate --no-deps caddy"
+      fi
       installed=1
       break
     fi
