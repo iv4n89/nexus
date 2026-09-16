@@ -93,7 +93,7 @@ Add this repository secret before the first deploy:
 
 - **`NEXUS_SSH_PRIVATE_KEY`** — private key whose public half is in `root@161.97.116.30:~/.ssh/authorized_keys`
 
-Optional: **`NEXUS_ADMIN_PASSWORD`**. If omitted, the first run writes a random admin password to `/opt/nexus/.env` on the server (mode 600). Later deploys do not overwrite that file.
+Optional: **`NEXUS_ADMIN_PASSWORD`**. If omitted, the first run writes a random admin password to `/opt/nexus/.env` on the server (mode 600). Later deploys do not overwrite that file. Production login is `admin` plus that value — not the local `changeme`.
 
 ```bash
 gh secret set NEXUS_SSH_PRIVATE_KEY < deploy_key
