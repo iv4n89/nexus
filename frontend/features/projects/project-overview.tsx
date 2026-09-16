@@ -3,13 +3,13 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StatusDot, toneFromHealthAndState } from '@/components/status-dot'
 import { me } from '@/features/auth/api'
 import { api } from '@/lib/api'
 import { containersForProject, displayName, projectLabel, serviceLabel } from '@/lib/docker'
 import { formatBytes, formatClock, formatElapsed, formatPercent, healthOkLabel } from '@/lib/format'
-import type { AuthUser, Container, DeployAccepted, Deployment, ProjectDetail, ProjectMetrics } from '@/types/api'
+import type { Alert, AuthUser, Container, DeployAccepted, Deployment, ProjectDetail, ProjectMetrics } from '@/types/api'
 
 type ServiceRow = {
   key: string
@@ -75,6 +75,18 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
     queryKey: ['containers'],
     queryFn: () => api<Container[]>('/api/containers'),
   })
+  const queryClient = useQueryClient()
+  const alerts = useQuery({
+    queryKey: ['alerts'],
+    queryFn: () => api<Alert[]>('/api/alerts'),
+    refetchInterval: 30_000,
+  })
+  const acknowledge = useMutation({
+    mutationFn: (id: string) => api<Alert>(`/api/alerts/${id}/acknowledge`, { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['alerts'] })
+    },
+  })
 
   if (project.isPending) {
     return <p className="text-sm text-[#888]">Loading…</p>
@@ -85,7 +97,9 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
 
   const rows = serviceRows(projectId, project.data, containers.data)
   const canDeploy = auth.data?.role === 'ADMIN' && project.data.deployable
+  const canAcknowledge = auth.data?.role === 'ADMIN'
   const recentErrors = project.data.recentErrors ?? []
+  const projectAlerts = (alerts.data ?? []).filter((alert) => alert.projectId === projectId)
 
   async function onDeploy() {
     if (!canDeploy || deploying) {
@@ -201,6 +215,50 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
             ))}
           </ul>
         )}
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Alerts</h2>
+        {alerts.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : alerts.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{alerts.error.message}</p>
+        ) : projectAlerts.length === 0 ? (
+          <p className="text-sm text-[#888]">No active alerts</p>
+        ) : (
+          <ul>
+            {projectAlerts.map((alert) => (
+              <li
+                key={alert.id}
+                className="flex items-start justify-between gap-4 border-b border-[#2a2a2a] py-3 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm">{alert.type}</p>
+                  <p className="mt-1 break-all text-sm text-[#888]">{alert.message}</p>
+                  <p className="mt-1 text-sm text-[#888]">
+                    {alert.status}
+                    {alert.serviceId ? ` · ${alert.serviceId}` : ''}
+                    {' · '}
+                    {formatClock(alert.openedAt)}
+                  </p>
+                </div>
+                {canAcknowledge && alert.status === 'ACTIVE' ? (
+                  <button
+                    type="button"
+                    disabled={acknowledge.isPending}
+                    onClick={() => acknowledge.mutate(alert.id)}
+                    className="shrink-0 border border-[#f5f5f5] px-3 py-1 text-sm text-[#f5f5f5] disabled:cursor-not-allowed disabled:border-[#2a2a2a] disabled:text-[#888]"
+                  >
+                    ACK
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+        {acknowledge.isError ? (
+          <p className="mt-2 text-sm text-[#ff4d4f]">{acknowledge.error.message}</p>
+        ) : null}
       </section>
 
       <section>

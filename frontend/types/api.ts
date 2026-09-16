@@ -90,3 +90,27 @@ export type ContainerMetrics = {
   rxBytes: number
   txBytes: number
 }
+
+export type AlertStatus = 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED'
+
+export type AlertType =
+  | 'CONTAINER_STOPPED'
+  | 'RESTART_SPIKE'
+  | 'HIGH_MEMORY'
+  | 'DISK'
+  | 'ERROR_RATE'
+  | 'DOCKER_HEALTH'
+  | 'HTTP_HEALTH'
+
+export type Alert = {
+  id: string
+  ruleId: string | null
+  projectId: string | null
+  serviceId: string | null
+  status: AlertStatus
+  message: string
+  openedAt: string
+  acknowledgedAt: string | null
+  resolvedAt: string | null
+  type: AlertType
+}

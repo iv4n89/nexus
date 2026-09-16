@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @ConditionalOnProperty(name = "nexus.alerts.enabled", havingValue = "true")
@@ -29,6 +30,7 @@ public class AnalyzeLogs {
     private final LogProvider logProvider;
     private final LogErrorFingerprintJpaRepository fingerprints;
     private final int logWindowSeconds;
+    private final ConcurrentHashMap<String, Integer> watermarks = new ConcurrentHashMap<>();
 
     public AnalyzeLogs(
             DiscoverProjects discoverProjects,
@@ -43,18 +45,27 @@ public class AnalyzeLogs {
 
     @Scheduled(fixedDelayString = "${nexus.alerts.interval-ms:30000}")
     public void execute() {
-        int since = (int) (Instant.now().getEpochSecond() - logWindowSeconds);
-        Map<FingerprintKey, LogErrorFingerprintEntity> pending = new HashMap<>();
+        int nowEpoch = (int) Instant.now().getEpochSecond();
         Instant now = Instant.now();
+        Map<FingerprintKey, LogErrorFingerprintEntity> pending = new HashMap<>();
         for (var entry : discoverProjects.groupByProject().entrySet()) {
             String projectId = entry.getKey();
             for (ContainerSnapshot container : entry.getValue()) {
                 String serviceId = serviceId(container);
+                int since = sinceFor(container.id(), nowEpoch);
                 for (String line : fetchLines(container.id(), since)) {
                     ErrorNormalizer.normalize(line).ifPresent(error -> upsert(pending, projectId, serviceId, error, now));
                 }
             }
         }
+    }
+
+    private int sinceFor(String containerId, int nowEpoch) {
+        int windowStart = nowEpoch - logWindowSeconds;
+        Integer lastWatermark = watermarks.get(containerId);
+        int since = lastWatermark == null ? windowStart : Math.max(windowStart, lastWatermark);
+        watermarks.put(containerId, nowEpoch);
+        return since;
     }
 
     private List<String> fetchLines(String containerId, int since) {

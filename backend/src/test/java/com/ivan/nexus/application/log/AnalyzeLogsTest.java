@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -88,6 +89,32 @@ class AnalyzeLogsTest {
 
         verify(fingerprints, never()).save(any());
         verify(fingerprints, never()).findByProjectIdAndServiceIdAndFingerprint(any(), any(), any());
+    }
+
+    @Test
+    void subsequentScanUsesWatermarkInsteadOfFullWindow() {
+        given(logProvider.fetch(eq("web-id"), eq(2000), anyInt(), isNull(), eq(false)))
+                .willReturn(List.of("ERROR boom"));
+        given(fingerprints.findByProjectIdAndServiceIdAndFingerprint(eq("lab"), eq("web"), any()))
+                .willReturn(Optional.empty());
+        given(fingerprints.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        AnalyzeLogs analyzeLogs = analyze("web");
+        analyzeLogs.execute();
+
+        ArgumentCaptor<Integer> firstSince = ArgumentCaptor.forClass(Integer.class);
+        verify(logProvider).fetch(eq("web-id"), eq(2000), firstSince.capture(), isNull(), eq(false));
+        int windowStart = firstSince.getValue();
+        int nowAfterFirst = (int) Instant.now().getEpochSecond();
+        assertThat(nowAfterFirst - windowStart).isBetween(119, 122);
+
+        analyzeLogs.execute();
+
+        ArgumentCaptor<Integer> secondSince = ArgumentCaptor.forClass(Integer.class);
+        verify(logProvider, times(2))
+                .fetch(eq("web-id"), eq(2000), secondSince.capture(), isNull(), eq(false));
+        assertThat(secondSince.getAllValues().get(1)).isGreaterThan(windowStart);
+        assertThat(secondSince.getAllValues().get(1)).isGreaterThanOrEqualTo(nowAfterFirst - 2);
     }
 
     @Test
