@@ -33,7 +33,7 @@ public class DiscoverProjects {
                 .toList();
     }
 
-    Map<String, List<ContainerSnapshot>> groupByProject() {
+    public Map<String, List<ContainerSnapshot>> groupByProject() {
         Map<String, List<ContainerSnapshot>> grouped = new LinkedHashMap<>();
         for (ContainerSnapshot snapshot : inventory.listAll()) {
             String projectId = ProjectGrouping.projectId(snapshot.name(), snapshot.labels());

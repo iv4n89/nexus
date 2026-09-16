@@ -17,6 +17,13 @@ export type ProjectService = {
 
 export type ProjectDetail = Project & {
   services: ProjectService[]
+  recentErrors?: RecentError[]
+}
+
+export type RecentError = {
+  sampleMessage: string
+  count: number
+  lastSeen: string
 }
 
 export type AuthUser = {

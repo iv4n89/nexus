@@ -85,6 +85,7 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
 
   const rows = serviceRows(projectId, project.data, containers.data)
   const canDeploy = auth.data?.role === 'ADMIN' && project.data.deployable
+  const recentErrors = project.data.recentErrors ?? []
 
   async function onDeploy() {
     if (!canDeploy || deploying) {
@@ -176,6 +177,28 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
                 </li>
               )
             })}
+          </ul>
+        )}
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Errors</h2>
+        {recentErrors.length === 0 ? (
+          <p className="text-sm text-[#888]">No recent errors</p>
+        ) : (
+          <ul>
+            {recentErrors.map((error) => (
+              <li
+                key={`${error.sampleMessage}-${error.lastSeen}`}
+                className="border-b border-[#2a2a2a] py-3 font-mono text-sm last:border-b-0"
+              >
+                <div className="flex items-baseline justify-between gap-4">
+                  <span className="min-w-0 break-all">{error.sampleMessage}</span>
+                  <span className="shrink-0 text-[#888]">×{error.count}</span>
+                </div>
+                <p className="mt-1 text-[#888]">{formatClock(error.lastSeen)}</p>
+              </li>
+            ))}
           </ul>
         )}
       </section>
