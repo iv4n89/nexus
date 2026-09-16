@@ -111,7 +111,7 @@ public class LogStreamController {
             try {
                 emitter.send(SseEmitter.event().name("log").data(line));
             } catch (IOException ex) {
-                completeWithError(emitter, ex);
+                complete(emitter);
             }
         }
     }
@@ -121,7 +121,7 @@ public class LogStreamController {
             try {
                 emitter.send(SseEmitter.event().comment("ping"));
             } catch (IOException ex) {
-                completeWithError(emitter, ex);
+                complete(emitter);
             }
         }
     }

@@ -99,17 +99,61 @@ class ProjectControllerTest {
                 snapshot("web-id", "lab-web-1", "running", "healthy", "web")));
         given(getRecentErrors.execute("lab")).willReturn(List.of(
                 new GetRecentErrors.RecentError(
+                        "api",
                         "Connection to 10.0.0.31 failed at 12:42",
                         37L,
+                        Instant.parse("2026-01-01T00:40:00Z"),
                         Instant.parse("2026-01-01T00:42:00Z"))));
 
         mockMvc.perform(get("/api/projects/lab"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.recentErrors", hasSize(1)))
+                .andExpect(jsonPath("$.recentErrors[0].serviceId").value("api"))
                 .andExpect(jsonPath("$.recentErrors[0].sampleMessage")
                         .value("Connection to 10.0.0.31 failed at 12:42"))
                 .andExpect(jsonPath("$.recentErrors[0].count").value(37))
+                .andExpect(jsonPath("$.recentErrors[0].firstSeen").value("2026-01-01T00:40:00Z"))
                 .andExpect(jsonPath("$.recentErrors[0].lastSeen").value("2026-01-01T00:42:00Z"));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void projectErrorsFiltersByService() throws Exception {
+        given(inventory.listAll()).willReturn(List.of(
+                snapshot("api-id", "lab-api-1", "running", "healthy", "api")));
+        given(getRecentErrors.execute("lab", "api")).willReturn(List.of(
+                new GetRecentErrors.RecentError(
+                        "api",
+                        "Broken pipe",
+                        12L,
+                        Instant.parse("2026-01-01T00:40:00Z"),
+                        Instant.parse("2026-01-01T00:42:00Z"))));
+
+        mockMvc.perform(get("/api/projects/lab/errors").param("serviceId", "api"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].serviceId").value("api"))
+                .andExpect(jsonPath("$[0].sampleMessage").value("Broken pipe"))
+                .andExpect(jsonPath("$[0].count").value(12));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void projectErrorsWithoutServiceReturnsProjectScopedList() throws Exception {
+        given(inventory.listAll()).willReturn(List.of(
+                snapshot("api-id", "lab-api-1", "running", "healthy", "api")));
+        given(getRecentErrors.execute("lab", null)).willReturn(List.of(
+                new GetRecentErrors.RecentError(
+                        "api",
+                        "Broken pipe",
+                        12L,
+                        Instant.parse("2026-01-01T00:40:00Z"),
+                        Instant.parse("2026-01-01T00:42:00Z"))));
+
+        mockMvc.perform(get("/api/projects/lab/errors"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].serviceId").value("api"));
     }
 
     @Test

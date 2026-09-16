@@ -11,6 +11,7 @@ const NAV = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const wide = pathname.includes('/database') || pathname.includes('/logs') || pathname.includes('/services')
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-black text-[#f5f5f5]">
@@ -34,7 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
       </header>
-      <main className={`mx-auto w-full flex-1 px-6 py-10 ${pathname.includes('/database') ? 'max-w-6xl' : 'max-w-3xl'}`}>
+      <main className={`mx-auto w-full flex-1 px-6 py-10 ${wide ? 'max-w-6xl' : 'max-w-3xl'}`}>
         {children}
       </main>
     </div>

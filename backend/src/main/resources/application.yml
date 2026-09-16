@@ -23,6 +23,10 @@ management:
       probes:
         enabled: true
       show-details: never
+logging:
+  level:
+    org.apache.catalina.connector.ClientAbortException: OFF
+    org.springframework.web.context.request.async.AsyncRequestNotUsableException: OFF
 nexus:
   version: ${NEXUS_VERSION:0.0.1-SNAPSHOT}
   docker:

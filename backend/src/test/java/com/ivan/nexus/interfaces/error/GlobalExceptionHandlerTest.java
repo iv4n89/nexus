@@ -85,6 +85,12 @@ class GlobalExceptionHandlerTest {
                 .doesNotContain("at com.ivan");
     }
 
+    @Test
+    void brokenPipeDoesNotReturnInternalErrorEnvelope() throws Exception {
+        mockMvc.perform(get("/test/broken-pipe"))
+                .andExpect(status().isNoContent());
+    }
+
     @RestController
     static class ErrorFixtureController {
         @GetMapping("/test/not-found")
@@ -110,6 +116,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/query-timeout")
         void queryTimeout() {
             throw new DomainException(NexusErrorCode.QUERY_TIMEOUT, "Query timed out");
+        }
+
+        @GetMapping("/test/broken-pipe")
+        void brokenPipe() throws Exception {
+            throw new java.io.IOException("Broken pipe");
         }
     }
 }

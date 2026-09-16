@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useEventSource } from '@/hooks/use-event-source'
 import { api } from '@/lib/api'
-import { containersForProject, displayName } from '@/lib/docker'
-import type { Container } from '@/types/api'
+import { containersForProject, displayName, serviceLabel } from '@/lib/docker'
+import type { Container, LogSnapshot } from '@/types/api'
 
 const LEVELS = ['ALL', 'INFO', 'WARN', 'ERROR'] as const
 const FROM_OPTIONS = [
@@ -19,17 +20,40 @@ const DEFAULT_FROM_SECONDS = 30 * 60
 
 type Level = (typeof LEVELS)[number]
 
+function parseLevel(value: string | null): Level {
+  const upper = value?.toUpperCase()
+  return LEVELS.find((level) => level === upper) ?? 'ALL'
+}
+
+function matchesLogLine(line: string, level: Level, query: string): boolean {
+  const haystack = line.toLowerCase()
+  if (level !== 'ALL' && !haystack.includes(level.toLowerCase())) {
+    return false
+  }
+  const needle = query.trim().toLowerCase()
+  return !needle || haystack.includes(needle)
+}
+
 export function LogViewer({ projectId }: { projectId: string }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const containers = useQuery({
     queryKey: ['containers'],
     queryFn: () => api<Container[]>('/api/containers'),
   })
-  const [level, setLevel] = useState<Level>('ALL')
-  const [search, setSearch] = useState('')
-  const [containerId, setContainerId] = useState<string | null>(null)
+  const [level, setLevel] = useState<Level>(() => parseLevel(searchParams.get('level')))
+  const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
+  const [appliedSearch, setAppliedSearch] = useState(() => searchParams.get('q') ?? '')
+  const [containerId, setContainerId] = useState<string | null>(searchParams.get('container'))
   const [fromSeconds, setFromSeconds] = useState(DEFAULT_FROM_SECONDS)
   const [lines, setLines] = useState<string[]>([])
   const scrollerRef = useRef<HTMLPreElement>(null)
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setAppliedSearch(search), 300)
+    return () => window.clearTimeout(handle)
+  }, [search])
 
   const ofProject = useMemo(
     () => (containers.data ? containersForProject(containers.data, projectId) : []),
@@ -37,60 +61,122 @@ export function LogViewer({ projectId }: { projectId: string }) {
   )
 
   useEffect(() => {
+    if (containers.isPending) {
+      return
+    }
     if (ofProject.length === 0) {
       setContainerId(null)
       return
     }
+    const wantedService = searchParams.get('service')
+    const wantedContainer = searchParams.get('container')
     setContainerId((current) => {
+      if (wantedContainer && ofProject.some((container) => container.id === wantedContainer)) {
+        return wantedContainer
+      }
+      if (wantedService) {
+        const match = ofProject.find((container) => serviceLabel(container) === wantedService)
+        if (match) {
+          return match.id
+        }
+      }
       if (current && ofProject.some((container) => container.id === current)) {
         return current
       }
       return ofProject[0].id
     })
-  }, [ofProject])
+  }, [ofProject, searchParams, containers.isPending])
+
+  const selected = ofProject.find((container) => container.id === containerId)
+  const selectedService = selected ? serviceLabel(selected) : null
+
+  useEffect(() => {
+    if (containers.isPending || (ofProject.length > 0 && !containerId)) {
+      return
+    }
+    const params = new URLSearchParams()
+    if (selectedService) {
+      params.set('service', selectedService)
+    } else if (containerId) {
+      params.set('container', containerId)
+    }
+    if (level !== 'ALL') {
+      params.set('level', level)
+    }
+    if (appliedSearch.trim()) {
+      params.set('q', appliedSearch.trim())
+    }
+    const next = params.toString()
+    const current = searchParams.toString()
+    if (next !== current) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false })
+    }
+  }, [
+    appliedSearch,
+    containerId,
+    containers.isPending,
+    level,
+    ofProject.length,
+    pathname,
+    router,
+    searchParams,
+    selectedService,
+  ])
 
   const since = useMemo(
     () => Math.floor(Date.now() / 1000) - fromSeconds,
     [fromSeconds, containerId],
   )
 
-  const streamUrl =
-    containerId == null
-      ? null
-      : `/api/containers/${encodeURIComponent(containerId)}/logs/stream?tail=100&since=${since}`
+  const snapshot = useQuery({
+    queryKey: ['logs', 'search', containerId, since, level, appliedSearch],
+    enabled: containerId != null,
+    queryFn: () => {
+      const params = new URLSearchParams({
+        tail: String(MAX_LINES),
+        since: String(since),
+        timestamps: 'true',
+      })
+      if (level !== 'ALL') {
+        params.set('level', level)
+      }
+      if (appliedSearch.trim()) {
+        params.set('q', appliedSearch.trim())
+      }
+      return api<LogSnapshot>(
+        `/api/containers/${encodeURIComponent(containerId!)}/logs/search?${params}`,
+      )
+    },
+  })
 
   useEffect(() => {
-    setLines([])
-  }, [streamUrl])
+    setLines(snapshot.data?.lines ?? [])
+  }, [snapshot.data])
+
+  const streamUrl =
+    containerId == null || !snapshot.isSuccess
+      ? null
+      : `/api/containers/${encodeURIComponent(containerId)}/logs/stream?tail=1&since=${since}`
 
   useEventSource(streamUrl, (data) => {
+    if (!matchesLogLine(data, level, appliedSearch)) {
+      return
+    }
     setLines((prev) => {
+      if (prev[prev.length - 1] === data) {
+        return prev
+      }
       const next = [...prev, data]
       return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next
     })
   })
-
-  const visibleLines = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    const levelNeedle = level === 'ALL' ? null : level.toLowerCase()
-    return lines.filter((line) => {
-      const hay = line.toLowerCase()
-      if (levelNeedle && !hay.includes(levelNeedle)) {
-        return false
-      }
-      if (query && !hay.includes(query)) {
-        return false
-      }
-      return true
-    })
-  }, [lines, level, search])
 
   useEffect(() => {
     const node = scrollerRef.current
     if (node) {
       node.scrollTop = node.scrollHeight
     }
-  }, [visibleLines])
+  }, [lines])
 
   if (containers.isPending) {
     return <p className="text-sm text-[#888]">Loading…</p>
@@ -115,6 +201,9 @@ export function LogViewer({ projectId }: { projectId: string }) {
         ← {projectId}
       </Link>
       <h1 className="text-xl uppercase tracking-wider">Logs</h1>
+      {selectedService ? (
+        <p className="font-mono text-sm text-[#888]">{selectedService}</p>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {LEVELS.map((tab) => (
@@ -138,7 +227,7 @@ export function LogViewer({ projectId }: { projectId: string }) {
         <input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="border border-[#2a2a2a] bg-black px-2 py-1 text-[#f5f5f5]"
+          className="min-w-0 flex-1 border border-[#2a2a2a] bg-black px-2 py-1 text-[#f5f5f5]"
         />
       </label>
 
@@ -172,13 +261,32 @@ export function LogViewer({ projectId }: { projectId: string }) {
         </select>
       </label>
 
+      {snapshot.isError ? (
+        <p className="text-sm text-[#ff4d4f]">{snapshot.error.message}</p>
+      ) : null}
+
       <pre
         ref={scrollerRef}
-        className="h-[28rem] overflow-auto border border-[#2a2a2a] bg-black p-3 font-mono text-sm text-[#f5f5f5]"
+        className="h-[32rem] overflow-auto border border-[#2a2a2a] bg-black p-3 font-mono text-sm leading-6 text-[#f5f5f5]"
       >
-        {visibleLines.map((line, index) => (
-          <div key={index}>{line}</div>
-        ))}
+        {snapshot.isPending && lines.length === 0 ? (
+          <div className="text-[#888]">Loading…</div>
+        ) : lines.length === 0 ? (
+          <div className="text-[#888]">No matching lines</div>
+        ) : (
+          lines.map((line, index) => (
+            <div
+              key={index}
+              className={
+                /error|exception|fatal|failed|timeout/i.test(line)
+                  ? 'whitespace-pre-wrap break-all text-[#ff4d4f]'
+                  : 'whitespace-pre-wrap break-all'
+              }
+            >
+              {line}
+            </div>
+          ))
+        )}
       </pre>
     </div>
   )
