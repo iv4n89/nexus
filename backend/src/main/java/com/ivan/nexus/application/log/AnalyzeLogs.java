@@ -1,6 +1,8 @@
 package com.ivan.nexus.application.log;
 
 import com.ivan.nexus.application.project.DiscoverProjects;
+import com.ivan.nexus.application.activity.RecordActivity;
+import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.log.ErrorFingerprint;
 import com.ivan.nexus.domain.log.ErrorNormalizer;
@@ -29,6 +31,7 @@ public class AnalyzeLogs {
     private final DiscoverProjects discoverProjects;
     private final LogProvider logProvider;
     private final LogErrorFingerprintJpaRepository fingerprints;
+    private final RecordActivity recordActivity;
     private final int logWindowSeconds;
     private final ConcurrentHashMap<String, Integer> watermarks = new ConcurrentHashMap<>();
 
@@ -36,10 +39,12 @@ public class AnalyzeLogs {
             DiscoverProjects discoverProjects,
             LogProvider logProvider,
             LogErrorFingerprintJpaRepository fingerprints,
+            RecordActivity recordActivity,
             @Value("${nexus.alerts.log-window-seconds:120}") int logWindowSeconds) {
         this.discoverProjects = discoverProjects;
         this.logProvider = logProvider;
         this.fingerprints = fingerprints;
+        this.recordActivity = recordActivity;
         this.logWindowSeconds = logWindowSeconds;
     }
 
@@ -85,6 +90,7 @@ public class AnalyzeLogs {
             Instant now) {
         FingerprintKey key = new FingerprintKey(projectId, serviceId, error.fingerprint());
         LogErrorFingerprintEntity entity = pending.get(key);
+        boolean created = false;
         if (entity == null) {
             entity = fingerprints
                     .findByProjectIdAndServiceIdAndFingerprint(projectId, serviceId, error.fingerprint())
@@ -100,11 +106,20 @@ public class AnalyzeLogs {
                     now,
                     1L,
                     error.sampleMessage());
+            created = true;
         } else {
             entity.recordHit(now);
         }
         pending.put(key, entity);
         fingerprints.save(entity);
+        if (created) {
+            recordActivity.execute(
+                    ActivityType.ERROR_DETECTED,
+                    projectId,
+                    serviceId,
+                    "error detected",
+                    Map.of("fingerprint", error.fingerprint(), "sampleMessage", error.sampleMessage()));
+        }
     }
 
     private static String serviceId(ContainerSnapshot container) {

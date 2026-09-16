@@ -1,6 +1,8 @@
 package com.ivan.nexus.application.deployment;
 
+import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
@@ -53,6 +55,7 @@ class DeployProjectTest {
     private final FakeProcessExecutor processExecutor = new FakeProcessExecutor();
     private final FakeHealthChecker healthChecker = new FakeHealthChecker();
     private final RecordAudit recordAudit = mock(RecordAudit.class);
+    private final RecordActivity recordActivity = mock(RecordActivity.class);
     private final UserJpaRepository users = mock(UserJpaRepository.class);
     private final UUID adminId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
@@ -101,6 +104,18 @@ class DeployProjectTest {
                 "health check OK",
                 "DEPLOYMENT SUCCESS");
         assertThat(healthChecker.called).isTrue();
+        verify(recordActivity).execute(
+                eq(ActivityType.DEPLOYMENT_STARTED),
+                eq("lab"),
+                isNull(),
+                eq("deployment started"),
+                any());
+        verify(recordActivity).execute(
+                eq(ActivityType.DEPLOYMENT_SUCCESS),
+                eq("lab"),
+                isNull(),
+                eq("deployment successful"),
+                any());
         verify(recordAudit).execute(
                 eq(adminId),
                 eq(AuditAction.DEPLOY),
@@ -143,6 +158,18 @@ class DeployProjectTest {
                 "health check FAILED",
                 "DEPLOYMENT FAILED");
         assertThat(healthChecker.called).isTrue();
+        verify(recordActivity).execute(
+                eq(ActivityType.HEALTH_CHECK_FAILED),
+                eq("lab"),
+                isNull(),
+                eq("health check failed"),
+                any());
+        verify(recordActivity).execute(
+                eq(ActivityType.DEPLOYMENT_FAILED),
+                eq("lab"),
+                isNull(),
+                eq("deployment failed"),
+                any());
     }
 
     @Test
@@ -180,6 +207,7 @@ class DeployProjectTest {
                 processExecutor,
                 healthChecker,
                 recordAudit,
+                recordActivity,
                 users,
                 executor);
     }

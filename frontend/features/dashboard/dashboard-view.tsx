@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
+import { ActivityTimeline, useActivityEvents } from '@/features/activity/timeline'
 import { ProjectList } from '@/features/projects/project-list'
 import { api } from '@/lib/api'
 import { formatPercent, usagePercent } from '@/lib/format'
@@ -22,6 +23,7 @@ export function DashboardView() {
     queryFn: () => api<Alert[]>('/api/alerts'),
     refetchInterval: 30_000,
   })
+  const activity = useActivityEvents(8)
 
   return (
     <div className="flex flex-col gap-10">
@@ -102,7 +104,13 @@ export function DashboardView() {
 
       <section>
         <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">RECENT ACTIVITY</h2>
-        <p className="text-sm text-[#888]">No recent activity</p>
+        {activity.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : activity.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{activity.error?.message ?? 'Unable to load activity'}</p>
+        ) : (
+          <ActivityTimeline events={activity.events} />
+        )}
       </section>
     </div>
   )

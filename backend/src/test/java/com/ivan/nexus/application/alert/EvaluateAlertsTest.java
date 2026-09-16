@@ -1,10 +1,12 @@
 package com.ivan.nexus.application.alert;
 
+import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.deployment.HealthChecker;
 import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetSystemMetrics;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.application.project.DiscoverProjects;
+import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
@@ -31,6 +33,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
@@ -49,6 +52,8 @@ class EvaluateAlertsTest {
     AlertRuleJpaRepository rules;
     @Mock
     AlertEventJpaRepository events;
+    @Mock
+    RecordActivity recordActivity;
 
     private final List<ContainerSnapshot> inventory = new ArrayList<>();
     private EvaluateAlerts evaluateAlerts;
@@ -67,6 +72,7 @@ class EvaluateAlertsTest {
                 new YamlManifestLoader(),
                 rules,
                 events,
+                recordActivity,
                 "/tmp/nexus-no-manifests");
     }
 
@@ -90,6 +96,10 @@ class EvaluateAlertsTest {
         assertThat(saved.getServiceId()).isEqualTo("web");
         assertThat(saved.getRule().getType()).isEqualTo(AlertType.CONTAINER_STOPPED);
         assertThat(saved.getResolvedAt()).isNull();
+        verify(recordActivity).execute(
+                eq(ActivityType.ALERT_CREATED), eq("lab"), eq("web"), eq("alert created"), any());
+        verify(recordActivity).execute(
+                eq(ActivityType.CONTAINER_STOPPED), eq("lab"), eq("web"), eq("stopped"), any());
     }
 
     @Test
@@ -140,6 +150,10 @@ class EvaluateAlertsTest {
         assertThat(saved).hasSize(1);
         assertThat(saved.getFirst().getStatus()).isEqualTo(AlertStatus.RESOLVED);
         assertThat(saved.getFirst().getResolvedAt()).isNotNull();
+        verify(recordActivity).execute(
+                eq(ActivityType.ALERT_RESOLVED), eq("lab"), eq("web"), eq("alert resolved"), any());
+        verify(recordActivity).execute(
+                eq(ActivityType.CONTAINER_STARTED), eq("lab"), eq("web"), eq("started"), any());
     }
 
     private static Optional<AlertEventEntity> openOfType(List<AlertEventEntity> saved, AlertType type) {

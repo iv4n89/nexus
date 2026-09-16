@@ -114,3 +114,25 @@ export type Alert = {
   resolvedAt: string | null
   type: AlertType
 }
+
+export type ActivityType =
+  | 'DEPLOYMENT_STARTED'
+  | 'DEPLOYMENT_SUCCESS'
+  | 'DEPLOYMENT_FAILED'
+  | 'CONTAINER_STARTED'
+  | 'CONTAINER_STOPPED'
+  | 'CONTAINER_RESTARTED'
+  | 'ERROR_DETECTED'
+  | 'ALERT_CREATED'
+  | 'ALERT_RESOLVED'
+  | 'HEALTH_CHECK_FAILED'
+
+export type ActivityEvent = {
+  id: string
+  createdAt: string
+  type: ActivityType
+  projectId: string | null
+  serviceId: string | null
+  message: string
+  metadata: Record<string, unknown>
+}

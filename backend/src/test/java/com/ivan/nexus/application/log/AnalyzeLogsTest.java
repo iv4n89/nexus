@@ -2,6 +2,8 @@ package com.ivan.nexus.application.log;
 
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.application.project.DiscoverProjects;
+import com.ivan.nexus.application.activity.RecordActivity;
+import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.log.ErrorNormalizer;
 import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintEntity;
@@ -37,6 +39,9 @@ class AnalyzeLogsTest {
     @Mock
     LogErrorFingerprintJpaRepository fingerprints;
 
+    @Mock
+    RecordActivity recordActivity;
+
     @Test
     void insertsNewFingerprintForErrorLine() {
         given(logProvider.fetch(eq("web-id"), eq(2000), anyInt(), isNull(), eq(false)))
@@ -58,6 +63,8 @@ class AnalyzeLogsTest {
                 ErrorNormalizer.normalize("Connection to 10.0.0.31 failed at 12:42").orElseThrow().fingerprint());
         assertThat(saved.getFirstSeen()).isNotNull();
         assertThat(saved.getLastSeen()).isEqualTo(saved.getFirstSeen());
+        verify(recordActivity).execute(
+                eq(ActivityType.ERROR_DETECTED), eq("lab"), eq("web"), eq("error detected"), any());
     }
 
     @Test
@@ -78,6 +85,7 @@ class AnalyzeLogsTest {
         assertThat(existing.getCount()).isEqualTo(4L);
         assertThat(existing.getLastSeen()).isAfter(firstSeen);
         assertThat(existing.getFirstSeen()).isEqualTo(firstSeen);
+        verify(recordActivity, never()).execute(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -141,6 +149,7 @@ class AnalyzeLogsTest {
                 new DiscoverProjects(inventory(snapshot), "/tmp/nexus-no-manifests"),
                 logProvider,
                 fingerprints,
+                recordActivity,
                 120);
         analyzeLogs.execute();
 
@@ -154,6 +163,7 @@ class AnalyzeLogsTest {
                 new DiscoverProjects(inventory(snapshot(service)), "/tmp/nexus-no-manifests"),
                 logProvider,
                 fingerprints,
+                recordActivity,
                 120);
     }
 

@@ -1,9 +1,11 @@
 package com.ivan.nexus.application.alert;
 
+import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.deployment.HealthChecker;
 import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetSystemMetrics;
 import com.ivan.nexus.application.project.DiscoverProjects;
+import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.alert.AlertEvaluator;
 import com.ivan.nexus.domain.alert.AlertEvaluation;
 import com.ivan.nexus.domain.alert.AlertFacts;
@@ -60,10 +62,12 @@ public class EvaluateAlerts {
     private final YamlManifestLoader loader;
     private final AlertRuleJpaRepository rules;
     private final AlertEventJpaRepository events;
+    private final RecordActivity recordActivity;
     private final Path allowedRoot;
     private final AlertEvaluator evaluator = new AlertEvaluator();
     private final ConcurrentHashMap<String, ContainerSnapshot> previousSnapshots = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<FingerprintCountKey, Long> previousFingerprintCounts = new ConcurrentHashMap<>();
+    private volatile boolean primed;
 
     public EvaluateAlerts(
             DiscoverProjects discoverProjects,
@@ -74,6 +78,7 @@ public class EvaluateAlerts {
             YamlManifestLoader loader,
             AlertRuleJpaRepository rules,
             AlertEventJpaRepository events,
+            RecordActivity recordActivity,
             @Value("${nexus.manifest.allowed-root}") String allowedRoot) {
         this.discoverProjects = discoverProjects;
         this.statsProvider = statsProvider;
@@ -83,6 +88,7 @@ public class EvaluateAlerts {
         this.loader = loader;
         this.rules = rules;
         this.events = events;
+        this.recordActivity = recordActivity;
         this.allowedRoot = Path.of(allowedRoot).toAbsolutePath().normalize();
     }
 
@@ -120,6 +126,7 @@ public class EvaluateAlerts {
 
         AlertEvaluation evaluation = evaluator.evaluate(facts);
         persist(evaluation, enabledRules, now);
+        emitContainerActivity(grouped);
 
         previousSnapshots.clear();
         for (List<ContainerSnapshot> containers : grouped.values()) {
@@ -127,6 +134,7 @@ public class EvaluateAlerts {
                 previousSnapshots.put(container.id(), container);
             }
         }
+        primed = true;
     }
 
     private void persist(AlertEvaluation evaluation, List<AlertRuleEntity> enabledRules, Instant now) {
@@ -149,14 +157,79 @@ public class EvaluateAlerts {
                     now,
                     null,
                     null));
+            recordActivity.execute(
+                    ActivityType.ALERT_CREATED,
+                    key.projectId(),
+                    key.serviceId(),
+                    "alert created",
+                    Map.of("alertType", key.type().name(), "detail", firing.message()));
+            if (key.type() == AlertType.HTTP_HEALTH || key.type() == AlertType.DOCKER_HEALTH) {
+                recordActivity.execute(
+                        ActivityType.HEALTH_CHECK_FAILED,
+                        key.projectId(),
+                        key.serviceId(),
+                        "health check failed",
+                        Map.of("alertType", key.type().name()));
+            }
         }
         for (AlertKey key : evaluation.resolveKeys()) {
             events.findOpenByTypeAndProjectAndService(key.type(), key.projectId(), key.serviceId())
                     .ifPresent(open -> {
                         open.resolve(now);
                         events.save(open);
+                        recordActivity.execute(
+                                ActivityType.ALERT_RESOLVED,
+                                key.projectId(),
+                                key.serviceId(),
+                                "alert resolved",
+                                Map.of("alertType", key.type().name()));
                     });
         }
+    }
+
+    private void emitContainerActivity(Map<String, List<ContainerSnapshot>> grouped) {
+        for (var entry : grouped.entrySet()) {
+            String projectId = entry.getKey();
+            for (ContainerSnapshot current : entry.getValue()) {
+                String serviceId = serviceId(current);
+                ContainerSnapshot previous = previousSnapshots.get(current.id());
+                if (previous == null) {
+                    if (primed && isRunning(current.state())) {
+                        recordContainer(ActivityType.CONTAINER_STARTED, projectId, serviceId, current, "started");
+                    }
+                    continue;
+                }
+                if (current.restartCount() > previous.restartCount()) {
+                    recordContainer(ActivityType.CONTAINER_RESTARTED, projectId, serviceId, current, "restarted");
+                    continue;
+                }
+                boolean wasRunning = isRunning(previous.state());
+                boolean nowRunning = isRunning(current.state());
+                if (wasRunning && !nowRunning) {
+                    recordContainer(ActivityType.CONTAINER_STOPPED, projectId, serviceId, current, "stopped");
+                } else if (!wasRunning && nowRunning) {
+                    recordContainer(ActivityType.CONTAINER_STARTED, projectId, serviceId, current, "started");
+                }
+            }
+        }
+    }
+
+    private void recordContainer(
+            ActivityType type,
+            String projectId,
+            String serviceId,
+            ContainerSnapshot container,
+            String message) {
+        recordActivity.execute(
+                type,
+                projectId,
+                serviceId,
+                message,
+                Map.of("containerId", container.id(), "restartCount", container.restartCount()));
+    }
+
+    private static boolean isRunning(String state) {
+        return state != null && state.equalsIgnoreCase("running");
     }
 
     private ContainerAlertState toState(
