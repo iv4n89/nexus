@@ -69,4 +69,20 @@ class ErrorNormalizerTest {
                 "{\"level\":\"info\",\"ts\":1789556477.742,\"msg\":\"failed to sufficiently increase receive buffer size\"}"))
                 .isEmpty();
     }
+
+    @Test
+    void leftoverNginxBindAndMongoSocketAreNotAppErrors() {
+        assertThat(ErrorNormalizer.normalize(
+                "nginx: [emerg] bind() to 0.0.0.0:80 failed (98: Address in use)"))
+                .isEmpty();
+        assertThat(ErrorNormalizer.normalize(
+                "com.mongodb.MongoSocketOpenException: Exception opening socket"))
+                .isEmpty();
+        assertThat(ErrorNormalizer.normalize(
+                "org.springframework.web.context.request.async.AsyncRequestNotUsableException: Response not usable after response errors."))
+                .isEmpty();
+        assertThat(ErrorNormalizer.normalize(
+                "Caused by: java.net.ConnectException: Connection refused"))
+                .isEmpty();
+    }
 }
