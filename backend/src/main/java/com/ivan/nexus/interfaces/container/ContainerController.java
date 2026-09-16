@@ -1,7 +1,9 @@
 package com.ivan.nexus.interfaces.container;
 
+import com.ivan.nexus.application.metrics.GetContainerMetrics;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
+import com.ivan.nexus.domain.metrics.ContainerMetrics;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,9 +19,11 @@ import java.util.Map;
 @RequestMapping("/api/containers")
 public class ContainerController {
     private final ContainerInventory inventory;
+    private final GetContainerMetrics getContainerMetrics;
 
-    public ContainerController(ContainerInventory inventory) {
+    public ContainerController(ContainerInventory inventory, GetContainerMetrics getContainerMetrics) {
         this.inventory = inventory;
+        this.getContainerMetrics = getContainerMetrics;
     }
 
     @GetMapping
@@ -32,6 +36,11 @@ public class ContainerController {
         return inventory.findById(id)
                 .map(ContainerResponse::from)
                 .orElseThrow(() -> new DomainException(NexusErrorCode.CONTAINER_NOT_FOUND, "Container not found"));
+    }
+
+    @GetMapping("/{id}/stats")
+    public ContainerMetrics stats(@PathVariable String id) {
+        return getContainerMetrics.execute(id);
     }
 
     public record ContainerResponse(
