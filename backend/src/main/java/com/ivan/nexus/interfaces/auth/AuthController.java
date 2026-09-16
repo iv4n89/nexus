@@ -1,5 +1,8 @@
 package com.ivan.nexus.interfaces.auth;
 
+import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.domain.audit.AuditAction;
+import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,14 +21,24 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
     private final AuthenticationManager authenticationManager;
+    private final UserJpaRepository users;
+    private final RecordAudit recordAudit;
     private final SecurityContextRepository securityContextRepository = new HttpSessionSecurityContextRepository();
 
-    public AuthController(AuthenticationManager authenticationManager) {
+    public AuthController(
+            AuthenticationManager authenticationManager,
+            UserJpaRepository users,
+            RecordAudit recordAudit) {
         this.authenticationManager = authenticationManager;
+        this.users = users;
+        this.recordAudit = recordAudit;
     }
 
     @GetMapping("/csrf")
@@ -49,7 +62,26 @@ public class AuthController {
         SecurityContextHolder.setContext(context);
         securityContextRepository.saveContext(context, httpRequest, httpResponse);
 
+        UUID userId = users.findByUsername(authentication.getName())
+                .orElseThrow()
+                .getId();
+        recordAudit.execute(
+                userId,
+                AuditAction.LOGIN,
+                null,
+                null,
+                clientIp(httpRequest),
+                Map.of("username", authentication.getName()));
+
         return toResponse(authentication);
+    }
+
+    private static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",", 2)[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 
     @GetMapping("/me")

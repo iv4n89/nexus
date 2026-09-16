@@ -7,6 +7,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -14,8 +15,12 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.notNullValue;
@@ -40,6 +45,11 @@ class AuthControllerIT {
 
     @Autowired
     MockMvc mockMvc;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
     void csrfReturnsToken() throws Exception {
@@ -91,6 +101,37 @@ class AuthControllerIT {
     }
 
     @Test
+    void successfulLoginWritesAuditEventWithoutPassword() throws Exception {
+        Csrf csrf = csrf();
+        int before = countLoginEvents();
+
+        mockMvc.perform(post("/api/auth/login")
+                        .cookie(csrf.cookie())
+                        .header("X-XSRF-TOKEN", csrf.token())
+                        .header("X-Forwarded-For", "203.0.113.10, 10.0.0.1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"changeme\"}"))
+                .andExpect(status().isOk());
+
+        assertThat(countLoginEvents()).isEqualTo(before + 1);
+
+        Map<String, Object> row = jdbcTemplate.queryForMap(
+                """
+                        SELECT user_id, action, ip, metadata
+                        FROM audit_events
+                        WHERE action = 'LOGIN'
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                        """);
+        assertThat(row.get("action")).isEqualTo("LOGIN");
+        assertThat(row.get("user_id")).isNotNull();
+        assertThat(row.get("ip")).isEqualTo("203.0.113.10");
+
+        JsonNode metadata = objectMapper.readTree(row.get("metadata").toString());
+        assertThat(metadata.has("password")).isFalse();
+    }
+
+    @Test
     void loginWithBadPasswordReturns401() throws Exception {
         Csrf csrf = csrf();
 
@@ -123,6 +164,12 @@ class AuthControllerIT {
     void unauthenticatedProjectsReturns401() throws Exception {
         mockMvc.perform(get("/api/projects"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    private int countLoginEvents() {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM audit_events WHERE action = 'LOGIN'", Integer.class);
+        return count == null ? 0 : count;
     }
 
     private MockHttpSession login(String username, String password) throws Exception {
