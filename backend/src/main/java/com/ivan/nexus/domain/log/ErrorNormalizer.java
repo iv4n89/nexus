@@ -13,6 +13,9 @@ public final class ErrorNormalizer {
     private static final Pattern STACK_FRAME = Pattern.compile("^\\s+at\\s+\\S+\\(");
     private static final Pattern SPRING_INFO = Pattern.compile("\\sINFO\\s");
     private static final Pattern JSON_INFO_LEVEL = Pattern.compile("\"level\"\\s*:\\s*\"info\"", Pattern.CASE_INSENSITIVE);
+    private static final Pattern BIND_ADDRESS_IN_USE = Pattern.compile("bind\\(\\) to .* failed \\(98: Address in use\\)");
+    private static final Pattern INFRA_NOISE = Pattern.compile(
+            "MongoSocketOpenException|AsyncRequestNotUsableException|^\\s*Caused by: java\\.net\\.ConnectException: Connection refused\\s*$");
     private static final Pattern ISO_TIMESTAMP = Pattern.compile(
             "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?");
     private static final Pattern UUID = Pattern.compile(
@@ -30,6 +33,9 @@ public final class ErrorNormalizer {
             return Optional.empty();
         }
         if (SPRING_INFO.matcher(line).find() || JSON_INFO_LEVEL.matcher(line).find()) {
+            return Optional.empty();
+        }
+        if (BIND_ADDRESS_IN_USE.matcher(line).find() || INFRA_NOISE.matcher(line).find()) {
             return Optional.empty();
         }
         if (!ERROR_LINE.matcher(line).find()) {
