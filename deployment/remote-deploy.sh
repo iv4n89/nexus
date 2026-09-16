@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT=/opt/nexus
 MANIFEST_ROOT=/srv/projects
 
-mkdir -p "$ROOT/nginx" "$MANIFEST_ROOT"
+mkdir -p "$ROOT/caddy" "$MANIFEST_ROOT"
 cd "$ROOT"
 chmod 700 "$ROOT"
 
@@ -50,23 +50,20 @@ echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER:?GHCR_USER is requir
 docker compose --env-file .env --env-file .env.runtime pull
 docker compose --env-file .env --env-file .env.runtime up -d --no-build --remove-orphans
 
-VHOST_SRC="${ROOT}/nginx/0nexus.duckdns.org.conf"
-if [[ -f "${VHOST_SRC}" ]]; then
+CADDY_SRC="${ROOT}/caddy/nexus.caddy"
+if [[ -f "${CADDY_SRC}" ]]; then
   installed=
-  for dir in \
-    /opt/ava-assistant/nginx/conf.d \
-    /opt/ava-assistant/nginx/sites-enabled \
-    /opt/ava-assistant/docker/nginx/conf.d \
-    /opt/ava/nginx/conf.d
-  do
-    if [[ -d "${dir}" ]]; then
-      cp "${VHOST_SRC}" "${dir}/0nexus.duckdns.org.conf"
-      echo "Installed edge vhost into ${dir}"
+  for root in /opt/ava-assistant /opt/ava; do
+    if [[ -f "${root}/docker-compose.tls.yml" || -d "${root}/deploy/caddy-optional" ]]; then
+      mkdir -p "${root}/deploy/caddy-optional"
+      cp "${CADDY_SRC}" "${root}/deploy/caddy-optional/nexus.caddy"
+      echo "Installed ${root}/deploy/caddy-optional/nexus.caddy"
+      echo "From ${root}: docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d"
       installed=1
       break
     fi
   done
   if [[ -z "${installed}" ]]; then
-    echo "Copy ${VHOST_SRC} into ava-assistant nginx conf.d (server_name 0nexus.duckdns.org) and reload that nginx."
+    echo "Copy ${CADDY_SRC} to Ava deploy/caddy-optional/nexus.caddy and: docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml up -d"
   fi
 fi

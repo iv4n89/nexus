@@ -35,7 +35,7 @@ Redis is not required for V1.
 
 ## Request path
 
-Production: browser → edge Nginx (`ava-assistant.duckdns.org` vs `0nexus.duckdns.org`) → `/` to the Next.js standalone server (`127.0.0.1:3000`), `/api/` and `/actuator/health` to Spring Boot (`127.0.0.1:8080`). Nginx disables buffering on `/api/` so SSE is not held. Nexus does not bind port 80.
+Production: browser → Ava Caddy (`ava-assistant.duckdns.org` vs `0nexus.duckdns.org`) → `/` to Next.js (`host.docker.internal:3000`), `/api/` and `/actuator/health` to Spring Boot (`host.docker.internal:8080`). Caddy disables proxy buffering on `/api/` so SSE is not held. Nexus does not bind port 80.
 
 Local development: `next dev` rewrites `/api/:path*` to `http://localhost:8080`. The production image sets `output: 'standalone'` and omits those rewrites so Nginx remains the only `/api` hop.
 
