@@ -78,6 +78,9 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
           <span className="text-[#888]">Status: </span>
           {project.data.status}
         </p>
+        <Link href={`/projects/${projectId}/logs`} className="text-sm">
+          LOGS
+        </Link>
         <div className="flex gap-3">
           <button
             type="button"
