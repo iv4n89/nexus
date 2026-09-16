@@ -1,6 +1,7 @@
 package com.ivan.nexus.interfaces.deployment;
 
 import com.ivan.nexus.application.deployment.DeployProject;
+import com.ivan.nexus.application.deployment.RollbackProject;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.shared.DomainException;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,6 +44,9 @@ class DeploymentControllerTest {
 
     @MockitoBean
     DeployProject deployProject;
+
+    @MockitoBean
+    RollbackProject rollbackProject;
 
     @MockitoBean
     DeploymentJpaRepository deployments;
@@ -81,6 +86,26 @@ class DeploymentControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminPostRollbackReturns202() throws Exception {
+        UUID id = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
+        given(rollbackProject.execute("lab", "admin")).willReturn(deployment(id, DeploymentStatus.RUNNING));
+
+        mockMvc.perform(post("/api/projects/lab/rollback").with(csrf()))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.status").value("RUNNING"));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void viewerPostRollbackReturns403() throws Exception {
+        mockMvc.perform(post("/api/projects/lab/rollback").with(csrf()))
+                .andExpect(status().isForbidden());
+        verify(rollbackProject, never()).execute(any(), any());
+    }
+
+    @Test
     @WithMockUser(roles = "VIEWER")
     void viewerGetHistoryReturns200() throws Exception {
         UUID id = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
@@ -98,7 +123,8 @@ class DeploymentControllerTest {
                 .andExpect(jsonPath("$[0].commitSha").isEmpty())
                 .andExpect(jsonPath("$[0].exitCode").value(0))
                 .andExpect(jsonPath("$[0].outputSummary").value("done"))
-                .andExpect(jsonPath("$[0].healthOk").value(true));
+                .andExpect(jsonPath("$[0].healthOk").value(true))
+                .andExpect(jsonPath("$[0].kind").value("deploy"));
     }
 
     @Test
@@ -117,7 +143,7 @@ class DeploymentControllerTest {
     }
 
     private static DeploymentEntity entity(UUID id, String projectId, DeploymentStatus status) {
-        return new DeploymentEntity(
+        DeploymentEntity entity = new DeploymentEntity(
                 id,
                 projectId,
                 status,
@@ -128,5 +154,7 @@ class DeploymentControllerTest {
                 0,
                 "done",
                 true);
+        entity.setMetadata(Map.of("kind", "deploy"));
+        return entity;
     }
 }

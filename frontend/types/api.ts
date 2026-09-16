@@ -31,6 +31,15 @@ export type AuthUser = {
   role: string
 }
 
+export type Settings = {
+  version: string
+  retention: {
+    activityDays: number
+    deploymentEventsDays: number
+    fingerprintDays: number
+  }
+}
+
 export type Deployment = {
   id: string
   projectId: string
@@ -42,6 +51,7 @@ export type Deployment = {
   exitCode: number | null
   outputSummary: string | null
   healthOk: boolean | null
+  kind: string | null
 }
 
 export type DeployAccepted = {

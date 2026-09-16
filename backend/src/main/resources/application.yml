@@ -20,6 +20,7 @@ management:
         enabled: true
       show-details: never
 nexus:
+  version: ${NEXUS_VERSION:0.0.1-SNAPSHOT}
   docker:
     host: ${DOCKER_HOST:unix:///var/run/docker.sock}
   manifest:

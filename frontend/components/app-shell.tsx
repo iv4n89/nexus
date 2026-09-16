@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const NAV = [
-  { href: '/', label: 'Dashboard', kind: 'route' as const },
-  { href: '/activity', label: 'Activity', kind: 'route' as const },
-  { href: '#', label: 'Settings', kind: 'placeholder' as const },
+  { href: '/', label: 'Dashboard' },
+  { href: '/activity', label: 'Activity' },
+  { href: '/settings', label: 'Settings' },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -20,13 +20,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Link>
         <nav className="flex items-center gap-6 text-sm">
           {NAV.map((item) => {
-            if (item.kind === 'placeholder') {
-              return (
-                <a key={item.label} href={item.href} className="text-[#888]">
-                  {item.label}
-                </a>
-              )
-            }
             const active =
               item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (

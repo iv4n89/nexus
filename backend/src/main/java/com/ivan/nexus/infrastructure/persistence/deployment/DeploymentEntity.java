@@ -13,6 +13,8 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -51,6 +53,10 @@ public class DeploymentEntity {
     @Column(name = "health_ok")
     private Boolean healthOk;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(nullable = false)
+    private Map<String, Object> metadata = new HashMap<>();
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -71,6 +77,21 @@ public class DeploymentEntity {
             Integer exitCode,
             String outputSummary,
             Boolean healthOk) {
+        this(id, projectId, status, startedAt, finishedAt, triggeredBy, commitSha, exitCode, outputSummary, healthOk, Map.of());
+    }
+
+    public DeploymentEntity(
+            UUID id,
+            String projectId,
+            DeploymentStatus status,
+            Instant startedAt,
+            Instant finishedAt,
+            String triggeredBy,
+            String commitSha,
+            Integer exitCode,
+            String outputSummary,
+            Boolean healthOk,
+            Map<String, Object> metadata) {
         this.id = id;
         this.projectId = projectId;
         this.status = status;
@@ -81,6 +102,7 @@ public class DeploymentEntity {
         this.exitCode = exitCode;
         this.outputSummary = outputSummary;
         this.healthOk = healthOk;
+        this.metadata = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
     }
 
     @PrePersist
@@ -117,6 +139,10 @@ public class DeploymentEntity {
 
     public void setHealthOk(Boolean healthOk) {
         this.healthOk = healthOk;
+    }
+
+    public void setMetadata(Map<String, Object> metadata) {
+        this.metadata = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
     }
 
     public UUID getId() {
@@ -157,6 +183,18 @@ public class DeploymentEntity {
 
     public Boolean getHealthOk() {
         return healthOk;
+    }
+
+    public Map<String, Object> getMetadata() {
+        return metadata;
+    }
+
+    public String getKind() {
+        if (metadata == null) {
+            return null;
+        }
+        Object kind = metadata.get("kind");
+        return kind == null ? null : kind.toString();
     }
 
     public Instant getCreatedAt() {
