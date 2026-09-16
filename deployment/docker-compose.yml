@@ -6,8 +6,9 @@
 # Required: NEXUS_ADMIN_PASSWORD, DOCKER_GID (stat -c '%g' /var/run/docker.sock).
 # Path identity: host /srv/projects is bind-mounted at the same path so
 # nexus.yml workingDirectory values match ProcessBuilder cwd.
-# Backend and Nginx use host networking so the API can reach published
-# project database ports on 127.0.0.1.
+# Backend uses host networking so the API can reach published project
+# database ports on 127.0.0.1. Public HTTP is the edge nginx on the VPS
+# (ava-assistant), vhost nexus-project.duckdns.org.
 #
 # VPS deploys pull GHCR images and must use `docker compose up --no-build`.
 # Local: `docker compose --env-file .env up -d --build`.
@@ -37,6 +38,7 @@ services:
     network_mode: host
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      SERVER_ADDRESS: "127.0.0.1"
       DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/nexus
       DATABASE_USERNAME: nexus
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-nexus}
@@ -85,23 +87,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
-
-  nginx:
-    image: nginx:1.27-alpine
-    network_mode: host
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      frontend:
-        condition: service_healthy
-      backend:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
 
 volumes:
   nexus_pg:

@@ -49,3 +49,24 @@ echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER:?GHCR_USER is requir
 
 docker compose --env-file .env --env-file .env.runtime pull
 docker compose --env-file .env --env-file .env.runtime up -d --no-build --remove-orphans
+
+VHOST_SRC="${ROOT}/nginx/nexus-project.duckdns.org.conf"
+if [[ -f "${VHOST_SRC}" ]]; then
+  installed=
+  for dir in \
+    /opt/ava-assistant/nginx/conf.d \
+    /opt/ava-assistant/nginx/sites-enabled \
+    /opt/ava-assistant/docker/nginx/conf.d \
+    /opt/ava/nginx/conf.d
+  do
+    if [[ -d "${dir}" ]]; then
+      cp "${VHOST_SRC}" "${dir}/nexus-project.duckdns.org.conf"
+      echo "Installed edge vhost into ${dir}"
+      installed=1
+      break
+    fi
+  done
+  if [[ -z "${installed}" ]]; then
+    echo "Copy ${VHOST_SRC} into ava-assistant nginx conf.d (server_name nexus-project.duckdns.org) and reload that nginx."
+  fi
+fi
