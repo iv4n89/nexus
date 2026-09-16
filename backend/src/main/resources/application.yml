@@ -27,6 +27,7 @@ logging:
   level:
     org.apache.catalina.connector.ClientAbortException: OFF
     org.springframework.web.context.request.async.AsyncRequestNotUsableException: OFF
+    org.mongodb: ERROR
 nexus:
   version: ${NEXUS_VERSION:0.0.1-SNAPSHOT}
   docker:

@@ -56,6 +56,9 @@ public class AnalyzeLogs {
         for (var entry : discoverProjects.groupByProject().entrySet()) {
             String projectId = entry.getKey();
             for (ContainerSnapshot container : entry.getValue()) {
+                if (!"running".equalsIgnoreCase(container.state())) {
+                    continue;
+                }
                 String serviceId = serviceId(container);
                 int since = sinceFor(container.id(), nowEpoch);
                 for (String line : fetchLines(container.id(), since)) {

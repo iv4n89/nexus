@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -83,7 +84,11 @@ public class DockerLogProvider implements LogProvider {
 
             @Override
             public void onError(Throwable throwable) {
-                log.warn("Log follow failed for container {}", containerId, throwable);
+                if (throwable instanceof ClosedByInterruptException || throwable instanceof InterruptedException) {
+                    log.debug("Log follow interrupted for container {}", containerId);
+                } else {
+                    log.warn("Log follow failed for container {}", containerId, throwable);
+                }
                 super.onError(throwable);
                 if (onComplete != null) {
                     onComplete.run();

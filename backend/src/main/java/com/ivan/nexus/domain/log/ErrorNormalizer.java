@@ -10,6 +10,9 @@ import java.util.regex.Pattern;
 public final class ErrorNormalizer {
     private static final Pattern ERROR_LINE = Pattern.compile(
             "(?i)(ERROR|Exception|Traceback|FATAL|failed|connection refused|timeout|HTTP 500)");
+    private static final Pattern STACK_FRAME = Pattern.compile("^\\s+at\\s+\\S+\\(");
+    private static final Pattern SPRING_INFO = Pattern.compile("\\sINFO\\s");
+    private static final Pattern JSON_INFO_LEVEL = Pattern.compile("\"level\"\\s*:\\s*\"info\"", Pattern.CASE_INSENSITIVE);
     private static final Pattern ISO_TIMESTAMP = Pattern.compile(
             "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?");
     private static final Pattern UUID = Pattern.compile(
@@ -23,7 +26,13 @@ public final class ErrorNormalizer {
     }
 
     public static Optional<ErrorFingerprint> normalize(String line) {
-        if (line == null || !ERROR_LINE.matcher(line).find()) {
+        if (line == null || STACK_FRAME.matcher(line).find()) {
+            return Optional.empty();
+        }
+        if (SPRING_INFO.matcher(line).find() || JSON_INFO_LEVEL.matcher(line).find()) {
+            return Optional.empty();
+        }
+        if (!ERROR_LINE.matcher(line).find()) {
             return Optional.empty();
         }
         String normalized = ISO_TIMESTAMP.matcher(line).replaceAll("<TS>");

@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -97,6 +98,33 @@ class AnalyzeLogsTest {
 
         verify(fingerprints, never()).save(any());
         verify(fingerprints, never()).findByProjectIdAndServiceIdAndFingerprint(any(), any(), any());
+    }
+
+    @Test
+    void skipsStoppedContainers() {
+        ContainerSnapshot stopped = new ContainerSnapshot(
+                "nginx-id",
+                "nexus-nginx-1",
+                "nginx:alpine",
+                "Exited (1)",
+                "exited",
+                null,
+                Instant.parse("2026-01-01T00:00:00Z"),
+                Map.of("com.docker.compose.project", "nexus", "com.docker.compose.service", "nginx"),
+                List.of(),
+                0,
+                Instant.parse("2026-01-01T00:00:01Z"));
+        AnalyzeLogs analyzeLogs = new AnalyzeLogs(
+                new DiscoverProjects(inventory(stopped), "/tmp/nexus-no-manifests"),
+                logProvider,
+                fingerprints,
+                recordActivity,
+                120);
+
+        analyzeLogs.execute();
+
+        verify(logProvider, never()).fetch(any(), anyInt(), any(), any(), anyBoolean());
+        verify(fingerprints, never()).save(any());
     }
 
     @Test

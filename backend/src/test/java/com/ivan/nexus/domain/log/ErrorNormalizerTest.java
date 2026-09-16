@@ -45,4 +45,28 @@ class ErrorNormalizerTest {
         assertThat(result.normalized()).isNotBlank();
         assertThat(result.sampleMessage()).isEqualTo("ERROR boom");
     }
+
+    @Test
+    void stackFramesAreNotErrors() {
+        assertThat(ErrorNormalizer.normalize(
+                "        at org.springframework.security.web.access.ExceptionTranslationFilter.doFilter(ExceptionTranslationFilter.java:125)"))
+                .isEmpty();
+        assertThat(ErrorNormalizer.normalize(
+                "\tat org.apache.catalina.valves.ErrorReportValve.invoke(ErrorReportValve.java:83)"))
+                .isEmpty();
+    }
+
+    @Test
+    void mongoDriverInfoMonitorIsNotAnError() {
+        assertThat(ErrorNormalizer.normalize(
+                "2026-09-16T13:42:27.045Z  INFO 1 --- [localhost:27017] org.mongodb.driver.cluster               : Exception in monitor thread while connecting to server localhost:27017"))
+                .isEmpty();
+    }
+
+    @Test
+    void caddyInfoFailedBufferIsNotAnError() {
+        assertThat(ErrorNormalizer.normalize(
+                "{\"level\":\"info\",\"ts\":1789556477.742,\"msg\":\"failed to sufficiently increase receive buffer size\"}"))
+                .isEmpty();
+    }
 }

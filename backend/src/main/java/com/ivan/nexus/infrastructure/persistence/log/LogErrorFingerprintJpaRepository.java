@@ -11,12 +11,14 @@ public interface LogErrorFingerprintJpaRepository extends JpaRepository<LogError
     Optional<LogErrorFingerprintEntity> findByProjectIdAndServiceIdAndFingerprint(
             String projectId, String serviceId, String fingerprint);
 
-    List<LogErrorFingerprintEntity> findTop10ByProjectIdOrderByLastSeenDesc(String projectId);
+    List<LogErrorFingerprintEntity> findTop10ByProjectIdAndLastSeenAfterOrderByLastSeenDesc(
+            String projectId, Instant cutoff);
 
-    List<LogErrorFingerprintEntity> findTop50ByProjectIdOrderByLastSeenDesc(String projectId);
+    List<LogErrorFingerprintEntity> findTop50ByProjectIdAndLastSeenAfterOrderByLastSeenDesc(
+            String projectId, Instant cutoff);
 
-    List<LogErrorFingerprintEntity> findTop50ByProjectIdAndServiceIdOrderByLastSeenDesc(
-            String projectId, String serviceId);
+    List<LogErrorFingerprintEntity> findTop50ByProjectIdAndServiceIdAndLastSeenAfterOrderByLastSeenDesc(
+            String projectId, String serviceId, Instant cutoff);
 
     long deleteByLastSeenBefore(Instant cutoff);
 }
