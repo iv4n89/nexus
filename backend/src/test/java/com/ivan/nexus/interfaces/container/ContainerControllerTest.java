@@ -1,7 +1,10 @@
 package com.ivan.nexus.interfaces.container;
 
+import com.ivan.nexus.application.metrics.ContainerStatsProvider;
+import com.ivan.nexus.application.metrics.GetContainerMetrics;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
+import com.ivan.nexus.domain.metrics.ContainerMetrics;
 import com.ivan.nexus.infrastructure.security.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = ContainerController.class)
-@Import(SecurityConfig.class)
+@Import({GetContainerMetrics.class, SecurityConfig.class})
 class ContainerControllerTest {
 
     @Autowired
@@ -34,6 +37,9 @@ class ContainerControllerTest {
 
     @MockitoBean
     ContainerInventory inventory;
+
+    @MockitoBean
+    ContainerStatsProvider statsProvider;
 
     @Test
     @WithMockUser(roles = "ADMIN")
@@ -79,6 +85,33 @@ class ContainerControllerTest {
                 .andExpect(jsonPath("$.id").value("abc123"))
                 .andExpect(jsonPath("$.env").doesNotExist())
                 .andExpect(content().string(not(containsString("POSTGRES_PASSWORD"))));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void containerStatsReturnsProviderValues() throws Exception {
+        given(inventory.findById("abc123")).willReturn(Optional.of(snapshot()));
+        given(statsProvider.stats("abc123"))
+                .willReturn(new ContainerMetrics("abc123", 12.5, 100, 200, 10, 20));
+
+        mockMvc.perform(get("/api/containers/abc123/stats"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.containerId").value("abc123"))
+                .andExpect(jsonPath("$.cpuPercent").value(12.5))
+                .andExpect(jsonPath("$.memoryUsedBytes").value(100))
+                .andExpect(jsonPath("$.memoryLimitBytes").value(200))
+                .andExpect(jsonPath("$.rxBytes").value(10))
+                .andExpect(jsonPath("$.txBytes").value(20));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void unknownContainerStatsReturns404ContainerNotFound() throws Exception {
+        given(inventory.findById("missing")).willReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/containers/missing/stats"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("CONTAINER_NOT_FOUND"));
     }
 
     private static ContainerSnapshot snapshot() {
