@@ -1,19 +1,14 @@
 'use client'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { isAuthError } from '@/lib/api'
+import { shouldRetryQuery } from '@/lib/api'
 
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 60 * 1000,
-        retry: (failureCount, error) => {
-          if (isAuthError(error)) {
-            return false
-          }
-          return failureCount < 2
-        },
+        retry: shouldRetryQuery,
       },
     },
   })

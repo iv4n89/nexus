@@ -16,6 +16,13 @@ export function shouldRedirectToLogin(status: number, pathname: string): boolean
   return status === 401 && pathname !== '/login' && !pathname.startsWith('/login/')
 }
 
+export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  if (error instanceof ApiError && error.status >= 400) {
+    return false
+  }
+  return failureCount < 2
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const csrf = document.cookie
     .split('; ')
