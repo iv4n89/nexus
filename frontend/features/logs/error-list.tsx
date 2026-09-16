@@ -3,23 +3,10 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { formatClock } from '@/lib/format'
+import { logsHref } from '@/lib/log-filter'
 import type { RecentError } from '@/types/api'
 
-export function logsHref(
-  projectId: string,
-  options: { serviceId?: string | null; query?: string | null; level?: string } = {},
-): string {
-  const params = new URLSearchParams()
-  if (options.serviceId) {
-    params.set('service', options.serviceId)
-  }
-  params.set('level', options.level ?? 'ERROR')
-  if (options.query) {
-    params.set('q', options.query)
-  }
-  const query = params.toString()
-  return `/projects/${projectId}/logs${query ? `?${query}` : ''}`
-}
+export { logsHref }
 
 export function ErrorList({
   projectId,
@@ -87,7 +74,7 @@ export function ErrorList({
               <Link
                 href={logsHref(projectId, {
                   serviceId: error.serviceId,
-                  query: error.sampleMessage.slice(0, 80),
+                  query: error.sampleMessage,
                 })}
                 className="flex flex-col gap-2 py-4"
               >

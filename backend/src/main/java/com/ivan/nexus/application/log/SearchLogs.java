@@ -15,8 +15,21 @@ public class SearchLogs {
 
         return lines.stream()
                 .filter(line -> !filterQuery || line.toLowerCase(Locale.ROOT).contains(queryNeedle))
-                .filter(line -> !filterLevel || line.toLowerCase(Locale.ROOT).contains(levelNeedle))
+                .filter(line -> !filterLevel || matchesLevel(line, levelNeedle))
                 .toList();
+    }
+
+    static boolean matchesLevel(String line, String levelNeedle) {
+        String haystack = line.toLowerCase(Locale.ROOT);
+        return switch (levelNeedle) {
+            case "error" -> haystack.contains("error")
+                    || haystack.contains("exception")
+                    || haystack.contains("fatal")
+                    || haystack.contains("traceback")
+                    || haystack.contains("emerg");
+            case "warn" -> haystack.contains("warn");
+            default -> haystack.contains(levelNeedle);
+        };
     }
 
     private static boolean hasText(String value) {

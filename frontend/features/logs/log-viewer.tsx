@@ -7,31 +7,29 @@ import { useQuery } from '@tanstack/react-query'
 import { useEventSource } from '@/hooks/use-event-source'
 import { api } from '@/lib/api'
 import { containersForProject, displayName, serviceLabel } from '@/lib/docker'
+import { LOG_LEVELS, matchesLogLine, parseLogLevel, type LogLevel } from '@/lib/log-filter'
 import type { Container, LogSnapshot } from '@/types/api'
 
-const LEVELS = ['ALL', 'INFO', 'WARN', 'ERROR'] as const
 const FROM_OPTIONS = [
+  { label: 'all', seconds: 0 },
   { label: '15 min', seconds: 15 * 60 },
   { label: '30 min', seconds: 30 * 60 },
   { label: '1 hour', seconds: 60 * 60 },
+  { label: '6 hours', seconds: 6 * 60 * 60 },
+  { label: '24 hours', seconds: 24 * 60 * 60 },
 ] as const
 const MAX_LINES = 2000
-const DEFAULT_FROM_SECONDS = 30 * 60
+const DEFAULT_FROM_SECONDS = 0
 
-type Level = (typeof LEVELS)[number]
-
-function parseLevel(value: string | null): Level {
-  const upper = value?.toUpperCase()
-  return LEVELS.find((level) => level === upper) ?? 'ALL'
-}
-
-function matchesLogLine(line: string, level: Level, query: string): boolean {
-  const haystack = line.toLowerCase()
-  if (level !== 'ALL' && !haystack.includes(level.toLowerCase())) {
-    return false
+function emptyLogsMessage(level: LogLevel, fromSeconds: number): string {
+  const window =
+    fromSeconds <= 0
+      ? 'in the current container logs'
+      : `in the last ${FROM_OPTIONS.find((option) => option.seconds === fromSeconds)?.label ?? 'window'}`
+  if (level === 'ALL') {
+    return `No log lines ${window}. After a deploy the container starts with a fresh log buffer.`
   }
-  const needle = query.trim().toLowerCase()
-  return !needle || haystack.includes(needle)
+  return `No ${level} lines ${window}. Try ALL, or a wider From — stored fingerprints can outlive the current container.`
 }
 
 export function LogViewer({ projectId }: { projectId: string }) {
@@ -42,7 +40,7 @@ export function LogViewer({ projectId }: { projectId: string }) {
     queryKey: ['containers'],
     queryFn: () => api<Container[]>('/api/containers'),
   })
-  const [level, setLevel] = useState<Level>(() => parseLevel(searchParams.get('level')))
+  const [level, setLevel] = useState<LogLevel>(() => parseLogLevel(searchParams.get('level')))
   const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
   const [appliedSearch, setAppliedSearch] = useState(() => searchParams.get('q') ?? '')
   const [containerId, setContainerId] = useState<string | null>(searchParams.get('container'))
@@ -124,7 +122,7 @@ export function LogViewer({ projectId }: { projectId: string }) {
   ])
 
   const since = useMemo(
-    () => Math.floor(Date.now() / 1000) - fromSeconds,
+    () => (fromSeconds > 0 ? Math.floor(Date.now() / 1000) - fromSeconds : undefined),
     [fromSeconds, containerId],
   )
 
@@ -134,9 +132,11 @@ export function LogViewer({ projectId }: { projectId: string }) {
     queryFn: () => {
       const params = new URLSearchParams({
         tail: String(MAX_LINES),
-        since: String(since),
         timestamps: 'true',
       })
+      if (since != null) {
+        params.set('since', String(since))
+      }
       if (level !== 'ALL') {
         params.set('level', level)
       }
@@ -156,7 +156,9 @@ export function LogViewer({ projectId }: { projectId: string }) {
   const streamUrl =
     containerId == null || !snapshot.isSuccess
       ? null
-      : `/api/containers/${encodeURIComponent(containerId)}/logs/stream?tail=1&since=${since}`
+      : `/api/containers/${encodeURIComponent(containerId)}/logs/stream?tail=1${
+          since != null ? `&since=${since}` : ''
+        }`
 
   useEventSource(streamUrl, (data) => {
     if (!matchesLogLine(data, level, appliedSearch)) {
@@ -206,7 +208,7 @@ export function LogViewer({ projectId }: { projectId: string }) {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {LEVELS.map((tab) => (
+        {LOG_LEVELS.map((tab) => (
           <button
             key={tab}
             type="button"
@@ -272,7 +274,9 @@ export function LogViewer({ projectId }: { projectId: string }) {
         {snapshot.isPending && lines.length === 0 ? (
           <div className="text-[#888]">Loading…</div>
         ) : lines.length === 0 ? (
-          <div className="text-[#888]">No matching lines</div>
+          <div className="whitespace-pre-wrap text-[#888]">
+            {emptyLogsMessage(level, fromSeconds)}
+          </div>
         ) : (
           lines.map((line, index) => (
             <div
