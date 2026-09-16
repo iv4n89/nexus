@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 @Component
 public class DockerLogProvider implements LogProvider {
@@ -63,10 +64,62 @@ public class DockerLogProvider implements LogProvider {
         }
     }
 
+    @Override
+    public AutoCloseable follow(
+            String containerId, int tail, Integer since, Consumer<String> onLine, Runnable onComplete) {
+        ResultCallback.Adapter<Frame> callback = new ResultCallback.Adapter<>() {
+            @Override
+            public void onNext(Frame frame) {
+                emitLines(frame, onLine);
+            }
+
+            @Override
+            public void onComplete() {
+                super.onComplete();
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                log.warn("Log follow failed for container {}", containerId, throwable);
+                super.onError(throwable);
+                if (onComplete != null) {
+                    onComplete.run();
+                }
+            }
+        };
+        try {
+            LogContainerCmd command = dockerClient.logContainerCmd(containerId)
+                    .withStdOut(true)
+                    .withStdErr(true)
+                    .withFollowStream(true)
+                    .withTimestamps(true)
+                    .withTail(tail);
+            if (since != null) {
+                command.withSince(since);
+            }
+            run(command, callback);
+            return callback;
+        } catch (NotFoundException ex) {
+            throw new DomainException(NexusErrorCode.CONTAINER_NOT_FOUND, "Container not found");
+        }
+    }
+
     private static <T extends ResultCallback<Frame>> T run(
             AsyncDockerCmd<LogContainerCmd, Frame> command, T callback) {
         return command.exec
                 (callback);
+    }
+
+    private static void emitLines(Frame frame, Consumer<String> onLine) {
+        if (frame == null || frame.getPayload() == null || frame.getPayload().length == 0) {
+            return;
+        }
+        new String(frame.getPayload(), StandardCharsets.UTF_8)
+                .lines()
+                .forEach(onLine);
     }
 
     static final class LogCollector extends ResultCallback.Adapter<Frame> {
@@ -74,12 +127,7 @@ public class DockerLogProvider implements LogProvider {
 
         @Override
         public void onNext(Frame frame) {
-            if (frame == null || frame.getPayload() == null || frame.getPayload().length == 0) {
-                return;
-            }
-            new String(frame.getPayload(), StandardCharsets.UTF_8)
-                    .lines()
-                    .forEach(lines::add);
+            emitLines(frame, lines::add);
         }
     }
 }
