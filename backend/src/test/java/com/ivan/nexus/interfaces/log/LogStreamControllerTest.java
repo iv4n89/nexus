@@ -102,6 +102,28 @@ class LogStreamControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "VIEWER")
+    void lateLogLineAfterClientDisconnectDoesNotFailTheFollow() throws Exception {
+        given(inventory.findById("abc123")).willReturn(Optional.of(snapshot()));
+        AtomicReference<Consumer<String>> onLine = new AtomicReference<>();
+        AtomicReference<Runnable> onComplete = new AtomicReference<>();
+        given(logProvider.follow(eq("abc123"), eq(100), isNull(), any(), any()))
+                .willAnswer(invocation -> {
+                    onLine.set(invocation.getArgument(3));
+                    onComplete.set(invocation.getArgument(4));
+                    return (AutoCloseable) () -> {
+                    };
+                });
+
+        mockMvc.perform(get("/api/containers/abc123/logs/stream")
+                        .accept(MediaType.TEXT_EVENT_STREAM))
+                .andExpect(request().asyncStarted());
+
+        onComplete.get().run();
+        onLine.get().accept("ERROR after disconnect");
+    }
+
+    @Test
     @WithMockUser(roles = "ADMIN")
     void streamClampsTailAndPassesSince() throws Exception {
         given(inventory.findById("abc123")).willReturn(Optional.of(snapshot()));

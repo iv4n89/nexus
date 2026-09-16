@@ -59,7 +59,8 @@ public class GlobalExceptionHandler {
                 String lower = message.toLowerCase(Locale.ROOT);
                 if (lower.contains("broken pipe")
                         || lower.contains("connection reset by peer")
-                        || lower.contains("async request")) {
+                        || lower.contains("async request")
+                        || lower.contains("responsebodyemitter has already completed")) {
                     return true;
                 }
             }
