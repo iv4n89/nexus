@@ -41,6 +41,40 @@ class SearchLogsTest {
     }
 
     @Test
+    void levelErrorKeepsExceptionAndFatalWithoutTheWordError() {
+        List<String> lines = List.of(
+                "INFO started successfully",
+                "java.net.ConnectException: Connection refused",
+                "FATAL panic in worker",
+                "Traceback (most recent call last):",
+                "WARN retry later");
+
+        assertThat(searchLogs.execute(lines, null, "ERROR")).containsExactly(
+                "java.net.ConnectException: Connection refused",
+                "FATAL panic in worker",
+                "Traceback (most recent call last):");
+    }
+
+    @Test
+    void levelErrorDoesNotTreatInfoTimeoutAsError() {
+        List<String> lines = List.of("INFO timeout ignored", "ERROR timeout on db");
+
+        assertThat(searchLogs.execute(lines, null, "ERROR")).containsExactly("ERROR timeout on db");
+    }
+
+    @Test
+    void levelWarnKeepsWarningWithoutRequiringError() {
+        List<String> lines = List.of(
+                "INFO started",
+                "WARN retry",
+                "WARNING deprecated api",
+                "ERROR boom");
+
+        assertThat(searchLogs.execute(lines, null, "WARN"))
+                .containsExactly("WARN retry", "WARNING deprecated api");
+    }
+
+    @Test
     void allNullOrBlankLevelDoesNotFilter() {
         List<String> lines = List.of("INFO started", "ERROR boom");
 
