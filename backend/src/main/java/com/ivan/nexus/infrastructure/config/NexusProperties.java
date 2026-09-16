@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class NexusProperties {
     private final Docker docker = new Docker();
     private final Manifest manifest = new Manifest();
+    private final Retention retention = new Retention();
 
     public Docker getDocker() {
         return docker;
@@ -13,6 +14,10 @@ public class NexusProperties {
 
     public Manifest getManifest() {
         return manifest;
+    }
+
+    public Retention getRetention() {
+        return retention;
     }
 
     public static class Docker {
@@ -36,6 +41,45 @@ public class NexusProperties {
 
         public void setAllowedRoot(String allowedRoot) {
             this.allowedRoot = allowedRoot;
+        }
+    }
+
+    public static class Retention {
+        private int activityDays = 30;
+        private int deploymentEventsDays = 30;
+        private int fingerprintDays = 90;
+        private String cron = "0 0 3 * * *";
+
+        public int getActivityDays() {
+            return activityDays;
+        }
+
+        public void setActivityDays(int activityDays) {
+            this.activityDays = activityDays;
+        }
+
+        public int getDeploymentEventsDays() {
+            return deploymentEventsDays;
+        }
+
+        public void setDeploymentEventsDays(int deploymentEventsDays) {
+            this.deploymentEventsDays = deploymentEventsDays;
+        }
+
+        public int getFingerprintDays() {
+            return fingerprintDays;
+        }
+
+        public void setFingerprintDays(int fingerprintDays) {
+            this.fingerprintDays = fingerprintDays;
+        }
+
+        public String getCron() {
+            return cron;
+        }
+
+        public void setCron(String cron) {
+            this.cron = cron;
         }
     }
 }

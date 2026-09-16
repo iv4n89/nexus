@@ -24,3 +24,12 @@ nexus:
     host: ${DOCKER_HOST:unix:///var/run/docker.sock}
   manifest:
     allowed-root: ${NEXUS_MANIFEST_ROOT:/home/ibetanzos/dev/nexus_project/projects}
+  alerts:
+    enabled: true
+    interval-ms: 30000
+    log-window-seconds: 120
+  retention:
+    activity-days: 30
+    deployment-events-days: 30
+    fingerprint-days: 90
+    cron: "0 0 3 * * *"

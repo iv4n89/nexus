@@ -1,5 +1,6 @@
 package com.ivan.nexus.interfaces.project;
 
+import com.ivan.nexus.application.log.GetRecentErrors;
 import com.ivan.nexus.application.project.DiscoverProjects;
 import com.ivan.nexus.application.project.GetProject;
 import com.ivan.nexus.application.project.GetProjectServices;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -17,14 +19,17 @@ public class ProjectController {
     private final DiscoverProjects discoverProjects;
     private final GetProject getProject;
     private final GetProjectServices getProjectServices;
+    private final GetRecentErrors getRecentErrors;
 
     public ProjectController(
             DiscoverProjects discoverProjects,
             GetProject getProject,
-            GetProjectServices getProjectServices) {
+            GetProjectServices getProjectServices,
+            GetRecentErrors getRecentErrors) {
         this.discoverProjects = discoverProjects;
         this.getProject = getProject;
         this.getProjectServices = getProjectServices;
+        this.getRecentErrors = getRecentErrors;
     }
 
     @GetMapping
@@ -37,7 +42,8 @@ public class ProjectController {
         GetProject.Result result = getProject.execute(id);
         return ProjectDetailResponse.from(
                 result.project(),
-                result.containers().stream().map(GetProjectServices::toService).toList());
+                result.containers().stream().map(GetProjectServices::toService).toList(),
+                getRecentErrors.execute(id));
     }
 
     @GetMapping("/{id}/services")
@@ -70,8 +76,12 @@ public class ProjectController {
             int runningCount,
             int totalCount,
             boolean deployable,
-            List<ProjectServiceResponse> services) {
-        static ProjectDetailResponse from(Project project, List<GetProjectServices.ServiceView> services) {
+            List<ProjectServiceResponse> services,
+            List<RecentErrorResponse> recentErrors) {
+        static ProjectDetailResponse from(
+                Project project,
+                List<GetProjectServices.ServiceView> services,
+                List<GetRecentErrors.RecentError> recentErrors) {
             return new ProjectDetailResponse(
                     project.id(),
                     project.name(),
@@ -79,7 +89,14 @@ public class ProjectController {
                     project.runningCount(),
                     project.totalCount(),
                     project.deployable(),
-                    services.stream().map(ProjectServiceResponse::from).toList());
+                    services.stream().map(ProjectServiceResponse::from).toList(),
+                    recentErrors.stream().map(RecentErrorResponse::from).toList());
+        }
+    }
+
+    public record RecentErrorResponse(String sampleMessage, long count, Instant lastSeen) {
+        static RecentErrorResponse from(GetRecentErrors.RecentError error) {
+            return new RecentErrorResponse(error.sampleMessage(), error.count(), error.lastSeen());
         }
     }
 

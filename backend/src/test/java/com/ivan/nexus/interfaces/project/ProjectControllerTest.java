@@ -1,5 +1,6 @@
 package com.ivan.nexus.interfaces.project;
 
+import com.ivan.nexus.application.log.GetRecentErrors;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.application.project.DiscoverProjects;
 import com.ivan.nexus.application.project.GetProject;
@@ -36,6 +37,9 @@ class ProjectControllerTest {
     @MockitoBean
     ContainerInventory inventory;
 
+    @MockitoBean
+    GetRecentErrors getRecentErrors;
+
     @Test
     @WithMockUser(roles = "VIEWER")
     void listsLabProjectAsHealthyWhenTwoContainersAreRunning() throws Exception {
@@ -52,7 +56,8 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$[0].runningCount").value(2))
                 .andExpect(jsonPath("$[0].totalCount").value(2))
                 .andExpect(jsonPath("$[0].deployable").value(true))
-                .andExpect(jsonPath("$[0].services").doesNotExist());
+                .andExpect(jsonPath("$[0].services").doesNotExist())
+                .andExpect(jsonPath("$[0].recentErrors").doesNotExist());
     }
 
     @Test
@@ -83,7 +88,28 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.services[0].name").exists())
                 .andExpect(jsonPath("$.services[0].state").value("running"))
                 .andExpect(jsonPath("$.services[0].status").exists())
-                .andExpect(jsonPath("$.services[0].health").exists());
+                .andExpect(jsonPath("$.services[0].health").exists())
+                .andExpect(jsonPath("$.recentErrors", hasSize(0)));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void projectDetailIncludesRecentErrors() throws Exception {
+        given(inventory.listAll()).willReturn(List.of(
+                snapshot("web-id", "lab-web-1", "running", "healthy", "web")));
+        given(getRecentErrors.execute("lab")).willReturn(List.of(
+                new GetRecentErrors.RecentError(
+                        "Connection to 10.0.0.31 failed at 12:42",
+                        37L,
+                        Instant.parse("2026-01-01T00:42:00Z"))));
+
+        mockMvc.perform(get("/api/projects/lab"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recentErrors", hasSize(1)))
+                .andExpect(jsonPath("$.recentErrors[0].sampleMessage")
+                        .value("Connection to 10.0.0.31 failed at 12:42"))
+                .andExpect(jsonPath("$.recentErrors[0].count").value(37))
+                .andExpect(jsonPath("$.recentErrors[0].lastSeen").value("2026-01-01T00:42:00Z"));
     }
 
     @Test

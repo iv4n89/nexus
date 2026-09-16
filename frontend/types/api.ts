@@ -17,6 +17,13 @@ export type ProjectService = {
 
 export type ProjectDetail = Project & {
   services: ProjectService[]
+  recentErrors?: RecentError[]
+}
+
+export type RecentError = {
+  sampleMessage: string
+  count: number
+  lastSeen: string
 }
 
 export type AuthUser = {
@@ -82,4 +89,50 @@ export type ContainerMetrics = {
   memoryLimitBytes: number
   rxBytes: number
   txBytes: number
+}
+
+export type AlertStatus = 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED'
+
+export type AlertType =
+  | 'CONTAINER_STOPPED'
+  | 'RESTART_SPIKE'
+  | 'HIGH_MEMORY'
+  | 'DISK'
+  | 'ERROR_RATE'
+  | 'DOCKER_HEALTH'
+  | 'HTTP_HEALTH'
+
+export type Alert = {
+  id: string
+  ruleId: string | null
+  projectId: string | null
+  serviceId: string | null
+  status: AlertStatus
+  message: string
+  openedAt: string
+  acknowledgedAt: string | null
+  resolvedAt: string | null
+  type: AlertType
+}
+
+export type ActivityType =
+  | 'DEPLOYMENT_STARTED'
+  | 'DEPLOYMENT_SUCCESS'
+  | 'DEPLOYMENT_FAILED'
+  | 'CONTAINER_STARTED'
+  | 'CONTAINER_STOPPED'
+  | 'CONTAINER_RESTARTED'
+  | 'ERROR_DETECTED'
+  | 'ALERT_CREATED'
+  | 'ALERT_RESOLVED'
+  | 'HEALTH_CHECK_FAILED'
+
+export type ActivityEvent = {
+  id: string
+  createdAt: string
+  type: ActivityType
+  projectId: string | null
+  serviceId: string | null
+  message: string
+  metadata: Record<string, unknown>
 }

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 
 const NAV = [
   { href: '/', label: 'Dashboard', kind: 'route' as const },
-  { href: '#', label: 'Activity', kind: 'placeholder' as const },
+  { href: '/activity', label: 'Activity', kind: 'route' as const },
   { href: '#', label: 'Settings', kind: 'placeholder' as const },
 ]
 
@@ -27,7 +27,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </a>
               )
             }
-            const active = pathname === item.href
+            const active =
+              item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`)
             return (
               <Link
                 key={item.label}

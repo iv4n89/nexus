@@ -1,6 +1,8 @@
 package com.ivan.nexus.application.deployment;
 
+import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
@@ -48,6 +50,7 @@ public class DeployProject {
     private final ProcessExecutor processExecutor;
     private final HealthChecker healthChecker;
     private final RecordAudit recordAudit;
+    private final RecordActivity recordActivity;
     private final UserJpaRepository users;
     private final Executor sseExecutor;
 
@@ -61,6 +64,7 @@ public class DeployProject {
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
             RecordAudit recordAudit,
+            RecordActivity recordActivity,
             UserJpaRepository users,
             @Qualifier("sseExecutor") Executor sseExecutor) {
         this.loader = loader;
@@ -72,6 +76,7 @@ public class DeployProject {
         this.processExecutor = processExecutor;
         this.healthChecker = healthChecker;
         this.recordAudit = recordAudit;
+        this.recordActivity = recordActivity;
         this.users = users;
         this.sseExecutor = sseExecutor;
     }
@@ -126,6 +131,7 @@ public class DeployProject {
         List<String> summaryLines = new ArrayList<>();
         try {
             emit(id, summaryLines, "deployment started");
+            record(ActivityType.DEPLOYMENT_STARTED, entity, "deployment started");
 
             List<String> tokens = List.of(manifest.deployment().command().trim().split("\\s+"));
             Path command = workingDirectory.resolve(tokens.getFirst()).normalize();
@@ -166,6 +172,7 @@ public class DeployProject {
                     finish(entity, summaryLines, DeploymentStatus.SUCCESS, username);
                 } else {
                     emit(id, summaryLines, "health check FAILED");
+                    record(ActivityType.HEALTH_CHECK_FAILED, entity, "health check failed");
                     finish(entity, summaryLines, DeploymentStatus.FAILED, username);
                 }
                 return;
@@ -185,8 +192,10 @@ public class DeployProject {
             String username) {
         if (status == DeploymentStatus.SUCCESS) {
             emit(entity.getId(), summaryLines, "DEPLOYMENT SUCCESS");
+            record(ActivityType.DEPLOYMENT_SUCCESS, entity, "deployment successful");
         } else {
             emit(entity.getId(), summaryLines, "DEPLOYMENT FAILED");
+            record(ActivityType.DEPLOYMENT_FAILED, entity, "deployment failed");
         }
         entity.applyStatus(DeploymentTransitions.next(entity.getStatus(), status));
         entity.setFinishedAt(Instant.now());
@@ -206,6 +215,15 @@ public class DeployProject {
     private void emit(UUID id, List<String> summaryLines, String line) {
         summaryLines.add(line);
         hub.append(id, line);
+    }
+
+    private void record(ActivityType type, DeploymentEntity entity, String message) {
+        recordActivity.execute(
+                type,
+                entity.getProjectId(),
+                null,
+                message,
+                Map.of("deploymentId", entity.getId().toString()));
     }
 
     private void upsertProject(ProjectManifest manifest, Path workingDirectory, Path manifestPath) {

@@ -2,7 +2,11 @@
 
 import { useEffect, useRef } from 'react'
 
-export function useEventSource(url: string | null, onMessage: (data: string) => void) {
+export function useEventSource(
+  url: string | null,
+  onMessage: (data: string) => void,
+  eventName = 'log',
+) {
   const onMessageRef = useRef(onMessage)
   onMessageRef.current = onMessage
 
@@ -14,9 +18,9 @@ export function useEventSource(url: string | null, onMessage: (data: string) => 
     const handler = (event: MessageEvent<string>) => {
       onMessageRef.current(event.data)
     }
-    source.addEventListener('log', handler)
+    source.addEventListener(eventName, handler)
     return () => {
       source.close()
     }
-  }, [url])
+  }, [url, eventName])
 }

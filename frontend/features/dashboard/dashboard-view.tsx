@@ -1,10 +1,12 @@
 'use client'
 
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
+import { ActivityTimeline, useActivityEvents } from '@/features/activity/timeline'
 import { ProjectList } from '@/features/projects/project-list'
 import { api } from '@/lib/api'
 import { formatPercent, usagePercent } from '@/lib/format'
-import type { Project, SystemMetrics } from '@/types/api'
+import type { Alert, Project, SystemMetrics } from '@/types/api'
 
 export function DashboardView() {
   const metrics = useQuery({
@@ -15,6 +17,13 @@ export function DashboardView() {
     queryKey: ['projects'],
     queryFn: () => api<Project[]>('/api/projects'),
   })
+
+  const alerts = useQuery({
+    queryKey: ['alerts'],
+    queryFn: () => api<Alert[]>('/api/alerts'),
+    refetchInterval: 30_000,
+  })
+  const activity = useActivityEvents(8)
 
   return (
     <div className="flex flex-col gap-10">
@@ -59,14 +68,49 @@ export function DashboardView() {
 
       <section>
         <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">ALERTS</h2>
-        <p className="text-sm">0 active alerts</p>
+        {alerts.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : alerts.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{alerts.error.message}</p>
+        ) : alerts.data.length === 0 ? (
+          <p className="text-sm">0 active alerts</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm">
+              {alerts.data.length} active alert{alerts.data.length === 1 ? '' : 's'}
+            </p>
+            <ul>
+              {alerts.data.slice(0, 8).map((alert) => {
+                const label = [alert.type, alert.message].filter(Boolean).join(' — ')
+                return (
+                  <li key={alert.id} className="border-b border-[#2a2a2a] py-2 text-sm last:border-b-0">
+                    {alert.projectId ? (
+                      <Link href={`/projects/${alert.projectId}`} className="flex justify-between gap-4">
+                        <span className="min-w-0 break-all">{label}</span>
+                        <span className="shrink-0 text-[#888]">{alert.projectId}</span>
+                      </Link>
+                    ) : (
+                      <span>{label}</span>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
       </section>
 
       <hr className="border-[#2a2a2a]" />
 
       <section>
         <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">RECENT ACTIVITY</h2>
-        <p className="text-sm text-[#888]">No recent activity</p>
+        {activity.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : activity.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{activity.error?.message ?? 'Unable to load activity'}</p>
+        ) : (
+          <ActivityTimeline events={activity.events} />
+        )}
       </section>
     </div>
   )
