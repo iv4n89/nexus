@@ -8,6 +8,9 @@
 # nexus.yml workingDirectory values match ProcessBuilder cwd.
 # Backend and Nginx use host networking so the API can reach published
 # project database ports on 127.0.0.1.
+#
+# VPS deploys pull GHCR images and must use `docker compose up --no-build`.
+# Local: `docker compose --env-file .env up -d --build`.
 
 services:
   postgres:
@@ -17,7 +20,7 @@ services:
       POSTGRES_USER: nexus
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - nexus_pg:/var/lib/postgresql/data
     healthcheck:
@@ -28,6 +31,7 @@ services:
     restart: unless-stopped
 
   backend:
+    image: ${NEXUS_BACKEND_IMAGE:-nexus-backend:local}
     build:
       context: ../backend
     network_mode: host
@@ -39,12 +43,13 @@ services:
       NEXUS_ADMIN_USERNAME: ${NEXUS_ADMIN_USERNAME:-admin}
       NEXUS_ADMIN_PASSWORD: ${NEXUS_ADMIN_PASSWORD:-}
       NEXUS_MANIFEST_ROOT: /srv/projects
+      NEXUS_VERSION: ${NEXUS_VERSION:-0.0.1-SNAPSHOT}
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /srv/projects:/srv/projects
     group_add:
-      - "${DOCKER_GID:-998}"
+      - "${DOCKER_GID:?set DOCKER_GID from the host docker socket gid}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,6 +62,7 @@ services:
     restart: unless-stopped
 
   frontend:
+    image: ${NEXUS_FRONTEND_IMAGE:-nexus-frontend:local}
     build:
       context: ../frontend
     environment:
@@ -78,7 +84,7 @@ services:
       start_period: 20s
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
   nginx:
     image: nginx:1.27-alpine
