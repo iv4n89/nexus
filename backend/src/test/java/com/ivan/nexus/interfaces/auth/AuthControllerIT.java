@@ -70,6 +70,27 @@ class AuthControllerIT {
     }
 
     @Test
+    void loginRotatesSessionIdToPreventFixation() throws Exception {
+        Csrf csrf = csrf();
+        MockHttpSession preLoginSession = new MockHttpSession();
+        String sessionIdBefore = preLoginSession.getId();
+
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .session(preLoginSession)
+                        .cookie(csrf.cookie())
+                        .header("X-XSRF-TOKEN", csrf.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"changeme\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MockHttpSession sessionAfter = (MockHttpSession) result.getRequest().getSession(false);
+        assertThat(sessionAfter).isNotNull();
+        assertThat(sessionAfter.getId()).isNotEqualTo(sessionIdBefore);
+        assertThat(sessionAfter.getId()).isNotBlank();
+    }
+
+    @Test
     void loginWithBadPasswordReturns401() throws Exception {
         Csrf csrf = csrf();
 
