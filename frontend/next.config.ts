@@ -1,7 +1,11 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   async rewrites() {
+    if (process.env.NODE_ENV === 'production') {
+      return []
+    }
     return [
       {
         source: '/api/:path*',
