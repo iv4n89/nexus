@@ -1,5 +1,8 @@
 .env
 .env.local
+deployment/.env
+deployment/.env.runtime
+deployment/.deploy-env
 backend/target/
 backend/.m2/
 frontend/node_modules/

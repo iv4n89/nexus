@@ -40,6 +40,7 @@ Same-origin `/api` in production (Nginx). Local `next dev` rewrites `/api/*` to 
 - Allowlisted deploy and rollback from `nexus.yml` (script + health check, live output)
 - Service restart, deployment history, live activity timeline
 - Session cookie auth (`ADMIN` / `VIEWER`) with CSRF
+- In-app project database explorer and query (Postgres, MySQL, Mongo)
 - Read-only settings (version and retention)
 
 ## Local development
@@ -81,6 +82,26 @@ Open http://localhost:3000 and sign in as `admin` / `changeme`. Copy `.env.examp
 ## Deployment
 
 Production stack: Nginx + Next.js standalone + Spring Boot + PostgreSQL. The backend mounts the **Docker socket** (host-root equivalent) and bind-mounts `/srv/projects` at the **same host path** so deploy scripts see the paths in `nexus.yml`.
+
+VPS target: `root@161.97.116.30`, stack directory `/opt/nexus`, public URL `http://161.97.116.30`. Postgres and the Next server bind to localhost; Nginx on host port 80 is the public entry.
+
+### Continuous deploy
+
+A push (or manual run) on `main` builds images, pushes them to GHCR (`ghcr.io/<owner>/nexus/backend` and `.../frontend`), rsyncs compose to `/opt/nexus`, and runs `deployment/remote-deploy.sh`. That script creates `/opt/nexus` and `/srv/projects` if needed, reads `DOCKER_GID` from the host socket, and runs `docker compose up -d --no-build`.
+
+Add this repository secret before the first deploy:
+
+- **`NEXUS_SSH_PRIVATE_KEY`** — private key whose public half is in `root@161.97.116.30:~/.ssh/authorized_keys`
+
+Optional: **`NEXUS_ADMIN_PASSWORD`**. If omitted, the first run writes a random admin password to `/opt/nexus/.env` on the server (mode 600). Later deploys do not overwrite that file.
+
+```bash
+gh secret set NEXUS_SSH_PRIVATE_KEY < deploy_key
+```
+
+Then **Actions → Deploy → Run workflow**, or merge to `main`.
+
+### Manual compose
 
 ```bash
 cp deployment/.env.example deployment/.env

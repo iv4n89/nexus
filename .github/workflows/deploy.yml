@@ -1,0 +1,107 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  NEXUS_SSH_HOST: 161.97.116.30
+  NEXUS_SSH_USER: root
+  NEXUS_REMOTE_DIR: /opt/nexus
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Backend image name
+        id: backend
+        env:
+          REPO: ${{ github.repository }}
+        run: echo "image=${REGISTRY}/$(echo "$REPO" | tr '[:upper:]' '[:lower:]')/backend" >> "$GITHUB_OUTPUT"
+
+      - name: Frontend image name
+        id: frontend
+        env:
+          REPO: ${{ github.repository }}
+        run: echo "image=${REGISTRY}/$(echo "$REPO" | tr '[:upper:]' '[:lower:]')/frontend" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push backend
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.backend.outputs.image }}:${{ github.sha }}
+            ${{ steps.backend.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.frontend.outputs.image }}:${{ github.sha }}
+            ${{ steps.frontend.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Deploy over SSH
+        env:
+          NEXUS_SSH_PRIVATE_KEY: ${{ secrets.NEXUS_SSH_PRIVATE_KEY }}
+          NEXUS_ADMIN_PASSWORD: ${{ secrets.NEXUS_ADMIN_PASSWORD }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          NEXUS_BACKEND_IMAGE: ${{ steps.backend.outputs.image }}:${{ github.sha }}
+          NEXUS_FRONTEND_IMAGE: ${{ steps.frontend.outputs.image }}:${{ github.sha }}
+          NEXUS_VERSION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NEXUS_SSH_PRIVATE_KEY}" ]; then
+            echo "Add repository secret NEXUS_SSH_PRIVATE_KEY (private key whose public half is authorized for root on the VPS)"
+            exit 1
+          fi
+          KEY="${RUNNER_TEMP}/nexus_deploy_key"
+          install -m 600 /dev/null "${KEY}"
+          printf '%s\n' "${NEXUS_SSH_PRIVATE_KEY}" > "${KEY}"
+          SSH_OPTS=(-i "${KEY}" -o IdentitiesOnly=yes -o UserKnownHostsFile="${GITHUB_WORKSPACE}/deployment/known_hosts")
+          ssh "${SSH_OPTS[@]}" "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}" "mkdir -p '${NEXUS_REMOTE_DIR}/nginx'"
+          scp "${SSH_OPTS[@]}" \
+            deployment/docker-compose.yml \
+            deployment/remote-deploy.sh \
+            "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}:${NEXUS_REMOTE_DIR}/"
+          scp "${SSH_OPTS[@]}" \
+            deployment/nginx/nginx.conf \
+            "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}:${NEXUS_REMOTE_DIR}/nginx/nginx.conf"
+          ssh "${SSH_OPTS[@]}" "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}" "chmod 700 '${NEXUS_REMOTE_DIR}' '${NEXUS_REMOTE_DIR}/remote-deploy.sh'"
+          {
+            printf 'GHCR_USER=%s\n' "${GHCR_USER}"
+            printf 'GHCR_TOKEN=%s\n' "${GHCR_TOKEN}"
+            printf 'NEXUS_BACKEND_IMAGE=%s\n' "${NEXUS_BACKEND_IMAGE}"
+            printf 'NEXUS_FRONTEND_IMAGE=%s\n' "${NEXUS_FRONTEND_IMAGE}"
+            printf 'NEXUS_VERSION=%s\n' "${NEXUS_VERSION}"
+            printf 'NEXUS_ADMIN_PASSWORD=%s\n' "${NEXUS_ADMIN_PASSWORD}"
+          } | ssh "${SSH_OPTS[@]}" "${NEXUS_SSH_USER}@${NEXUS_SSH_HOST}" \
+            "umask 077; cat > '${NEXUS_REMOTE_DIR}/.deploy-env'; set -a; . '${NEXUS_REMOTE_DIR}/.deploy-env'; rm -f '${NEXUS_REMOTE_DIR}/.deploy-env'; '${NEXUS_REMOTE_DIR}/remote-deploy.sh'"
