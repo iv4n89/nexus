@@ -14,10 +14,10 @@ class HexagonalArchitectureTest {
     private static final String MONGO_STATEMENT_PARSER =
             "com.ivan.nexus.application.database.MongoStatementParser";
 
-    // Add application.database.. after its remaining adapter dependencies are migrated.
     private static final String[] CLEAN_APPLICATION_PACKAGES = {
             "com.ivan.nexus.application.audit..",
             "com.ivan.nexus.application.container..",
+            "com.ivan.nexus.application.database..",
             "com.ivan.nexus.application.log..",
             "com.ivan.nexus.application.metrics..",
             "com.ivan.nexus.application.project..",

@@ -9,17 +9,19 @@ import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.interfaces.database.DatabaseDtos;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,7 +44,8 @@ class EditDatabaseCellsTest {
         stubReady(DatabaseEngine.POSTGRES);
         DomainException ex = assertThrows(
                 DomainException.class,
-                () -> edit.execute("lab", "lab:db", body(List.of()), "ADMIN", "admin", "127.0.0.1"));
+                () -> edit.execute(command(
+                        "public", "jobs", null, null, List.of(), List.of(), List.of())));
         assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
         verify(jdbc, never()).applyCells(any(), any(), any(), any(), any());
     }
@@ -50,17 +53,17 @@ class EditDatabaseCellsTest {
     @Test
     void patchingPrimaryKeyColumnIsNotAllowed() {
         stubReady(DatabaseEngine.POSTGRES);
-        DatabaseDtos.CellsRequest body = new DatabaseDtos.CellsRequest(
+        EditDatabaseCellsCommand body = command(
                 "public",
                 "jobs",
                 null,
                 null,
-                List.of(new DatabaseDtos.CellPatch(Map.of("id", 1), "id", "2", null, null)),
+                List.of(new EditDatabaseCellsCommand.CellPatch(Map.of("id", 1), "id", "2", null, null)),
                 List.of(),
                 List.of());
         DomainException ex = assertThrows(
                 DomainException.class,
-                () -> edit.execute("lab", "lab:db", body, "ADMIN", "admin", "127.0.0.1"));
+                () -> edit.execute(body));
         assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
         verify(jdbc, never()).applyCells(any(), any(), any(), any(), any());
     }
@@ -68,17 +71,17 @@ class EditDatabaseCellsTest {
     @Test
     void mongoRejectsInserts() {
         stubReady(DatabaseEngine.MONGO);
-        DatabaseDtos.CellsRequest body = new DatabaseDtos.CellsRequest(
+        EditDatabaseCellsCommand body = command(
                 null,
                 null,
                 "app",
                 "jobs",
                 List.of(),
-                List.of(new DatabaseDtos.SqlInsertValues(Map.of("n", 1))),
+                List.of(new EditDatabaseCellsCommand.InsertValues(Map.of("n", 1))),
                 List.of());
         DomainException ex = assertThrows(
                 DomainException.class,
-                () -> edit.execute("lab", "lab:db", body, "ADMIN", "admin", "127.0.0.1"));
+                () -> edit.execute(body));
         assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
         verify(mongo, never()).updateDocuments(any(), any(), any(), any());
         verify(jdbc, never()).applyCells(any(), any(), any(), any(), any());
@@ -90,16 +93,49 @@ class EditDatabaseCellsTest {
         when(jdbc.applyCells(any(), any(), any(), any(), any()))
                 .thenReturn(new QueryResult(List.of("updateCount"), List.of(List.of(1)), false, 1, 1));
         when(users.findIdByUsername("admin")).thenReturn(java.util.Optional.empty());
-        DatabaseDtos.CellsRequest body = new DatabaseDtos.CellsRequest(
+        EditDatabaseCellsCommand body = command(
                 "public",
                 "users",
                 null,
                 null,
                 List.of(),
-                List.of(new DatabaseDtos.SqlInsertValues(Map.of("id", 9, "email", "nuevo@x"))),
+                List.of(new EditDatabaseCellsCommand.InsertValues(Map.of("id", 9, "email", "nuevo@x"))),
                 List.of());
-        edit.execute("lab", "lab:db", body, "ADMIN", "admin", "127.0.0.1");
+        edit.execute(body);
         verify(jdbc).applyCells(any(), any(), eq("public"), eq("users"), any());
+    }
+
+    @Test
+    void commandDefensivelyCopiesMapsWithoutRejectingNullCellValues() {
+        Map<String, Object> primaryKey = new LinkedHashMap<>();
+        primaryKey.put("tenant", null);
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("name", null);
+        Map<String, Object> delete = new LinkedHashMap<>();
+        delete.put("archivedAt", null);
+        List<Map<String, Object>> deletes = new ArrayList<>();
+        deletes.add(delete);
+
+        EditDatabaseCellsCommand command = command(
+                "public",
+                "users",
+                null,
+                null,
+                List.of(new EditDatabaseCellsCommand.CellPatch(primaryKey, "email", null, null, null)),
+                List.of(new EditDatabaseCellsCommand.InsertValues(values)),
+                deletes);
+        primaryKey.put("id", 9);
+        values.put("email", "changed@example.com");
+        delete.put("id", 10);
+        deletes.clear();
+
+        assertEquals(1, command.patches().getFirst().primaryKey().size());
+        assertNull(command.patches().getFirst().primaryKey().get("tenant"));
+        assertEquals(1, command.inserts().getFirst().values().size());
+        assertNull(command.inserts().getFirst().values().get("name"));
+        assertEquals(1, command.deletes().size());
+        assertEquals(1, command.deletes().getFirst().size());
+        assertNull(command.deletes().getFirst().get("archivedAt"));
     }
 
     private void stubReady(DatabaseEngine engine) {
@@ -109,7 +145,26 @@ class EditDatabaseCellsTest {
                 .thenReturn(new InstanceResolution(instance, new ResolvedTarget("127.0.0.1", 5432, "lab", "lab", "lab")));
     }
 
-    private static DatabaseDtos.CellsRequest body(List<DatabaseDtos.CellPatch> patches) {
-        return new DatabaseDtos.CellsRequest("public", "jobs", null, null, patches, List.of(), List.of());
+    private static EditDatabaseCellsCommand command(
+            String schema,
+            String table,
+            String mongoDatabase,
+            String collection,
+            List<EditDatabaseCellsCommand.CellPatch> patches,
+            List<EditDatabaseCellsCommand.InsertValues> inserts,
+            List<Map<String, Object>> deletes) {
+        return new EditDatabaseCellsCommand(
+                "lab",
+                "lab:db",
+                "ADMIN",
+                "admin",
+                "127.0.0.1",
+                schema,
+                table,
+                mongoDatabase,
+                collection,
+                patches,
+                inserts,
+                deletes);
     }
 }
