@@ -112,7 +112,7 @@ public class MongoQueryExecutor {
             MongoCollection<Document> coll = client.getDatabase(database).getCollection(collection);
             if (grouped.size() == 1) {
                 applyMongoUpdate(coll, grouped.get(0), null);
-                return writeResult(1, start);
+                return documentUpdateResult(grouped.size(), start);
             }
             ClientSession session;
             try {
@@ -137,7 +137,7 @@ public class MongoQueryExecutor {
                     throw mapMultiDocumentTxnFailure(ex, target.password());
                 }
             }
-            return writeResult(grouped.size(), start);
+            return documentUpdateResult(grouped.size(), start);
         } catch (DomainException ex) {
             throw ex;
         } catch (MongoException ex) {
@@ -292,6 +292,15 @@ public class MongoQueryExecutor {
                 false,
                 elapsedMs(start),
                 1);
+    }
+
+    private static QueryResult documentUpdateResult(int documentCount, long start) {
+        return new QueryResult(
+                List.of("updateCount"),
+                List.of(List.of(documentCount)),
+                false,
+                elapsedMs(start),
+                documentCount);
     }
 
     static Object parseId(String id) {

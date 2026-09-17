@@ -283,7 +283,12 @@ export function DatabasePage({ projectId }: { projectId: string }) {
                           {changes} {changes === 1 ? 'cambio' : 'cambios'}
                         </span>
                         <span className="flex gap-3">
-                          <button type="button" onClick={onCancel} className="text-[#888]">
+                          <button
+                            type="button"
+                            onClick={onCancel}
+                            disabled={save.isPending}
+                            className="text-[#888]"
+                          >
                             Cancelar
                           </button>
                           <button
