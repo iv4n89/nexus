@@ -1,10 +1,12 @@
 export class ApiError extends Error {
   readonly status: number
+  readonly code: string
 
-  constructor(message: string, status: number) {
-    super(message)
+  constructor(code: string, status: number, detail?: string) {
+    super(detail ? `${code}: ${detail}` : code)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -40,7 +42,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    const error = new ApiError(body?.error?.code ?? res.statusText, res.status)
+    const code = body?.error?.code ?? res.statusText
+    const detail = typeof body?.error?.message === 'string' ? body.error.message : undefined
+    const error = new ApiError(code, res.status, detail)
     if (typeof window !== 'undefined' && shouldRedirectToLogin(error.status, window.location.pathname)) {
       window.location.replace('/login')
       return new Promise<T>(() => {})

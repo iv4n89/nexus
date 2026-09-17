@@ -25,6 +25,19 @@ class MongoStatementClassifierTest {
     }
 
     @Test
+    void aggregateDoesNotTreatOutSubstringAsWrite() throws Exception {
+        String json = "{\"op\":\"aggregate\",\"database\":\"a\",\"collection\":\"c\",\"pipeline\":[{\"$match\":{\"note\":\"uses $out in a string\"}}]}";
+        var stmt = MongoStatementClassifier.parse(mapper, json);
+        assertEquals(StatementClass.READ, stmt.statementClass());
+    }
+
+    @Test
+    void aggregateMergeForbiddenRegardlessOfCase() {
+        String json = "{\"op\":\"aggregate\",\"database\":\"a\",\"collection\":\"c\",\"pipeline\":[{\"$MERGE\":{\"into\":\"x\"}}]}";
+        assertThrows(DomainException.class, () -> MongoStatementClassifier.parse(mapper, json));
+    }
+
+    @Test
     void deleteEmptyFilterIsDestructive() throws Exception {
         var stmt = MongoStatementClassifier.parse(new ObjectMapper(),
                 "{\"op\":\"delete\",\"database\":\"a\",\"collection\":\"c\",\"filter\":{}}");

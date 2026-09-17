@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { me } from '@/features/auth/api'
+import { boundTreeSelection } from '@/features/database/browse-selection'
 import { ConfirmDestructive } from '@/features/database/confirm-destructive'
 import { DataGrid } from '@/features/database/data-grid'
 import { InstanceSelect } from '@/features/database/instance-select'
@@ -11,6 +12,7 @@ import { QueryEditor } from '@/features/database/query-editor'
 import { SchemaTree, type TreeSelection } from '@/features/database/schema-tree'
 import { getMetadata, listInstances, postCell, postQuery, previewTable } from '@/features/database/api'
 import { isDestructiveSql, isReadMongo, isReadSql } from '@/features/database/classify-sql'
+import { ApiError } from '@/lib/api'
 import type { AuthUser, DatabaseInstance, QueryResult } from '@/types/api'
 
 export function DatabasePage({ projectId }: { projectId: string }) {
@@ -20,7 +22,10 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   const [statement, setStatement] = useState('SELECT 1')
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null)
   const [queryError, setQueryError] = useState<string | null>(null)
+  const [browseError, setBrowseError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [selectionInstanceId, setSelectionInstanceId] = useState('')
+  const queryClient = useQueryClient()
 
   const auth = useQuery({
     queryKey: ['auth', 'me'],
@@ -33,6 +38,16 @@ export function DatabasePage({ projectId }: { projectId: string }) {
 
   const selectedId = instanceId || instances.data?.[0]?.id || ''
   const selected: DatabaseInstance | undefined = instances.data?.find((item) => item.id === selectedId)
+  const previewSelection = boundTreeSelection(selection, selectionInstanceId, selectedId)
+
+  if (selectionInstanceId && selectedId && selectionInstanceId !== selectedId) {
+    setSelectionInstanceId(selectedId)
+    setSelection(null)
+    setQueryResult(null)
+    setStatement('SELECT 1')
+    setQueryError(null)
+    setBrowseError(null)
+  }
 
   const metadata = useQuery({
     queryKey: ['projects', projectId, 'database', selectedId, 'metadata'],
@@ -41,20 +56,27 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   })
 
   const preview = useQuery({
-    queryKey: ['projects', projectId, 'database', selectedId, 'preview', selection],
+    queryKey: ['projects', projectId, 'database', selectedId, 'preview', previewSelection],
     queryFn: () => {
-      if (!selection) {
+      if (!previewSelection) {
         throw new Error('No selection')
       }
-      if (selection.kind === 'sql') {
-        return previewTable(projectId, selectedId, { schema: selection.schema, table: selection.table })
+      if (previewSelection.kind === 'sql') {
+        return previewTable(projectId, selectedId, {
+          schema: previewSelection.schema,
+          table: previewSelection.table,
+        })
       }
       return previewTable(projectId, selectedId, {
-        mongoDatabase: selection.database,
-        collection: selection.collection,
+        mongoDatabase: previewSelection.database,
+        collection: previewSelection.collection,
       })
     },
-    enabled: tab === 'browse' && Boolean(selectedId) && selected?.status === 'READY' && selection !== null,
+    enabled:
+      tab === 'browse' &&
+      Boolean(selectedId) &&
+      selected?.status === 'READY' &&
+      previewSelection !== null,
   })
 
   const isAdmin = auth.data?.role === 'ADMIN'
@@ -74,7 +96,7 @@ export function DatabasePage({ projectId }: { projectId: string }) {
       setConfirmOpen(false)
     },
     onError: (error: Error) => {
-      if (error.message === 'CONFIRMATION_REQUIRED') {
+      if (error instanceof ApiError && error.code === 'CONFIRMATION_REQUIRED') {
         setConfirmOpen(true)
         return
       }
@@ -84,6 +106,15 @@ export function DatabasePage({ projectId }: { projectId: string }) {
 
   const cell = useMutation({
     mutationFn: (payload: Parameters<typeof postCell>[2]) => postCell(projectId, selectedId, payload),
+    onSuccess: () => {
+      setBrowseError(null)
+      void queryClient.invalidateQueries({
+        queryKey: ['projects', projectId, 'database', selectedId, 'preview'],
+      })
+    },
+    onError: (error: Error) => {
+      setBrowseError(error.message)
+    },
   })
 
   function onExecute() {
@@ -122,8 +153,9 @@ export function DatabasePage({ projectId }: { projectId: string }) {
             {metadata.data ? (
               <SchemaTree
                 metadata={metadata.data}
-                selected={selection}
+                selected={previewSelection}
                 onSelect={(next) => {
+                  setSelectionInstanceId(selectedId)
                   setSelection(next)
                   setTab('browse')
                 }}
@@ -150,7 +182,7 @@ export function DatabasePage({ projectId }: { projectId: string }) {
               </button>
             </div>
             {tab === 'browse' ? (
-              selection == null ? (
+              previewSelection == null ? (
                 <p className="text-sm text-[#888]">Select a table or collection</p>
               ) : preview.isPending ? (
                 <p className="text-sm text-[#888]">Loading…</p>
@@ -158,33 +190,35 @@ export function DatabasePage({ projectId }: { projectId: string }) {
                 <p className="text-sm text-[#ff4d4f]">{preview.error.message}</p>
               ) : preview.data ? (
                 <>
+                  {browseError ? <p className="text-sm text-[#ff4d4f]">{browseError}</p> : null}
                   {preview.data.truncated ? (
                     <p className="text-sm text-[#888]">Result truncated at {preview.data.rowCount} rows</p>
                   ) : null}
                   <DataGrid
                     result={preview.data}
                     canEdit={Boolean(isAdmin)}
-                    primaryKey={selection?.kind === 'sql' ? selection.primaryKey : []}
-                    idColumn={selection?.kind === 'mongo' ? '_id' : null}
+                    primaryKey={previewSelection.kind === 'sql' ? previewSelection.primaryKey : []}
+                    idColumn={previewSelection.kind === 'mongo' ? '_id' : null}
                     onEdit={(row, column, value) => {
-                      if (selection?.kind === 'sql') {
+                      setBrowseError(null)
+                      if (previewSelection.kind === 'sql') {
                         const primaryKey: Record<string, unknown> = {}
-                        for (const key of selection.primaryKey) {
+                        for (const key of previewSelection.primaryKey) {
                           primaryKey[key] = row[key]
                         }
                         cell.mutate({
-                          schema: selection.schema,
-                          table: selection.table,
+                          schema: previewSelection.schema,
+                          table: previewSelection.table,
                           primaryKey,
                           column,
                           value,
                         })
                         return
                       }
-                      if (selection?.kind === 'mongo') {
+                      if (previewSelection.kind === 'mongo') {
                         cell.mutate({
-                          mongoDatabase: selection.database,
-                          collection: selection.collection,
+                          mongoDatabase: previewSelection.database,
+                          collection: previewSelection.collection,
                           id: String(row._id ?? ''),
                           field: column,
                           value,

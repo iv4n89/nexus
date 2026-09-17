@@ -19,8 +19,8 @@ class SqlStatementClassifierTest {
     }
 
     @Test
-    void selectIntoIsWrite() {
-        assertEquals(StatementClass.WRITE, SqlStatementClassifier.classify("SELECT * INTO tmp FROM users"));
+    void selectForUpdateIsWrite() {
+        assertEquals(StatementClass.WRITE, SqlStatementClassifier.classify("SELECT n FROM t FOR UPDATE"));
     }
 
     @Test

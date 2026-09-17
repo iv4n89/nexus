@@ -36,5 +36,6 @@ class EngineDetectorTest {
         assertTrue(EngineDetector.fromImage("nginx:alpine").isEmpty());
         assertTrue(EngineDetector.fromImage("redis:7").isEmpty());
         assertTrue(EngineDetector.fromImage("nexus-backend:latest").isEmpty());
+        assertTrue(EngineDetector.fromImage("mongo-express:1.0").isEmpty());
     }
 }

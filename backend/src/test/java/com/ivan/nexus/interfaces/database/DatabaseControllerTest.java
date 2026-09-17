@@ -87,6 +87,20 @@ class DatabaseControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void previewQueryFailedIncludesSqlMessage() throws Exception {
+        given(previewTable.execute(eq("lab"), eq("lab:aaaaaaaaaaaa"), eq("public"), eq("jobs"), any(), any(), eq("ADMIN")))
+                .willThrow(new DomainException(NexusErrorCode.QUERY_FAILED, "relation \"jobs\" does not exist"));
+
+        mockMvc.perform(get("/api/projects/lab/database/instances/lab:aaaaaaaaaaaa/preview")
+                        .queryParam("schema", "public")
+                        .queryParam("table", "jobs"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("QUERY_FAILED"))
+                .andExpect(jsonPath("$.error.message").value("relation \"jobs\" does not exist"));
+    }
+
+    @Test
     @WithMockUser(username = "viewer", roles = "VIEWER")
     void viewerPreviewOfControlPlaneDatabaseReturns403() throws Exception {
         given(previewTable.execute(eq("nexus"), eq("nexus:cccccccccccc"), any(), any(), any(), any(), eq("VIEWER")))

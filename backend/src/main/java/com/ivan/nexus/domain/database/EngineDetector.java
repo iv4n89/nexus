@@ -26,7 +26,7 @@ public final class EngineDetector {
         if (token.contains("mariadb") || token.contains("mysql")) {
             return Optional.of(DatabaseEngine.MYSQL);
         }
-        if (token.contains("mongodb") || token.equals("mongo") || token.startsWith("mongo")) {
+        if (token.equals("mongo") || token.equals("mongodb")) {
             return Optional.of(DatabaseEngine.MONGO);
         }
         return Optional.empty();
