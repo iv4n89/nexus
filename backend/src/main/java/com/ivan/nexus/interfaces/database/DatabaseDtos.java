@@ -28,17 +28,6 @@ public final class DatabaseDtos {
             long durationMs,
             int rowCount) {}
 
-    public record CellRequest(
-            String schema,
-            String table,
-            Map<String, Object> primaryKey,
-            String column,
-            Object value,
-            String mongoDatabase,
-            String collection,
-            String id,
-            String field) {}
-
     public record CellsRequest(
             String schema,
             String table,

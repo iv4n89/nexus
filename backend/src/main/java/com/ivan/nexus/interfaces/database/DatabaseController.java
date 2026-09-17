@@ -1,7 +1,7 @@
 package com.ivan.nexus.interfaces.database;
 
 import com.ivan.nexus.application.database.DiscoverProjectDatabases;
-import com.ivan.nexus.application.database.EditDatabaseCell;
+import com.ivan.nexus.application.database.EditDatabaseCells;
 import com.ivan.nexus.application.database.GetDatabaseMetadata;
 import com.ivan.nexus.application.database.PreviewTable;
 import com.ivan.nexus.application.database.RunDatabaseQuery;
@@ -27,19 +27,19 @@ public class DatabaseController {
     private final GetDatabaseMetadata getMetadata;
     private final PreviewTable previewTable;
     private final RunDatabaseQuery runQuery;
-    private final EditDatabaseCell editCell;
+    private final EditDatabaseCells editCells;
 
     public DatabaseController(
             DiscoverProjectDatabases discover,
             GetDatabaseMetadata getMetadata,
             PreviewTable previewTable,
             RunDatabaseQuery runQuery,
-            EditDatabaseCell editCell) {
+            EditDatabaseCells editCells) {
         this.discover = discover;
         this.getMetadata = getMetadata;
         this.previewTable = previewTable;
         this.runQuery = runQuery;
-        this.editCell = editCell;
+        this.editCells = editCells;
     }
 
     @GetMapping("/instances")
@@ -101,25 +101,17 @@ public class DatabaseController {
                 ClientIp.resolve(request)));
     }
 
-    @PostMapping("/instances/{databaseId}/cell")
-    public DatabaseDtos.QueryResponse cell(
+    @PostMapping("/instances/{databaseId}/cells")
+    public DatabaseDtos.QueryResponse cells(
             @PathVariable String projectId,
             @PathVariable String databaseId,
-            @RequestBody DatabaseDtos.CellRequest body,
+            @RequestBody DatabaseDtos.CellsRequest body,
             Authentication authentication,
             HttpServletRequest request) {
-        return toResponse(editCell.execute(
+        return toResponse(editCells.execute(
                 projectId,
                 databaseId,
-                body.schema(),
-                body.table(),
-                body.primaryKey(),
-                body.column(),
-                body.value(),
-                body.mongoDatabase(),
-                body.collection(),
-                body.id(),
-                body.field(),
+                body,
                 role(authentication),
                 authentication.getName(),
                 ClientIp.resolve(request)));

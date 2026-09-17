@@ -1,7 +1,7 @@
 package com.ivan.nexus.interfaces.database;
 
 import com.ivan.nexus.application.database.DiscoverProjectDatabases;
-import com.ivan.nexus.application.database.EditDatabaseCell;
+import com.ivan.nexus.application.database.EditDatabaseCells;
 import com.ivan.nexus.application.database.GetDatabaseMetadata;
 import com.ivan.nexus.application.database.PreviewTable;
 import com.ivan.nexus.application.database.RunDatabaseQuery;
@@ -47,7 +47,7 @@ class DatabaseControllerTest {
     @MockitoBean
     RunDatabaseQuery runQuery;
     @MockitoBean
-    EditDatabaseCell editCell;
+    EditDatabaseCells editCells;
 
     @Test
     void unauthenticatedQueryReturns401() throws Exception {
@@ -111,5 +111,38 @@ class DatabaseControllerTest {
                         .queryParam("table", "users"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @WithMockUser(username = "viewer", roles = "VIEWER")
+    void viewerPostCellsReturns403() throws Exception {
+        mockMvc.perform(post("/api/projects/lab/database/instances/lab:aaaaaaaaaaaa/cells")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"schema\":\"public\",\"table\":\"jobs\",\"patches\":[{\"primaryKey\":{\"id\":1},\"column\":\"status\",\"value\":\"running\"}]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminPostCellIsGone() throws Exception {
+        mockMvc.perform(post("/api/projects/lab/database/instances/lab:aaaaaaaaaaaa/cell")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"schema\":\"public\",\"table\":\"jobs\",\"primaryKey\":{\"id\":1},\"column\":\"status\",\"value\":\"running\"}"))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminPostCellsReturns200() throws Exception {
+        given(editCells.execute(eq("lab"), eq("lab:aaaaaaaaaaaa"), any(), eq("ADMIN"), eq("admin"), any()))
+                .willReturn(new QueryResult(List.of("updateCount"), List.of(List.of(1)), false, 1, 1));
+        mockMvc.perform(post("/api/projects/lab/database/instances/lab:aaaaaaaaaaaa/cells")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"schema\":\"public\",\"table\":\"jobs\",\"patches\":[{\"primaryKey\":{\"id\":1},\"column\":\"status\",\"value\":\"running\"}]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rowCount").value(1));
     }
 }
