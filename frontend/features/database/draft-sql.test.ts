@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMongoStatements, formatSqlStatements } from './draft-sql'
+import { formatMongoStatements, formatSqlDraft, formatSqlStatements } from './draft-sql'
 
 describe('formatSqlStatements', () => {
   it('renders one UPDATE with two columns and NULL', () => {
@@ -30,6 +30,39 @@ describe('formatSqlStatements', () => {
       { primaryKey: { n: 1 }, columns: { note: 'x' } },
     ])
     expect(sql).toBe('UPDATE `lab`.`order` SET `note` = \'x\' WHERE `n` = \'1\'')
+  })
+})
+
+describe('formatSqlDraft', () => {
+  it('orders DELETE then UPDATE then INSERT', () => {
+    const sql = formatSqlDraft('POSTGRES', 'public', 'users', {
+      deletes: [{ id: 3 }],
+      updates: [{ primaryKey: { id: 2 }, columns: { role: 'ADMIN' } }],
+      inserts: [{ email: 'nuevo@x' }],
+    })
+    expect(sql).toBe(
+      'DELETE FROM "public"."users" WHERE "id" = \'3\';\n' +
+        'UPDATE "public"."users" SET "role" = \'ADMIN\' WHERE "id" = \'2\';\n' +
+        'INSERT INTO "public"."users" ("email") VALUES (\'nuevo@x\')',
+    )
+  })
+
+  it('formats empty insert as DEFAULT VALUES on Postgres', () => {
+    const sql = formatSqlDraft('POSTGRES', 'public', 'users', {
+      deletes: [],
+      updates: [],
+      inserts: [{}],
+    })
+    expect(sql).toBe('INSERT INTO "public"."users" DEFAULT VALUES')
+  })
+
+  it('formats empty insert as () VALUES () on MySQL', () => {
+    const sql = formatSqlDraft('MYSQL', 'lab', 'users', {
+      deletes: [],
+      updates: [],
+      inserts: [{}],
+    })
+    expect(sql).toBe('INSERT INTO `lab`.`users` () VALUES ()')
   })
 })
 
