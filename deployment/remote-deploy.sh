@@ -94,8 +94,10 @@ docker ps -aq \
   | xargs -r docker rm -f || true
 
 # Caddy (Docker) reaches host-networked Next :3000 and Spring :8080 via
-# host.docker.internal. Both hit INPUT, so allow only the Caddy container
-# IPv4 (plus docker0 gateway). Probe from Caddy's network, not a random bridge.
+# host.docker.internal. Both hit INPUT, so allow the Caddy container IPv4
+# plus its bridge gateways. Probe from Caddy's network namespace so the
+# source IP matches the rule. Do not drop 172.16.0.0/12 until that probe
+# succeeds — a sibling container on the same bridge is a different IP.
 caddy_container_id() {
   docker ps -q --filter label=com.docker.compose.service=caddy | head -n1
 }
@@ -108,13 +110,12 @@ caddy_ipv4s() {
   docker inspect -f '{{range .NetworkSettings.Networks}}{{if .IPAddress}}{{.IPAddress}} {{end}}{{end}}' "${cid}"
 }
 
-caddy_first_network() {
+caddy_gateways() {
   local cid="${1:-}"
   if [[ -z "${cid}" ]]; then
     return 0
   fi
-  docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' "${cid}" \
-    | awk 'NF { print; exit }'
+  docker inspect -f '{{range .NetworkSettings.Networks}}{{if .Gateway}}{{.Gateway}} {{end}}{{end}}' "${cid}"
 }
 
 delete_host_api_source() {
@@ -143,21 +144,23 @@ allow_host_api_source() {
 }
 
 allow_docker_to_host_api() {
-  local cid
+  local cid src port
+  # Heal a previous deploy that dropped the broad rule before the probe
+  # used Caddy's own source IP.
+  for port in 8080 3000; do
+    allow_host_api_source "172.16.0.0/12" "${port}"
+  done
+
   cid=$(caddy_container_id)
   local -a sources=()
   if [[ -n "${cid}" ]]; then
     # shellcheck disable=SC2207
-    sources=($(caddy_ipv4s "${cid}"))
+    sources=($(caddy_ipv4s "${cid}") $(caddy_gateways "${cid}"))
     sources+=("172.17.0.1")
     echo "Allowing Caddy sources ${sources[*]} → host :8080 and :3000"
-    delete_host_api_source "172.16.0.0/12" 8080
-    delete_host_api_source "172.16.0.0/12" 3000
   else
-    echo "WARN: Caddy container not found; falling back to 172.16.0.0/12 for :8080 and :3000" >&2
-    sources=("172.16.0.0/12")
+    echo "WARN: Caddy container not found; keeping 172.16.0.0/12 for :8080 and :3000" >&2
   fi
-  local src port
   for src in "${sources[@]}"; do
     [[ -n "${src}" ]] || continue
     for port in 8080 3000; do
@@ -167,24 +170,31 @@ allow_docker_to_host_api() {
 }
 
 probe_caddy_to_api() {
-  local cid network
+  local cid gw
   cid=$(caddy_container_id)
-  network=$(caddy_first_network "${cid}")
-  if [[ -z "${network}" ]]; then
-    network=bridge
-    echo "WARN: probing from default bridge; Caddy network was not detected" >&2
-  else
-    echo "Probing host.docker.internal:8080 from Caddy network ${network}"
-  fi
-  if docker run --rm --network "${network}" --add-host=host.docker.internal:host-gateway \
-    --entrypoint curl "${NEXUS_BACKEND_IMAGE}" \
-    -fsS --max-time 8 http://host.docker.internal:8080/actuator/health; then
-    echo
-    echo "Caddy→API path is open"
+  if [[ -z "${cid}" ]]; then
+    echo "WARN: Caddy container not found; keeping 172.16.0.0/12" >&2
     return 0
   fi
-  echo "Caddy cannot reach host :8080. Check ufw/iptables for the Caddy container IP." >&2
-  return 1
+  local -a targets=()
+  # shellcheck disable=SC2207
+  targets=($(caddy_gateways "${cid}"))
+  targets+=("172.17.0.1")
+  for gw in "${targets[@]}"; do
+    [[ -n "${gw}" ]] || continue
+    echo "Probing ${gw}:8080 from Caddy's network namespace"
+    if docker run --rm --network "container:${cid}" --entrypoint curl "${NEXUS_BACKEND_IMAGE}" \
+      -fsS --max-time 8 "http://${gw}:8080/actuator/health"; then
+      echo
+      echo "Caddy→API path is open via ${gw}"
+      delete_host_api_source "172.16.0.0/12" 8080
+      delete_host_api_source "172.16.0.0/12" 3000
+      echo "Dropped 172.16.0.0/12 after Caddy IP rules were confirmed"
+      return 0
+    fi
+  done
+  echo "WARN: Caddy namespace probe failed; leaving 172.16.0.0/12 in place" >&2
+  return 0
 }
 
 allow_docker_to_host_api
