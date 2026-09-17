@@ -74,7 +74,7 @@ public class JdbcQueryExecutor {
         } catch (DomainException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.warn("Database query failed: {}", ex.toString());
+            log.warn("Database query failed", ex);
             throw new DomainException(
                     NexusErrorCode.QUERY_FAILED,
                     SecretSanitizer.strip(
