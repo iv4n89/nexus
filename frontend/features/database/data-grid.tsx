@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { shouldCommitCell } from '@/features/database/cell-edit'
+import { useEffect, useState } from 'react'
+import { displayValue, rowKey, type CellDraft } from '@/features/database/cell-draft'
 import type { QueryResult } from '@/types/api'
 
 export function DataGrid({
@@ -9,13 +9,17 @@ export function DataGrid({
   canEdit,
   primaryKey,
   idColumn,
-  onEdit,
+  draft,
+  resetToken,
+  onDraftChange,
 }: {
   result: QueryResult
   canEdit: boolean
   primaryKey: string[]
   idColumn: string | null
-  onEdit: (row: Record<string, unknown>, column: string, value: unknown) => void
+  draft: CellDraft
+  resetToken: number
+  onDraftChange: (row: Record<string, unknown>, column: string, input: string, original: unknown) => void
 }) {
   return (
     <div className="overflow-auto border border-[#2a2a2a]">
@@ -30,29 +34,41 @@ export function DataGrid({
           </tr>
         </thead>
         <tbody>
-          {result.rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-b border-[#2a2a2a]">
-              {result.columns.map((column, columnIndex) => (
-                <EditableCell
-                  key={column}
-                  value={row[columnIndex]}
-                  editable={
-                    canEdit &&
-                    (primaryKey.length > 0 || idColumn !== null) &&
-                    column !== idColumn &&
-                    !primaryKey.includes(column)
-                  }
-                  onCommit={(next) => {
-                    const record: Record<string, unknown> = {}
-                    result.columns.forEach((name, index) => {
-                      record[name] = row[index]
-                    })
-                    onEdit(record, column, next)
-                  }}
-                />
-              ))}
-            </tr>
-          ))}
+          {result.rows.map((row, rowIndex) => {
+            const record: Record<string, unknown> = {}
+            result.columns.forEach((name, index) => {
+              record[name] = row[index]
+            })
+            const key = idColumn
+              ? String(record[idColumn] ?? '')
+              : rowKey(
+                  Object.fromEntries(primaryKey.map((column) => [column, record[column]])),
+                  primaryKey,
+                )
+            return (
+              <tr key={rowIndex} className="border-b border-[#2a2a2a]">
+                {result.columns.map((column, columnIndex) => {
+                  const original = row[columnIndex]
+                  const dirty = draft[key] != null && column in draft[key]
+                  return (
+                    <EditableCell
+                      key={column}
+                      value={displayValue(draft, key, column, original)}
+                      dirty={dirty}
+                      resetToken={resetToken}
+                      editable={
+                        canEdit &&
+                        (primaryKey.length > 0 || idColumn !== null) &&
+                        column !== idColumn &&
+                        !primaryKey.includes(column)
+                      }
+                      onCommit={(input) => onDraftChange(record, column, input, original)}
+                    />
+                  )
+                })}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -61,36 +77,40 @@ export function DataGrid({
 
 function EditableCell({
   value,
+  dirty,
+  resetToken,
   editable,
   onCommit,
 }: {
   value: unknown
+  dirty: boolean
+  resetToken: number
   editable: boolean
-  onCommit: (value: unknown) => void
+  onCommit: (input: string) => void
 }) {
-  const [draft, setDraft] = useState(value == null ? '' : String(value))
+  const [localInput, setLocalInput] = useState(value == null ? '' : String(value))
+  useEffect(() => {
+    setLocalInput(value == null ? '' : String(value))
+  }, [value, resetToken])
   const display = value == null ? 'null' : String(value)
+  const dirtyClass = dirty ? 'outline outline-1 outline-[#f5f5f5]' : ''
 
   if (!editable) {
-    return <td className="px-3 py-2 align-top text-[#f5f5f5]">{display}</td>
+    return <td className={`px-3 py-2 align-top text-[#f5f5f5] ${dirtyClass}`}>{display}</td>
   }
 
   return (
-    <td className="px-3 py-2 align-top">
+    <td className={`px-3 py-2 align-top ${dirtyClass}`}>
       <input
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => {
-          if (shouldCommitCell(draft, value)) {
-            onCommit(draft === '' ? null : draft)
-          }
-        }}
+        value={localInput}
+        onChange={(event) => setLocalInput(event.target.value)}
+        onBlur={() => onCommit(localInput)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.currentTarget.blur()
           }
         }}
-        className="w-full bg-transparent text-[#f5f5f5] outline-none"
+        className={`w-full bg-transparent text-[#f5f5f5] ${dirty ? 'outline outline-1 outline-[#f5f5f5]' : 'outline-none'}`}
       />
     </td>
   )
