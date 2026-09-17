@@ -4,7 +4,6 @@ import com.ivan.nexus.application.alert.AlertStore;
 import com.ivan.nexus.domain.alert.Alert;
 import com.ivan.nexus.domain.alert.AlertKey;
 import com.ivan.nexus.domain.alert.AlertStatus;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -24,8 +23,8 @@ public class JpaAlertStore implements AlertStore {
     }
 
     @Override
-    public List<Alert> latest(Collection<AlertStatus> statuses, int limit) {
-        return events.findByStatusInOrderByOpenedAtDesc(statuses, PageRequest.of(0, limit)).stream()
+    public List<Alert> latest(Collection<AlertStatus> statuses) {
+        return events.findByStatusInOrderByOpenedAtDesc(statuses).stream()
                 .map(JpaAlertStore::toDomain)
                 .toList();
     }

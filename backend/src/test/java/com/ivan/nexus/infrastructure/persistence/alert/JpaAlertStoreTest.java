@@ -8,9 +8,9 @@ import com.ivan.nexus.domain.alert.AlertType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,17 +37,21 @@ class JpaAlertStoreTest {
     }
 
     @Test
-    void latestUsesBoundedNewestFirstQueryAndMapsRuleWhileManaged() {
-        Alert alert = alert(AlertStatus.ACTIVE, null, null);
-        when(events.findByStatusInOrderByOpenedAtDesc(any(), any()))
-                .thenReturn(List.of(entity(alert)));
+    void latestUsesUnboundedNewestFirstStatusQueryAndPreservesEveryResult() {
+        List<AlertStatus> statuses = List.of(
+                AlertStatus.ACTIVE, AlertStatus.ACKNOWLEDGED, AlertStatus.RESOLVED);
+        List<Alert> expected = java.util.stream.IntStream.range(0, 201)
+                .mapToObj(JpaAlertStoreTest::alert)
+                .toList();
+        when(events.findByStatusInOrderByOpenedAtDesc(statuses))
+                .thenReturn(expected.stream().map(JpaAlertStoreTest::entity).toList());
 
-        assertThat(store.latest(List.of(AlertStatus.ACTIVE), 37)).containsExactly(alert);
+        assertThat(store.latest(statuses)).containsExactlyElementsOf(expected);
 
-        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(events).findByStatusInOrderByOpenedAtDesc(any(), pageable.capture());
-        assertThat(pageable.getValue().getPageNumber()).isZero();
-        assertThat(pageable.getValue().getPageSize()).isEqualTo(37);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<AlertStatus>> delegated = ArgumentCaptor.forClass(Collection.class);
+        verify(events).findByStatusInOrderByOpenedAtDesc(delegated.capture());
+        assertThat(delegated.getValue()).containsExactlyElementsOf(statuses);
     }
 
     @Test
@@ -123,6 +127,20 @@ class JpaAlertStoreTest {
                 Instant.parse("2026-09-17T20:00:00Z"),
                 acknowledgedAt,
                 resolvedAt,
+                AlertType.DISK);
+    }
+
+    private static Alert alert(int index) {
+        return new Alert(
+                new UUID(0, index),
+                UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "lab",
+                "api",
+                AlertStatus.RESOLVED,
+                "resolved-" + index,
+                Instant.parse("2026-01-01T00:00:00Z").minusSeconds(index),
+                null,
+                Instant.parse("2026-01-01T00:01:00Z"),
                 AlertType.DISK);
     }
 

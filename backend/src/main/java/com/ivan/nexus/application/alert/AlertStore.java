@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface AlertStore {
-    List<Alert> latest(Collection<AlertStatus> statuses, int limit);
+    List<Alert> latest(Collection<AlertStatus> statuses);
 
     Optional<Alert> findById(UUID id);
 
