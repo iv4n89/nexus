@@ -6,6 +6,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}', github.event.pull_request.number) || 'deploy-vps' }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   NEXUS_SSH_HOST: 161.97.116.30
@@ -36,9 +40,6 @@ jobs:
   deploy:
     needs: test
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    concurrency:
-      group: deploy-vps
-      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
