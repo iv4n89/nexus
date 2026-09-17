@@ -1,5 +1,6 @@
 package com.ivan.nexus.infrastructure.database;
 
+import com.ivan.nexus.domain.database.CellPatchGrouper;
 import com.ivan.nexus.domain.database.MongoStatement;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
@@ -8,13 +9,14 @@ import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.mongodb.MongoException;
 import com.mongodb.MongoExecutionTimeoutException;
 import com.mongodb.MongoInterruptedException;
+import com.mongodb.client.ClientSession;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Updates;
+import com.mongodb.client.result.UpdateResult;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import org.bson.types.ObjectId;
@@ -26,6 +28,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -88,15 +91,86 @@ public class MongoQueryExecutor {
     }
 
     public QueryResult updateCell(ResolvedTarget target, String database, String collection, String id, String field, Object value) {
+        return updateDocuments(
+                target,
+                database,
+                collection,
+                CellPatchGrouper.groupMongo(List.of(new CellPatchGrouper.MongoPatch(id, field, value))));
+    }
+
+    public QueryResult updateDocuments(
+            ResolvedTarget target,
+            String database,
+            String collection,
+            List<CellPatchGrouper.GroupedMongoUpdate> grouped) {
+        if (grouped == null || grouped.isEmpty()) {
+            throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Patches are required");
+        }
         long start = System.nanoTime();
         try (MongoClient client = MongoClients.create(uri(target))) {
             MongoCollection<Document> coll = client.getDatabase(database).getCollection(collection);
-            coll.updateOne(Filters.eq("_id", parseId(id)), Updates.set(field, value));
-            return writeResult(1, start);
+            if (grouped.size() == 1) {
+                applyMongoUpdate(coll, grouped.get(0), null);
+                return writeResult(1, start);
+            }
+            ClientSession session;
+            try {
+                session = client.startSession();
+                session.startTransaction();
+            } catch (RuntimeException ex) {
+                throw new DomainException(
+                        NexusErrorCode.QUERY_NOT_ALLOWED,
+                        "Multi-document Save needs a replica set");
+            }
+            try (session) {
+                try {
+                    for (CellPatchGrouper.GroupedMongoUpdate update : grouped) {
+                        applyMongoUpdate(coll, update, session);
+                    }
+                    session.commitTransaction();
+                } catch (DomainException ex) {
+                    abortQuietly(session);
+                    throw ex;
+                } catch (RuntimeException ex) {
+                    abortQuietly(session);
+                    throw new DomainException(
+                            NexusErrorCode.QUERY_NOT_ALLOWED,
+                            "Multi-document Save needs a replica set");
+                }
+            }
+            return writeResult(grouped.size(), start);
+        } catch (DomainException ex) {
+            throw ex;
         } catch (MongoException ex) {
             throw new DomainException(
                     NexusErrorCode.QUERY_FAILED,
                     SecretSanitizer.strip(target.password(), ex.getMessage()));
+        }
+    }
+
+    private static void applyMongoUpdate(
+            MongoCollection<Document> collection,
+            CellPatchGrouper.GroupedMongoUpdate update,
+            ClientSession session) {
+        List<Bson> sets = new ArrayList<>();
+        for (Map.Entry<String, Object> field : update.fields().entrySet()) {
+            sets.add(Updates.set(field.getKey(), field.getValue()));
+        }
+        Bson filter = Filters.eq("_id", parseId(update.id()));
+        Bson updateDoc = Updates.combine(sets);
+        UpdateResult result = session == null
+                ? collection.updateOne(filter, updateDoc)
+                : collection.updateOne(session, filter, updateDoc);
+        if (result.getMatchedCount() != 1) {
+            throw new DomainException(NexusErrorCode.QUERY_FAILED, "No row matched primary key");
+        }
+    }
+
+    private static void abortQuietly(ClientSession session) {
+        try {
+            session.abortTransaction();
+        } catch (RuntimeException ignored) {
+            // already aborted or never started
         }
     }
 
