@@ -164,27 +164,27 @@ Anti-patterns: do not add `attribution-reporting` to Permissions-Policy. Do not 
 
 ### Tasks
 
-- [ ] **B3.1 MySQL timeout units**
+- [x] **B3.1 MySQL timeout units**
   - IT against MySQL testcontainer: connect succeeds with 5s, not 5ms.
   - Set `connectTimeout`/`socketTimeout` in milliseconds for MySQL only.
 
-- [ ] **B3.2 JDBC URL injection**
+- [x] **B3.2 JDBC URL injection**
   - `defaultDatabase`, username: allow `[A-Za-z0-9_]+` (plus `.` for MySQL schema if needed). Reject `;`, `?`, `/`, whitespace.
   - Test: database name `lab?allowMultiQueries=true` → `QUERY_FAILED`, no extra properties.
 
-- [ ] **B3.3 Catalog columns**
+- [x] **B3.3 Catalog columns**
   - `DatabaseDtos.fromSql` must include columns already loaded by `JdbcQueryExecutor.metadata`. Test the JSON shape.
 
-- [ ] **B3.4 WRITE that still returns rows**
+- [x] **B3.4 WRITE that still returns rows**
   - `SELECT … FOR UPDATE` / `RETURNING`: use `executeQuery` when the classifier is WRITE but the statement starts with SELECT/WITH. Test against Postgres.
 
-- [ ] **B3.5 Mongo `$out` / `$merge`**
+- [x] **B3.5 Mongo `$out` / `$merge`**
   - Parse pipeline as JSON; detect `$out` / `$merge` case-insensitive on object keys, not substring of `toString()`.
 
-- [ ] **B3.6 EngineDetector**
+- [x] **B3.6 EngineDetector**
   - `mongo-express` is not Mongo. Test image tokens more strictly (`mongo:` / `mongodb` / official mongo, not `startsWith("mongo")` on every token).
 
-- [ ] **B3.7 Frontend browse**
+- [x] **B3.7 Frontend browse**
   - Reset `selection`, `queryResult`, `statement` when `selectedId` changes.
   - Null cell: compare draft to canonical string (`''` for null means “no edit” if user never focused, or treat display `null` vs draft `''` as unchanged unless the user typed).
   - Cell mutation: `onError` + `invalidateQueries` for preview.

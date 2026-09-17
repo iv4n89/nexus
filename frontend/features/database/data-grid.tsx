@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { shouldCommitCell } from '@/features/database/cell-edit'
 import type { QueryResult } from '@/types/api'
 
 export function DataGrid({
@@ -80,8 +81,8 @@ function EditableCell({
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={() => {
-          if (draft !== display) {
-            onCommit(draft)
+          if (shouldCommitCell(draft, value)) {
+            onCommit(draft === '' ? null : draft)
           }
         }}
         onKeyDown={(event) => {

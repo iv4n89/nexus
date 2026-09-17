@@ -48,7 +48,7 @@ public final class MongoStatementClassifier {
         switch (op) {
             case "find" -> statementClass = StatementClass.READ;
             case "aggregate" -> {
-                if (pipelineJson != null && (pipelineJson.contains("\"$out\"") || pipelineJson.contains("\"$merge\""))) {
+                if (writesDocuments(root.get("pipeline"))) {
                     throw notAllowed();
                 }
                 statementClass = StatementClass.READ;
@@ -96,6 +96,25 @@ public final class MongoStatementClassifier {
         }
         String value = node.asText();
         return value.isBlank() ? null : value;
+    }
+
+    private static boolean writesDocuments(JsonNode pipeline) {
+        if (pipeline == null || !pipeline.isArray()) {
+            return false;
+        }
+        for (JsonNode stage : pipeline) {
+            if (stage == null || !stage.isObject()) {
+                continue;
+            }
+            var names = stage.fieldNames();
+            while (names.hasNext()) {
+                String key = names.next();
+                if ("$out".equalsIgnoreCase(key) || "$merge".equalsIgnoreCase(key)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static String jsonOrNull(JsonNode node) {

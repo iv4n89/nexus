@@ -22,6 +22,12 @@ describe('shouldRetryQuery', () => {
     expect(shouldRetryQuery(0, new ApiError('QUERY_FAILED', 400))).toBe(false)
   })
 
+  it('keeps the error code and SQL detail in the message', () => {
+    const error = new ApiError('QUERY_FAILED', 400, 'relation "jobs" does not exist')
+    expect(error.code).toBe('QUERY_FAILED')
+    expect(error.message).toBe('QUERY_FAILED: relation "jobs" does not exist')
+  })
+
   it('retries transient failures twice', () => {
     expect(shouldRetryQuery(0, new Error('network'))).toBe(true)
     expect(shouldRetryQuery(2, new Error('network'))).toBe(false)

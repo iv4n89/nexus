@@ -47,7 +47,9 @@ public final class DatabaseDtos {
 
     public record SchemaResponse(String name, List<TableResponse> tables) {}
 
-    public record TableResponse(String name, String type, List<String> primaryKey) {}
+    public record TableResponse(String name, String type, List<String> primaryKey, List<ColumnResponse> columns) {}
+
+    public record ColumnResponse(String name, String dataType, boolean nullable) {}
 
     public record MongoDatabaseResponse(String name, List<String> collections) {}
 
@@ -55,7 +57,13 @@ public final class DatabaseDtos {
         Map<String, List<TableResponse>> bySchema = new java.util.LinkedHashMap<>();
         for (JdbcQueryExecutor.SqlTable table : catalog.tables()) {
             bySchema.computeIfAbsent(table.schema(), key -> new java.util.ArrayList<>())
-                    .add(new TableResponse(table.name(), table.type(), table.primaryKey()));
+                    .add(new TableResponse(
+                            table.name(),
+                            table.type(),
+                            table.primaryKey(),
+                            table.columns().stream()
+                                    .map(column -> new ColumnResponse(column.name(), column.dataType(), column.nullable()))
+                                    .toList()));
         }
         List<SchemaResponse> schemas = bySchema.entrySet().stream()
                 .map(entry -> new SchemaResponse(entry.getKey(), List.copyOf(entry.getValue())))

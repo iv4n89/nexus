@@ -103,6 +103,63 @@ class JdbcQueryExecutorIT {
         assertTrue(body.endsWith("…"));
     }
 
+    @Test
+    void selectForUpdateStillReturnsRows() {
+        QueryResult locked = executor.query(
+                DatabaseEngine.POSTGRES,
+                target(),
+                "SELECT n FROM t WHERE n = 1 FOR UPDATE",
+                StatementClass.WRITE,
+                500);
+        assertEquals(1, locked.rowCount());
+        assertEquals(1, ((Number) locked.rows().getFirst().getFirst()).intValue());
+    }
+
+    @Test
+    void previewReadsReservedNamesAndMixedColumnTypes() throws Exception {
+        try (Connection conn = DriverManager.getConnection(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("""
+                    CREATE TABLE "user" (
+                        id INT PRIMARY KEY,
+                        loc POINT,
+                        payload JSONB,
+                        blob BYTEA,
+                        seen TIMESTAMPTZ
+                    )
+                    """);
+            stmt.execute("""
+                    INSERT INTO "user" (id, loc, payload, blob, seen)
+                    VALUES (1, POINT(1,2), '{"ok":true}', decode('DEAD', 'hex'), TIMESTAMPTZ '2026-09-17 08:00:00+00')
+                    """);
+        }
+        QueryResult result = executor.preview(DatabaseEngine.POSTGRES, target(), "public", "user");
+        assertEquals(1, result.rowCount());
+        assertEquals(5, result.columns().size());
+        assertEquals(1, ((Number) result.rows().getFirst().getFirst()).intValue());
+    }
+
+    @Test
+    void injectedDatabaseNameDoesNotReachDriver() {
+        ResolvedTarget poisoned = new ResolvedTarget(
+                postgres.getHost(),
+                postgres.getMappedPort(5432),
+                postgres.getUsername(),
+                postgres.getPassword(),
+                "lab?allowMultiQueries=true");
+        DomainException ex = assertThrows(
+                DomainException.class,
+                () -> executor.query(
+                        DatabaseEngine.POSTGRES,
+                        poisoned,
+                        "SELECT 1",
+                        StatementClass.READ,
+                        10));
+        assertEquals(NexusErrorCode.QUERY_FAILED, ex.getCode());
+        assertTrue(ex.getMessage().toLowerCase().contains("invalid"));
+    }
+
     private static ResolvedTarget target() {
         return new ResolvedTarget(
                 postgres.getHost(),

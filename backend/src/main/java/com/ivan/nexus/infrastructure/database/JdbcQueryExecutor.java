@@ -49,7 +49,7 @@ public class JdbcQueryExecutor {
              Statement stmt = conn.createStatement()) {
             stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
             stmt.setMaxFieldSize(MAX_CELL_CHARS);
-            if (statementClass == StatementClass.READ) {
+            if (returnsResultSet(sql, statementClass)) {
                 stmt.setMaxRows(limit + 1);
                 try (ResultSet rs = stmt.executeQuery(sql)) {
                     return readResult(rs, limit, elapsedMs(start));
@@ -231,11 +231,23 @@ public class JdbcQueryExecutor {
             }
             List<Object> row = new ArrayList<>(columnCount);
             for (int i = 1; i <= columnCount; i++) {
-                row.add(cell(rs.getObject(i)));
+                row.add(readCell(rs, i));
             }
             rows.add(row);
         }
         return new QueryResult(columns, rows, truncated, durationMs, rows.size());
+    }
+
+    static Object readCell(ResultSet rs, int index) throws SQLException {
+        try {
+            return cell(rs.getObject(index));
+        } catch (SQLException ex) {
+            try {
+                return cell(rs.getString(index));
+            } catch (SQLException ignored) {
+                return "<unreadable>";
+            }
+        }
     }
 
     static Object cell(Object value) {
@@ -261,28 +273,54 @@ public class JdbcQueryExecutor {
         return text.substring(0, MAX_CELL_CHARS - 1) + "…";
     }
 
-    private static Properties connectionProperties(DatabaseEngine engine, ResolvedTarget target) {
+    static boolean returnsResultSet(String sql, StatementClass statementClass) {
+        if (statementClass == StatementClass.READ) {
+            return true;
+        }
+        String head = sql == null ? "" : sql.stripLeading();
+        return startsWithIgnoreCase(head, "SELECT") || startsWithIgnoreCase(head, "WITH");
+    }
+
+    private static boolean startsWithIgnoreCase(String value, String prefix) {
+        return value.regionMatches(true, 0, prefix, 0, prefix.length());
+    }
+
+    static Properties connectionProperties(DatabaseEngine engine, ResolvedTarget target) {
         Properties props = new Properties();
         if (target.username() != null) {
-            props.setProperty("user", target.username());
+            props.setProperty("user", safeName(target.username()));
         }
         if (target.password() != null) {
             props.setProperty("password", target.password());
         }
-        props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SECONDS));
-        props.setProperty("socketTimeout", String.valueOf(SOCKET_TIMEOUT_SECONDS));
+        if (engine == DatabaseEngine.MYSQL) {
+            props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SECONDS * 1000));
+            props.setProperty("socketTimeout", String.valueOf(SOCKET_TIMEOUT_SECONDS * 1000));
+        } else {
+            props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SECONDS));
+            props.setProperty("socketTimeout", String.valueOf(SOCKET_TIMEOUT_SECONDS));
+        }
         if (engine == DatabaseEngine.POSTGRES) {
             props.setProperty("options", "-c statement_timeout=10000");
         }
         return props;
     }
 
-    private static String jdbcUrl(DatabaseEngine engine, ResolvedTarget target) {
+    static String jdbcUrl(DatabaseEngine engine, ResolvedTarget target) {
+        String database = safeName(target.defaultDatabase());
         if (engine == DatabaseEngine.POSTGRES) {
-            return "jdbc:postgresql://%s:%d/%s".formatted(target.host(), target.port(), target.defaultDatabase());
+            return "jdbc:postgresql://%s:%d/%s".formatted(target.host(), target.port(), database);
         }
         return "jdbc:mysql://%s:%d/%s?useSSL=false&allowPublicKeyRetrieval=true".formatted(
-                target.host(), target.port(), target.defaultDatabase());
+                target.host(), target.port(), database);
+    }
+
+    static String safeName(String value) {
+        if (value == null || !value.matches("[A-Za-z0-9_.]+") || value.contains("..")
+                || value.startsWith(".") || value.endsWith(".")) {
+            throw new DomainException(NexusErrorCode.QUERY_FAILED, "Invalid database name");
+        }
+        return value;
     }
 
     private static boolean isTimeout(SQLException ex) {

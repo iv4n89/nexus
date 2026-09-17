@@ -161,10 +161,17 @@ export type DatabaseInstance = {
   defaultDatabase: string
 }
 
+export type DatabaseColumn = {
+  name: string
+  dataType: string
+  nullable: boolean
+}
+
 export type DatabaseTable = {
   name: string
   type: 'table' | 'view' | string
   primaryKey: string[]
+  columns?: DatabaseColumn[]
 }
 
 export type DatabaseSchema = {
