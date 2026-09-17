@@ -4,6 +4,7 @@ import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.DatabaseInstance;
 import com.ivan.nexus.domain.database.DatabaseStatus;
+import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
@@ -23,6 +24,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,7 +46,7 @@ class EditDatabaseCellsTest {
                 DomainException.class,
                 () -> edit.execute("lab", "lab:db", body(List.of()), "ADMIN", "admin", "127.0.0.1"));
         assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
-        verify(jdbc, never()).updateCells(any(), any(), any(), any(), any());
+        verify(jdbc, never()).applyCells(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -55,12 +57,51 @@ class EditDatabaseCellsTest {
                 "jobs",
                 null,
                 null,
-                List.of(new DatabaseDtos.CellPatch(Map.of("id", 1), "id", "2", null, null)));
+                List.of(new DatabaseDtos.CellPatch(Map.of("id", 1), "id", "2", null, null)),
+                List.of(),
+                List.of());
         DomainException ex = assertThrows(
                 DomainException.class,
                 () -> edit.execute("lab", "lab:db", body, "ADMIN", "admin", "127.0.0.1"));
         assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
-        verify(jdbc, never()).updateCells(any(), any(), any(), any(), any());
+        verify(jdbc, never()).applyCells(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void mongoRejectsInserts() {
+        stubReady(DatabaseEngine.MONGO);
+        DatabaseDtos.CellsRequest body = new DatabaseDtos.CellsRequest(
+                null,
+                null,
+                "app",
+                "jobs",
+                List.of(),
+                List.of(new DatabaseDtos.SqlInsertValues(Map.of("n", 1))),
+                List.of());
+        DomainException ex = assertThrows(
+                DomainException.class,
+                () -> edit.execute("lab", "lab:db", body, "ADMIN", "admin", "127.0.0.1"));
+        assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
+        verify(mongo, never()).updateDocuments(any(), any(), any(), any());
+        verify(jdbc, never()).applyCells(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void insertMayIncludePrimaryKeyColumn() {
+        stubReady(DatabaseEngine.POSTGRES);
+        when(jdbc.applyCells(any(), any(), any(), any(), any()))
+                .thenReturn(new QueryResult(List.of("updateCount"), List.of(List.of(1)), false, 1, 1));
+        when(users.findByUsername("admin")).thenReturn(java.util.Optional.empty());
+        DatabaseDtos.CellsRequest body = new DatabaseDtos.CellsRequest(
+                "public",
+                "users",
+                null,
+                null,
+                List.of(),
+                List.of(new DatabaseDtos.SqlInsertValues(Map.of("id", 9, "email", "nuevo@x"))),
+                List.of());
+        edit.execute("lab", "lab:db", body, "ADMIN", "admin", "127.0.0.1");
+        verify(jdbc).applyCells(any(), any(), eq("public"), eq("users"), any());
     }
 
     private void stubReady(DatabaseEngine engine) {
@@ -71,6 +112,6 @@ class EditDatabaseCellsTest {
     }
 
     private static DatabaseDtos.CellsRequest body(List<DatabaseDtos.CellPatch> patches) {
-        return new DatabaseDtos.CellsRequest("public", "jobs", null, null, patches);
+        return new DatabaseDtos.CellsRequest("public", "jobs", null, null, patches, List.of(), List.of());
     }
 }

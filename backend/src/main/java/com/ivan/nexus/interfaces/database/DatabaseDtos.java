@@ -33,7 +33,11 @@ public final class DatabaseDtos {
             String table,
             String mongoDatabase,
             String collection,
-            List<CellPatch> patches) {}
+            List<CellPatch> patches,
+            List<SqlInsertValues> inserts,
+            List<Map<String, Object>> deletes) {}
+
+    public record SqlInsertValues(Map<String, Object> values) {}
 
     public record CellPatch(
             Map<String, Object> primaryKey,
