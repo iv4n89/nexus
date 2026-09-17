@@ -15,6 +15,7 @@ class HexagonalArchitectureTest {
             "com.ivan.nexus.application.database.MongoStatementParser";
 
     private static final String[] CLEAN_APPLICATION_PACKAGES = {
+            "com.ivan.nexus.application.activity..",
             "com.ivan.nexus.application.audit..",
             "com.ivan.nexus.application.container..",
             "com.ivan.nexus.application.database..",
@@ -78,6 +79,16 @@ class HexagonalArchitectureTest {
                         "com.ivan.nexus.application.alert..")
                 .should().dependOnClassesThat()
                 .resideInAPackage("com.ivan.nexus.infrastructure.manifest..")
+                .check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void retentionCleanupMustUseDeploymentEventStoreSeam() {
+        noClasses()
+                .that().haveFullyQualifiedName(
+                        "com.ivan.nexus.application.activity.RetentionCleanup")
+                .should().dependOnClassesThat().haveFullyQualifiedName(
+                        "com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEventJpaRepository")
                 .check(NEXUS_CLASSES);
     }
 
