@@ -71,7 +71,7 @@ class EvaluateAlertsTest {
                 healthChecker,
                 new YamlManifestLoader(),
                 rules,
-                events,
+                new PersistAlertEvaluation(events, recordActivity),
                 recordActivity,
                 "/tmp/nexus-no-manifests");
     }

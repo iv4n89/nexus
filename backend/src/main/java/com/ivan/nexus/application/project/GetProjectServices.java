@@ -18,7 +18,7 @@ public class GetProjectServices {
 
     public List<ServiceView> execute(String projectId) {
         List<ContainerSnapshot> containers = discoverProjects.groupByProject().get(projectId);
-        if (containers == null || containers.isEmpty()) {
+        if (containers == null) {
             throw new DomainException(NexusErrorCode.PROJECT_NOT_FOUND, "Project not found");
         }
         return containers.stream().map(GetProjectServices::toService).toList();

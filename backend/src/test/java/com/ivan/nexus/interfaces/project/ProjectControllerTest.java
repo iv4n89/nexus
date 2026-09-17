@@ -73,6 +73,21 @@ class ProjectControllerTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void manifestOnlyProjectWithNoContainersIsFound() throws Exception {
+        given(inventory.listAll()).willReturn(List.of());
+
+        mockMvc.perform(get("/api/projects/lab"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("lab"))
+                .andExpect(jsonPath("$.status").value("DOWN"))
+                .andExpect(jsonPath("$.runningCount").value(0))
+                .andExpect(jsonPath("$.totalCount").value(0))
+                .andExpect(jsonPath("$.deployable").value(true))
+                .andExpect(jsonPath("$.services", hasSize(0)));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void projectDetailIncludesServices() throws Exception {
         given(inventory.listAll()).willReturn(List.of(
                 snapshot("web-id", "lab-web-1", "running", "healthy", "web"),

@@ -9,9 +9,6 @@ import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.alert.AlertEvaluator;
 import com.ivan.nexus.domain.alert.AlertEvaluation;
 import com.ivan.nexus.domain.alert.AlertFacts;
-import com.ivan.nexus.domain.alert.AlertFiring;
-import com.ivan.nexus.domain.alert.AlertKey;
-import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.alert.ContainerAlertState;
 import com.ivan.nexus.domain.alert.ErrorRateState;
@@ -23,8 +20,6 @@ import com.ivan.nexus.domain.metrics.SystemMetrics;
 import com.ivan.nexus.domain.project.Project;
 import com.ivan.nexus.domain.project.ProjectGrouping;
 import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertEventJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintEntity;
@@ -35,7 +30,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -45,7 +39,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -61,7 +54,7 @@ public class EvaluateAlerts {
     private final HealthChecker healthChecker;
     private final YamlManifestLoader loader;
     private final AlertRuleJpaRepository rules;
-    private final AlertEventJpaRepository events;
+    private final PersistAlertEvaluation persistAlertEvaluation;
     private final RecordActivity recordActivity;
     private final Path allowedRoot;
     private final AlertEvaluator evaluator = new AlertEvaluator();
@@ -77,7 +70,7 @@ public class EvaluateAlerts {
             HealthChecker healthChecker,
             YamlManifestLoader loader,
             AlertRuleJpaRepository rules,
-            AlertEventJpaRepository events,
+            PersistAlertEvaluation persistAlertEvaluation,
             RecordActivity recordActivity,
             @Value("${nexus.manifest.allowed-root}") String allowedRoot) {
         this.discoverProjects = discoverProjects;
@@ -87,13 +80,12 @@ public class EvaluateAlerts {
         this.healthChecker = healthChecker;
         this.loader = loader;
         this.rules = rules;
-        this.events = events;
+        this.persistAlertEvaluation = persistAlertEvaluation;
         this.recordActivity = recordActivity;
         this.allowedRoot = Path.of(allowedRoot).toAbsolutePath().normalize();
     }
 
     @Scheduled(fixedDelayString = "${nexus.alerts.interval-ms:30000}")
-    @Transactional
     public void execute() {
         Instant now = Instant.now();
         List<AlertRuleEntity> enabledRules = rules.findByEnabledTrue();
@@ -125,7 +117,7 @@ public class EvaluateAlerts {
                 httpHealthChecks(enabledRules, manifests));
 
         AlertEvaluation evaluation = evaluator.evaluate(facts);
-        persist(evaluation, enabledRules, now);
+        persistAlertEvaluation.persist(evaluation, enabledRules, now);
         emitContainerActivity(grouped);
 
         previousSnapshots.clear();
@@ -135,56 +127,6 @@ public class EvaluateAlerts {
             }
         }
         primed = true;
-    }
-
-    private void persist(AlertEvaluation evaluation, List<AlertRuleEntity> enabledRules, Instant now) {
-        for (AlertFiring firing : evaluation.firings()) {
-            AlertKey key = firing.key();
-            if (events.findOpenByTypeAndProjectAndService(key.type(), key.projectId(), key.serviceId()).isPresent()) {
-                continue;
-            }
-            AlertRuleEntity rule = ruleFor(enabledRules, key.type(), key.projectId());
-            if (rule == null) {
-                continue;
-            }
-            events.save(new AlertEventEntity(
-                    UUID.randomUUID(),
-                    rule,
-                    key.projectId(),
-                    key.serviceId(),
-                    AlertStatus.ACTIVE,
-                    firing.message(),
-                    now,
-                    null,
-                    null));
-            recordActivity.execute(
-                    ActivityType.ALERT_CREATED,
-                    key.projectId(),
-                    key.serviceId(),
-                    "alert created",
-                    Map.of("alertType", key.type().name(), "detail", firing.message()));
-            if (key.type() == AlertType.HTTP_HEALTH || key.type() == AlertType.DOCKER_HEALTH) {
-                recordActivity.execute(
-                        ActivityType.HEALTH_CHECK_FAILED,
-                        key.projectId(),
-                        key.serviceId(),
-                        "health check failed",
-                        Map.of("alertType", key.type().name()));
-            }
-        }
-        for (AlertKey key : evaluation.resolveKeys()) {
-            events.findOpenByTypeAndProjectAndService(key.type(), key.projectId(), key.serviceId())
-                    .ifPresent(open -> {
-                        open.resolve(now);
-                        events.save(open);
-                        recordActivity.execute(
-                                ActivityType.ALERT_RESOLVED,
-                                key.projectId(),
-                                key.serviceId(),
-                                "alert resolved",
-                                Map.of("alertType", key.type().name()));
-                    });
-        }
     }
 
     private void emitContainerActivity(Map<String, List<ContainerSnapshot>> grouped) {
@@ -387,7 +329,7 @@ public class EvaluateAlerts {
         return AlertEvaluator.DEFAULT_ERROR_RATE_PER_MINUTE;
     }
 
-    private static AlertRuleEntity ruleFor(List<AlertRuleEntity> enabledRules, AlertType type, String projectId) {
+    static AlertRuleEntity ruleFor(List<AlertRuleEntity> enabledRules, AlertType type, String projectId) {
         AlertRuleEntity global = null;
         for (AlertRuleEntity rule : enabledRules) {
             if (rule.getType() != type) {

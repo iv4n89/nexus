@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { StatusDot, toneFromHealthAndState } from '@/components/status-dot'
+import { alertsPath } from '@/features/alerts/api'
 import { me } from '@/features/auth/api'
 import { RollbackDialog } from '@/features/deployments/rollback-dialog'
 import { ErrorList, logsHref } from '@/features/logs/error-list'
@@ -96,8 +97,8 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
     refetchInterval: 30_000,
   })
   const alerts = useQuery({
-    queryKey: ['alerts'],
-    queryFn: () => api<Alert[]>('/api/alerts'),
+    queryKey: ['alerts', 'ACTIVE'],
+    queryFn: () => api<Alert[]>(alertsPath('ACTIVE')),
     refetchInterval: 30_000,
   })
   const acknowledge = useMutation({

@@ -9,8 +9,6 @@ import java.util.regex.Pattern;
 
 public final class SqlStatementClassifier {
     private static final Pattern LEADING_KEYWORD = Pattern.compile("^[A-Za-z]+");
-    private static final Pattern BLOCK_COMMENT = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
-    private static final Pattern LINE_COMMENT = Pattern.compile("--[^\\n]*");
     private static final Pattern INTO = Pattern.compile("\\bINTO\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern FOR_UPDATE = Pattern.compile("\\bFOR\\s+UPDATE\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern FOR_SHARE = Pattern.compile("\\bFOR\\s+SHARE\\b", Pattern.CASE_INSENSITIVE);
@@ -24,7 +22,7 @@ public final class SqlStatementClassifier {
         if (sql == null) {
             throw notAllowed();
         }
-        String cleaned = LINE_COMMENT.matcher(BLOCK_COMMENT.matcher(sql).replaceAll(" ")).replaceAll(" ").trim();
+        String cleaned = stripComments(sql).trim();
         if (cleaned.isEmpty()) {
             throw notAllowed();
         }
@@ -64,6 +62,54 @@ public final class SqlStatementClassifier {
             case "DELETE", "UPDATE" -> WHERE.matcher(sql).find() ? StatementClass.WRITE : StatementClass.DESTRUCTIVE;
             default -> throw notAllowed();
         };
+    }
+
+    private static String stripComments(String sql) {
+        StringBuilder out = new StringBuilder(sql.length());
+        int i = 0;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (c == '\'' || c == '"') {
+                i = copyQuoted(sql, i, c, out);
+            } else if (c == '-' && i + 1 < sql.length() && sql.charAt(i + 1) == '-') {
+                int newline = sql.indexOf('\n', i);
+                if (newline < 0) {
+                    break;
+                }
+                out.append(' ');
+                i = newline;
+            } else if (c == '/' && i + 1 < sql.length() && sql.charAt(i + 1) == '*') {
+                int end = sql.indexOf("*/", i + 2);
+                if (end < 0) {
+                    break;
+                }
+                out.append(' ');
+                i = end + 2;
+            } else {
+                out.append(c);
+                i++;
+            }
+        }
+        return out.toString();
+    }
+
+    private static int copyQuoted(String sql, int start, char quote, StringBuilder out) {
+        out.append(quote);
+        int i = start + 1;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            out.append(c);
+            i++;
+            if (c == quote) {
+                if (i < sql.length() && sql.charAt(i) == quote) {
+                    out.append(quote);
+                    i++;
+                    continue;
+                }
+                return i;
+            }
+        }
+        return i;
     }
 
     private static DomainException notAllowed() {

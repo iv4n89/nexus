@@ -210,11 +210,11 @@ Anti-patterns: do not add `attribution-reporting` to Permissions-Policy. Do not 
 
 ### Tasks
 
-- [ ] **B4.1 Transaction boundary** — test that `stats()` / HTTP health are not invoked inside an open Hibernate session (easier: split methods; unit-test the persist method is `@Transactional` and `execute()` is not).
-- [ ] **B4.2 Error rate** — 11 hits in 30s must **not** fire a rule of 10/min; 11 hits spanning 60s must.
-- [ ] **B4.3 AnalyzeLogs independent of alerts**
-- [ ] **B4.4 GetProject empty inventory**
-- [ ] **B4.5 Alerts query param**
+- [x] **B4.1 Transaction boundary** — test that `stats()` / HTTP health are not invoked inside an open Hibernate session (easier: split methods; unit-test the persist method is `@Transactional` and `execute()` is not).
+- [x] **B4.2 Error rate** — 11 hits in 30s must **not** fire a rule of 10/min; 11 hits spanning 60s must.
+- [x] **B4.3 AnalyzeLogs independent of alerts**
+- [x] **B4.4 GetProject empty inventory**
+- [x] **B4.5 Alerts query param**
 
 ### Verification
 

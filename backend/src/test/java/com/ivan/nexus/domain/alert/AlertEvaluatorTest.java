@@ -108,6 +108,25 @@ class AlertEvaluatorTest {
         assertThat(result.resolveKeys()).contains(new AlertKey(AlertType.DOCKER_HEALTH, "lab", "web"));
     }
 
+    @Test
+    void elevenHitsInThirtySecondsDoNotFireErrorRateOfTenPerMinute() {
+        Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        AlertEvaluation result = evaluator.evaluate(errorFacts(t0, 11, 10));
+
+        assertThat(result.firings()).noneMatch(firing -> firing.key().type() == AlertType.ERROR_RATE);
+    }
+
+    @Test
+    void elevenHitsSpanningSixtySecondsFireErrorRateOfTenPerMinute() {
+        Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        Instant t1 = Instant.parse("2026-01-01T00:01:00Z");
+        evaluator.evaluate(errorFacts(t0, 5, 10));
+        AlertEvaluation result = evaluator.evaluate(errorFacts(t1, 6, 10));
+
+        assertThat(result.firings()).anyMatch(firing -> firing.key().equals(
+                new AlertKey(AlertType.ERROR_RATE, "lab", "api")));
+    }
+
     private static AlertFiring firing(AlertType type, String projectId, String serviceId, String message) {
         return new AlertFiring(new AlertKey(type, projectId, serviceId), message);
     }
@@ -125,6 +144,17 @@ class AlertEvaluatorTest {
             List<ContainerAlertState> current,
             double diskPercent) {
         return new AlertFacts(now, previous, current, diskPercent, 85, List.of(), List.of());
+    }
+
+    private static AlertFacts errorFacts(Instant now, int newHits, int threshold) {
+        return new AlertFacts(
+                now,
+                List.of(),
+                List.of(),
+                0,
+                85,
+                List.of(new ErrorRateState("lab", "api", newHits, threshold)),
+                List.of());
     }
 
     private static ContainerAlertState container(
