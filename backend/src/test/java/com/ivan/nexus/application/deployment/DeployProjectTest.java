@@ -2,14 +2,15 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.manifest.FakeManifestCatalog;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
+import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectEntity;
@@ -48,7 +49,7 @@ class DeployProjectTest {
     @TempDir
     Path allowedRoot;
 
-    private final YamlManifestLoader loader = new YamlManifestLoader();
+    private final FakeManifestCatalog manifests = new FakeManifestCatalog();
     private final FakeProcessExecutor processExecutor = new FakeProcessExecutor();
     private final FakeHealthChecker healthChecker = new FakeHealthChecker();
     private final RecordAudit recordAudit = mock(RecordAudit.class);
@@ -212,14 +213,7 @@ class DeployProjectTest {
     void blankProjectNameFallsBackToId() throws Exception {
         writeLabManifest(null);
         Path dir = allowedRoot.resolve("lab");
-        Files.writeString(dir.resolve("nexus.yml"), """
-                project:
-                  id: lab
-                  name: "  "
-                  workingDirectory: %s
-                deployment:
-                  command: ./deploy.sh
-                """.formatted(dir.toAbsolutePath()));
+        manifests.add("lab", manifest("  ", dir, null), dir.resolve("nexus.yml"));
 
         useCase.execute("lab", "admin");
 
@@ -228,8 +222,7 @@ class DeployProjectTest {
 
     private DeployProject useCaseWithExecutor(Executor executor) {
         return new DeployProject(
-                loader,
-                allowedRoot,
+                manifests,
                 projects,
                 deployments,
                 hub,
@@ -289,23 +282,21 @@ class DeployProjectTest {
         Path script = dir.resolve("deploy.sh");
         Files.writeString(script, "#!/bin/sh\necho ok\n");
         assertThat(script.toFile().setExecutable(true, false)).isTrue();
-        String health = healthUrl == null
-                ? ""
-                : """
-                health:
-                  url: %s
-                  timeoutSeconds: 5
-                """.formatted(healthUrl);
-        Files.writeString(dir.resolve("nexus.yml"), """
-                project:
-                  id: lab
-                  name: Lab
-                  description: Test fixture
-                  workingDirectory: %s
-                deployment:
-                  command: ./deploy.sh
-                %s
-                """.formatted(dir.toAbsolutePath(), health));
+        manifests.add("lab", manifest("Lab", dir, healthUrl), dir.resolve("nexus.yml"));
+    }
+
+    private static ProjectManifest manifest(String name, Path workingDirectory, String healthUrl) {
+        ProjectManifest.HealthBlock health = healthUrl == null
+                ? null
+                : new ProjectManifest.HealthBlock(healthUrl, 5);
+        return new ProjectManifest(
+                new ProjectManifest.ProjectBlock(
+                        "lab", name, "Test fixture", workingDirectory.toAbsolutePath().toString()),
+                List.of(),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
+                null,
+                health,
+                null);
     }
 
     static final class FakeProcessExecutor implements ProcessExecutor {

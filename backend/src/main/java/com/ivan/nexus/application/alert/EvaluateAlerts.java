@@ -1,6 +1,7 @@
 package com.ivan.nexus.application.alert;
 
 import com.ivan.nexus.application.project.DiscoverProjects;
+import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.domain.alert.AlertEvaluator;
 import com.ivan.nexus.domain.alert.AlertEvaluation;
 import com.ivan.nexus.domain.alert.AlertFacts;
@@ -10,17 +11,14 @@ import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.project.Project;
 import com.ivan.nexus.domain.project.ProjectGrouping;
-import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,31 +32,28 @@ public class EvaluateAlerts {
     private static final Logger log = LoggerFactory.getLogger(EvaluateAlerts.class);
 
     private final DiscoverProjects discoverProjects;
-    private final YamlManifestLoader loader;
+    private final ManifestCatalog manifests;
     private final AlertRuleJpaRepository rules;
     private final PersistAlertEvaluation persistAlertEvaluation;
     private final AlertFactCollector factCollector;
     private final ContainerLifecycleNotifier lifecycleNotifier;
-    private final Path allowedRoot;
     private final AlertEvaluator evaluator = new AlertEvaluator();
     private final ConcurrentHashMap<String, ContainerSnapshot> previousSnapshots = new ConcurrentHashMap<>();
     private volatile boolean primed;
 
     public EvaluateAlerts(
             DiscoverProjects discoverProjects,
-            YamlManifestLoader loader,
+            ManifestCatalog manifests,
             AlertRuleJpaRepository rules,
             PersistAlertEvaluation persistAlertEvaluation,
             AlertFactCollector factCollector,
-            ContainerLifecycleNotifier lifecycleNotifier,
-            @Value("${nexus.manifest.allowed-root}") String allowedRoot) {
+            ContainerLifecycleNotifier lifecycleNotifier) {
         this.discoverProjects = discoverProjects;
-        this.loader = loader;
+        this.manifests = manifests;
         this.rules = rules;
         this.persistAlertEvaluation = persistAlertEvaluation;
         this.factCollector = factCollector;
         this.lifecycleNotifier = lifecycleNotifier;
-        this.allowedRoot = Path.of(allowedRoot).toAbsolutePath().normalize();
     }
 
     @Scheduled(fixedDelayString = "${nexus.alerts.interval-ms:30000}")
@@ -111,9 +106,8 @@ public class EvaluateAlerts {
             if (!project.deployable()) {
                 continue;
             }
-            Path path = allowedRoot.resolve(project.id()).resolve("nexus.yml");
             try {
-                manifests.put(project.id(), loader.load(path));
+                manifests.put(project.id(), this.manifests.loadRequired(project.id()).manifest());
             } catch (RuntimeException ex) {
                 log.warn("Unable to load manifest for project {}", project.id(), ex);
             }

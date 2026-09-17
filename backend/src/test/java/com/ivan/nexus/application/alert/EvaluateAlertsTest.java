@@ -2,6 +2,7 @@ package com.ivan.nexus.application.alert;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.deployment.HealthChecker;
+import com.ivan.nexus.application.manifest.FakeManifestCatalog;
 import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetSystemMetrics;
 import com.ivan.nexus.application.project.ContainerInventory;
@@ -12,7 +13,8 @@ import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.metrics.ContainerMetrics;
 import com.ivan.nexus.domain.metrics.SystemMetrics;
-import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
+import com.ivan.nexus.domain.shared.DomainException;
+import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertEventJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
@@ -33,6 +35,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -57,6 +60,7 @@ class EvaluateAlertsTest {
     RecordActivity recordActivity;
 
     private final List<ContainerSnapshot> inventory = new ArrayList<>();
+    private FakeManifestCatalog manifests;
     private EvaluateAlerts evaluateAlerts;
 
     @BeforeEach
@@ -64,16 +68,16 @@ class EvaluateAlertsTest {
         given(getSystemMetrics.execute()).willReturn(new SystemMetrics(0, 0, 1, 10, 100, 0, 0));
         given(fingerprints.findAll()).willReturn(List.of());
         given(rules.findByEnabledTrue()).willReturn(List.of(rule(AlertType.CONTAINER_STOPPED)));
-        DiscoverProjects discoverProjects = new DiscoverProjects(inventory(), "/tmp/nexus-no-manifests");
+        manifests = new FakeManifestCatalog();
+        DiscoverProjects discoverProjects = new DiscoverProjects(inventory(), manifests);
         evaluateAlerts = new EvaluateAlerts(
                 discoverProjects,
-                new YamlManifestLoader(),
+                manifests,
                 rules,
                 new PersistAlertEvaluation(events, recordActivity),
                 new AlertFactCollector(
                         discoverProjects, statsProvider, getSystemMetrics, fingerprints, healthChecker),
-                new ContainerLifecycleNotifier(recordActivity),
-                "/tmp/nexus-no-manifests");
+                new ContainerLifecycleNotifier(recordActivity));
     }
 
     @Test
@@ -197,6 +201,14 @@ class EvaluateAlertsTest {
         verify(events).save(captor.capture());
         assertThat(captor.getValue().getRule().getType()).isEqualTo(AlertType.DISK);
         assertThat(captor.getValue().getStatus()).isEqualTo(AlertStatus.ACTIVE);
+    }
+
+    @Test
+    void invalidManifestIsSkippedWithoutStoppingEvaluation() {
+        manifests.fail("lab", new DomainException(NexusErrorCode.MANIFEST_INVALID, "invalid fixture"));
+        inventory.add(snapshot("running"));
+
+        assertThatCode(evaluateAlerts::execute).doesNotThrowAnyException();
     }
 
     private static Optional<AlertEventEntity> openOfType(List<AlertEventEntity> saved, AlertType type) {

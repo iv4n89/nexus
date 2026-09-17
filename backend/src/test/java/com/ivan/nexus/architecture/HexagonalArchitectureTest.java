@@ -19,6 +19,7 @@ class HexagonalArchitectureTest {
             "com.ivan.nexus.application.container..",
             "com.ivan.nexus.application.database..",
             "com.ivan.nexus.application.log..",
+            "com.ivan.nexus.application.manifest..",
             "com.ivan.nexus.application.metrics..",
             "com.ivan.nexus.application.project..",
             "com.ivan.nexus.application.user.."
@@ -66,6 +67,17 @@ class HexagonalArchitectureTest {
         noClasses()
                 .that().resideInAPackage(APPLICATION_PACKAGES)
                 .should().dependOnClassesThat().resideInAPackage(JACKSON_PACKAGES)
+                .check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void deploymentAndAlertsMustNotImportInfrastructureManifestAdapters() {
+        noClasses()
+                .that().resideInAnyPackage(
+                        "com.ivan.nexus.application.deployment..",
+                        "com.ivan.nexus.application.alert..")
+                .should().dependOnClassesThat()
+                .resideInAPackage("com.ivan.nexus.infrastructure.manifest..")
                 .check(NEXUS_CLASSES);
     }
 
