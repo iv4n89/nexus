@@ -1,5 +1,6 @@
 package com.ivan.nexus.infrastructure.database;
 
+import com.ivan.nexus.domain.database.CellPatchGrouper;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
@@ -16,6 +17,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -172,6 +174,53 @@ class JdbcQueryExecutorIT {
                         10));
         assertEquals(NexusErrorCode.QUERY_FAILED, ex.getCode());
         assertTrue(ex.getMessage().toLowerCase().contains("invalid"));
+    }
+
+    @Test
+    void updateCellsRollsBackWhenSecondRowFails() throws Exception {
+        try (Connection conn = DriverManager.getConnection(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("""
+                    CREATE TABLE jobs (
+                        id INT PRIMARY KEY,
+                        status TEXT NOT NULL CHECK (status IN ('queued', 'running')),
+                        name TEXT
+                    )
+                    """);
+            stmt.execute("INSERT INTO jobs (id, status, name) VALUES (1, 'queued', 'ingest'), (2, 'queued', 'export')");
+        }
+        List<CellPatchGrouper.SqlPatch> patches = List.of(
+                new CellPatchGrouper.SqlPatch(Map.of("id", 1), "status", "running"),
+                new CellPatchGrouper.SqlPatch(Map.of("id", 2), "status", "bogus"));
+        DomainException ex = assertThrows(
+                DomainException.class,
+                () -> executor.updateCells(
+                        DatabaseEngine.POSTGRES,
+                        target(),
+                        "public",
+                        "jobs",
+                        CellPatchGrouper.groupSql(patches)));
+        assertEquals(NexusErrorCode.QUERY_FAILED, ex.getCode());
+        QueryResult still = executor.query(
+                DatabaseEngine.POSTGRES,
+                target(),
+                "SELECT status FROM jobs ORDER BY id",
+                StatementClass.READ,
+                10);
+        assertEquals("queued", still.rows().get(0).get(0));
+        assertEquals("queued", still.rows().get(1).get(0));
+    }
+
+    @Test
+    void updateCellsFailsWhenPrimaryKeyMatchesNoRow() {
+        List<CellPatchGrouper.GroupedSqlUpdate> grouped = CellPatchGrouper.groupSql(List.of(
+                new CellPatchGrouper.SqlPatch(Map.of("n", 99), "n", 99)));
+        DomainException ex = assertThrows(
+                DomainException.class,
+                () -> executor.updateCells(DatabaseEngine.POSTGRES, target(), "public", "t", grouped));
+        assertEquals(NexusErrorCode.QUERY_FAILED, ex.getCode());
+        assertTrue(ex.getMessage().toLowerCase().contains("primary key"));
     }
 
     private static ResolvedTarget target() {

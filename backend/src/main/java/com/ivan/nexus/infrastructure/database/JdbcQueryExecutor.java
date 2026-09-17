@@ -1,5 +1,6 @@
 package com.ivan.nexus.infrastructure.database;
 
+import com.ivan.nexus.domain.database.CellPatchGrouper;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
@@ -100,49 +101,105 @@ public class JdbcQueryExecutor {
             Map<String, Object> primaryKey,
             String column,
             Object value) {
-        if (primaryKey == null || primaryKey.isEmpty()) {
-            throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Primary key is required");
-        }
-        StringBuilder sql = new StringBuilder("UPDATE ")
-                .append(SqlIdentifierQuoter.quote(engine, schema))
-                .append('.')
-                .append(SqlIdentifierQuoter.quote(engine, table))
-                .append(" SET ")
-                .append(SqlIdentifierQuoter.quote(engine, column))
-                .append(" = ? WHERE ");
-        List<Object> params = new ArrayList<>();
-        params.add(value);
-        int i = 0;
-        for (Map.Entry<String, Object> entry : primaryKey.entrySet()) {
-            if (i++ > 0) {
-                sql.append(" AND ");
-            }
-            sql.append(SqlIdentifierQuoter.quote(engine, entry.getKey())).append(" = ?");
-            params.add(entry.getValue());
+        return updateCells(
+                engine,
+                target,
+                schema,
+                table,
+                CellPatchGrouper.groupSql(List.of(new CellPatchGrouper.SqlPatch(primaryKey, column, value))));
+    }
+
+    public QueryResult updateCells(
+            DatabaseEngine engine,
+            ResolvedTarget target,
+            String schema,
+            String table,
+            List<CellPatchGrouper.GroupedSqlUpdate> grouped) {
+        if (grouped == null || grouped.isEmpty()) {
+            throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Patches are required");
         }
         Properties props = connectionProperties(engine, target);
         String url = jdbcUrl(engine, target);
         long start = System.nanoTime();
-        try (Connection conn = DriverManager.getConnection(url, props);
-             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
-            stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
-            for (int index = 0; index < params.size(); index++) {
-                stmt.setObject(index + 1, params.get(index));
+        try (Connection conn = DriverManager.getConnection(url, props)) {
+            conn.setAutoCommit(false);
+            try {
+                for (CellPatchGrouper.GroupedSqlUpdate row : grouped) {
+                    String sql = buildUpdateSql(engine, schema, table, row);
+                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                        stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                        int index = 1;
+                        for (Object value : row.columns().values()) {
+                            stmt.setObject(index++, value);
+                        }
+                        for (Object value : row.primaryKey().values()) {
+                            stmt.setObject(index++, value);
+                        }
+                        int updated = stmt.executeUpdate();
+                        if (updated != 1) {
+                            conn.rollback();
+                            throw new DomainException(
+                                    NexusErrorCode.QUERY_FAILED,
+                                    "No row matched primary key");
+                        }
+                    }
+                }
+                conn.commit();
+                return new QueryResult(
+                        List.of("updateCount"),
+                        List.of(List.of(grouped.size())),
+                        false,
+                        elapsedMs(start),
+                        grouped.size());
+            } catch (DomainException ex) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ignored) {
+                    // already rolled back for unmatched primary key
+                }
+                throw ex;
+            } catch (SQLTimeoutException ex) {
+                conn.rollback();
+                throw new DomainException(NexusErrorCode.QUERY_TIMEOUT, "Query timed out");
+            } catch (SQLException ex) {
+                conn.rollback();
+                throw new DomainException(
+                        NexusErrorCode.QUERY_FAILED,
+                        SecretSanitizer.strip(target.password(), ex.getMessage()));
             }
-            int updated = stmt.executeUpdate();
-            return new QueryResult(
-                    List.of("updateCount"),
-                    List.of(List.of(updated)),
-                    false,
-                    elapsedMs(start),
-                    1);
-        } catch (SQLTimeoutException ex) {
-            throw new DomainException(NexusErrorCode.QUERY_TIMEOUT, "Query timed out");
         } catch (SQLException ex) {
             throw new DomainException(
                     NexusErrorCode.QUERY_FAILED,
                     SecretSanitizer.strip(target.password(), ex.getMessage()));
         }
+    }
+
+    static String buildUpdateSql(
+            DatabaseEngine engine,
+            String schema,
+            String table,
+            CellPatchGrouper.GroupedSqlUpdate row) {
+        StringBuilder sql = new StringBuilder("UPDATE ")
+                .append(SqlIdentifierQuoter.quote(engine, schema))
+                .append('.')
+                .append(SqlIdentifierQuoter.quote(engine, table))
+                .append(" SET ");
+        int i = 0;
+        for (String column : row.columns().keySet()) {
+            if (i++ > 0) {
+                sql.append(", ");
+            }
+            sql.append(SqlIdentifierQuoter.quote(engine, column)).append(" = ?");
+        }
+        sql.append(" WHERE ");
+        int j = 0;
+        for (String column : row.primaryKey().keySet()) {
+            if (j++ > 0) {
+                sql.append(" AND ");
+            }
+            sql.append(SqlIdentifierQuoter.quote(engine, column)).append(" = ?");
+        }
+        return sql.toString();
     }
 
     public SqlCatalog metadata(DatabaseEngine engine, ResolvedTarget target) {

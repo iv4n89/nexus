@@ -28,14 +28,17 @@ public final class DatabaseDtos {
             long durationMs,
             int rowCount) {}
 
-    public record CellRequest(
+    public record CellsRequest(
             String schema,
             String table,
+            String mongoDatabase,
+            String collection,
+            List<CellPatch> patches) {}
+
+    public record CellPatch(
             Map<String, Object> primaryKey,
             String column,
             Object value,
-            String mongoDatabase,
-            String collection,
             String id,
             String field) {}
 

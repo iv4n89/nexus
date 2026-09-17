@@ -11,6 +11,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.Locale;
@@ -36,6 +37,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AsyncRequestNotUsableException.class)
     public void handleDisconnectedClient() {
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResource() {
+        return envelope(HttpStatus.NOT_FOUND, "NOT_FOUND", "Not found");
     }
 
     @ExceptionHandler(Exception.class)

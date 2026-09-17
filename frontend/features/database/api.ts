@@ -39,23 +39,25 @@ export function postQuery(
   })
 }
 
-export function postCell(
+export function postCells(
   projectId: string,
   databaseId: string,
   body: {
     schema?: string
     table?: string
-    primaryKey?: Record<string, unknown>
-    column?: string
-    value?: unknown
     mongoDatabase?: string
     collection?: string
-    id?: string
-    field?: string
+    patches: Array<{
+      primaryKey?: Record<string, unknown>
+      column?: string
+      value?: unknown
+      id?: string
+      field?: string
+    }>
   },
 ) {
-  return api<QueryResult>(`/api/projects/${projectId}/database/instances/${encodeURIComponent(databaseId)}/cell`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return api<QueryResult>(
+    `/api/projects/${projectId}/database/instances/${encodeURIComponent(databaseId)}/cells`,
+    { method: 'POST', body: JSON.stringify(body) },
+  )
 }

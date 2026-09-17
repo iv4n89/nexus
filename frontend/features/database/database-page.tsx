@@ -5,12 +5,24 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { me } from '@/features/auth/api'
 import { boundTreeSelection } from '@/features/database/browse-selection'
+import {
+  applyCell,
+  dirtyCount,
+  emptyDraft,
+  mongoPatches,
+  rowKey,
+  sqlPatches,
+  toMongoRows,
+  toSqlRows,
+  type CellDraft,
+} from '@/features/database/cell-draft'
 import { ConfirmDestructive } from '@/features/database/confirm-destructive'
 import { DataGrid } from '@/features/database/data-grid'
+import { formatMongoStatements, formatSqlStatements } from '@/features/database/draft-sql'
 import { InstanceSelect } from '@/features/database/instance-select'
 import { QueryEditor } from '@/features/database/query-editor'
 import { SchemaTree, type TreeSelection } from '@/features/database/schema-tree'
-import { getMetadata, listInstances, postCell, postQuery, previewTable } from '@/features/database/api'
+import { getMetadata, listInstances, postCells, postQuery, previewTable } from '@/features/database/api'
 import { isDestructiveSql, isReadMongo, isReadSql } from '@/features/database/classify-sql'
 import { ApiError } from '@/lib/api'
 import type { AuthUser, DatabaseInstance, QueryResult } from '@/types/api'
@@ -25,6 +37,9 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   const [browseError, setBrowseError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [selectionInstanceId, setSelectionInstanceId] = useState('')
+  const [draft, setDraft] = useState<CellDraft>(emptyDraft())
+  const [resetToken, setResetToken] = useState(0)
+  const [navBlocked, setNavBlocked] = useState(false)
   const queryClient = useQueryClient()
 
   const auth = useQuery({
@@ -39,8 +54,9 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   const selectedId = instanceId || instances.data?.[0]?.id || ''
   const selected: DatabaseInstance | undefined = instances.data?.find((item) => item.id === selectedId)
   const previewSelection = boundTreeSelection(selection, selectionInstanceId, selectedId)
+  const changes = dirtyCount(draft)
 
-  if (selectionInstanceId && selectedId && selectionInstanceId !== selectedId) {
+  if (selectionInstanceId && selectedId && selectionInstanceId !== selectedId && changes === 0) {
     setSelectionInstanceId(selectedId)
     setSelection(null)
     setQueryResult(null)
@@ -104,9 +120,11 @@ export function DatabasePage({ projectId }: { projectId: string }) {
     },
   })
 
-  const cell = useMutation({
-    mutationFn: (payload: Parameters<typeof postCell>[2]) => postCell(projectId, selectedId, payload),
+  const save = useMutation({
+    mutationFn: (payload: Parameters<typeof postCells>[2]) => postCells(projectId, selectedId, payload),
     onSuccess: () => {
+      setDraft(emptyDraft())
+      setResetToken((n) => n + 1)
       setBrowseError(null)
       void queryClient.invalidateQueries({
         queryKey: ['projects', projectId, 'database', selectedId, 'preview'],
@@ -124,6 +142,53 @@ export function DatabasePage({ projectId }: { projectId: string }) {
       return
     }
     run.mutate(false)
+  }
+
+  function guardNav(): boolean {
+    if (dirtyCount(draft) > 0) {
+      setNavBlocked(true)
+      return true
+    }
+    return false
+  }
+
+  function onCancel() {
+    setDraft(emptyDraft())
+    setResetToken((n) => n + 1)
+    setBrowseError(null)
+  }
+
+  function onSave() {
+    if (!previewSelection || !preview.data) {
+      return
+    }
+    const result = preview.data
+    const keys = previewRowKeys(result, previewSelection)
+    if (previewSelection.kind === 'sql') {
+      save.mutate({
+        schema: previewSelection.schema,
+        table: previewSelection.table,
+        patches: sqlPatches(draft, keys, sqlPrimaryKeys(result, previewSelection.primaryKey), result.columns),
+      })
+      return
+    }
+    save.mutate({
+      mongoDatabase: previewSelection.database,
+      collection: previewSelection.collection,
+      patches: mongoPatches(draft, keys, result.columns),
+    })
+  }
+
+  function onDraftChange(row: Record<string, unknown>, column: string, input: string, original: unknown) {
+    const idColumn = previewSelection?.kind === 'mongo' ? '_id' : null
+    const primaryKey = previewSelection?.kind === 'sql' ? previewSelection.primaryKey : []
+    const key = idColumn
+      ? String(row[idColumn] ?? '')
+      : rowKey(
+          Object.fromEntries(primaryKey.map((name) => [name, row[name]])),
+          primaryKey,
+        )
+    setDraft((current) => applyCell(current, key, column, input, original))
   }
 
   if (instances.isPending) {
@@ -144,7 +209,16 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   return (
     <div className="flex flex-col gap-6">
       <Header projectId={projectId} />
-      <InstanceSelect instances={instances.data} value={selectedId} onChange={setInstanceId} />
+      <InstanceSelect
+        instances={instances.data}
+        value={selectedId}
+        onChange={(id) => {
+          if (guardNav()) {
+            return
+          }
+          setInstanceId(id)
+        }}
+      />
       {selected?.status === 'UNREACHABLE' ? (
         <p className="text-sm">Cannot connect</p>
       ) : (
@@ -155,6 +229,9 @@ export function DatabasePage({ projectId }: { projectId: string }) {
                 metadata={metadata.data}
                 selected={previewSelection}
                 onSelect={(next) => {
+                  if (guardNav()) {
+                    return
+                  }
                   setSelectionInstanceId(selectedId)
                   setSelection(next)
                   setTab('browse')
@@ -175,7 +252,12 @@ export function DatabasePage({ projectId }: { projectId: string }) {
               </button>
               <button
                 type="button"
-                onClick={() => setTab('query')}
+                onClick={() => {
+                  if (guardNav()) {
+                    return
+                  }
+                  setTab('query')
+                }}
                 className={tab === 'query' ? 'text-[#f5f5f5]' : 'text-[#888]'}
               >
                 Query
@@ -194,37 +276,59 @@ export function DatabasePage({ projectId }: { projectId: string }) {
                   {preview.data.truncated ? (
                     <p className="text-sm text-[#888]">Result truncated at {preview.data.rowCount} rows</p>
                   ) : null}
+                  {changes > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between text-sm text-[#888]">
+                        <span>
+                          {changes} {changes === 1 ? 'cambio' : 'cambios'}
+                        </span>
+                        <span className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={onCancel}
+                            disabled={save.isPending}
+                            className="text-[#888]"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onSave}
+                            disabled={save.isPending}
+                            className="text-[#f5f5f5]"
+                          >
+                            Guardar
+                          </button>
+                        </span>
+                      </div>
+                      <pre className="overflow-auto border border-[#2a2a2a] p-3 font-mono text-sm text-[#888] whitespace-pre-wrap">
+                        {previewSelection.kind === 'sql'
+                          ? formatSqlStatements(
+                              engine === 'MYSQL' ? 'MYSQL' : 'POSTGRES',
+                              previewSelection.schema,
+                              previewSelection.table,
+                              toSqlRows(
+                                draft,
+                                previewRowKeys(preview.data, previewSelection),
+                                sqlPrimaryKeys(preview.data, previewSelection.primaryKey),
+                                preview.data.columns,
+                              ),
+                            )
+                          : formatMongoStatements(
+                              previewSelection.collection,
+                              toMongoRows(draft, previewRowKeys(preview.data, previewSelection), preview.data.columns),
+                            )}
+                      </pre>
+                    </>
+                  ) : null}
                   <DataGrid
                     result={preview.data}
                     canEdit={Boolean(isAdmin)}
                     primaryKey={previewSelection.kind === 'sql' ? previewSelection.primaryKey : []}
                     idColumn={previewSelection.kind === 'mongo' ? '_id' : null}
-                    onEdit={(row, column, value) => {
-                      setBrowseError(null)
-                      if (previewSelection.kind === 'sql') {
-                        const primaryKey: Record<string, unknown> = {}
-                        for (const key of previewSelection.primaryKey) {
-                          primaryKey[key] = row[key]
-                        }
-                        cell.mutate({
-                          schema: previewSelection.schema,
-                          table: previewSelection.table,
-                          primaryKey,
-                          column,
-                          value,
-                        })
-                        return
-                      }
-                      if (previewSelection.kind === 'mongo') {
-                        cell.mutate({
-                          mongoDatabase: previewSelection.database,
-                          collection: previewSelection.collection,
-                          id: String(row._id ?? ''),
-                          field: column,
-                          value,
-                        })
-                      }
-                    }}
+                    draft={draft}
+                    resetToken={resetToken}
+                    onDraftChange={onDraftChange}
                   />
                 </>
               ) : (
@@ -248,7 +352,9 @@ export function DatabasePage({ projectId }: { projectId: string }) {
                     canEdit={false}
                     primaryKey={[]}
                     idColumn={null}
-                    onEdit={() => undefined}
+                    draft={emptyDraft()}
+                    resetToken={0}
+                    onDraftChange={() => undefined}
                   />
                 ) : null}
               </>
@@ -256,6 +362,18 @@ export function DatabasePage({ projectId }: { projectId: string }) {
           </section>
         </div>
       )}
+      {navBlocked ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="border border-[#f5f5f5] bg-black p-3 text-sm">
+            <p>Hay {changes} cambios sin guardar. Guarda o cancela antes de cambiar.</p>
+            <div className="mt-2 text-right">
+              <button type="button" onClick={() => setNavBlocked(false)}>
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <ConfirmDestructive
         open={confirmOpen}
         busy={run.isPending}
@@ -276,4 +394,34 @@ function Header({ projectId }: { projectId: string }) {
       </Link>
     </section>
   )
+}
+
+function previewRowKeys(result: QueryResult, previewSelection: TreeSelection): string[] {
+  return result.rows.map((row) => {
+    const record = Object.fromEntries(result.columns.map((c, i) => [c, row[i]]))
+    if (previewSelection.kind === 'mongo') {
+      return String(record._id ?? '')
+    }
+    const pk: Record<string, unknown> = {}
+    for (const column of previewSelection.primaryKey) {
+      pk[column] = record[column]
+    }
+    return rowKey(pk, previewSelection.primaryKey)
+  })
+}
+
+function sqlPrimaryKeys(
+  result: QueryResult,
+  primaryKey: string[],
+): Record<string, Record<string, unknown>> {
+  const map: Record<string, Record<string, unknown>> = {}
+  for (const row of result.rows) {
+    const record = Object.fromEntries(result.columns.map((c, i) => [c, row[i]]))
+    const pk: Record<string, unknown> = {}
+    for (const column of primaryKey) {
+      pk[column] = record[column]
+    }
+    map[rowKey(pk, primaryKey)] = pk
+  }
+  return map
 }
