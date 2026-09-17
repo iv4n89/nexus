@@ -1,13 +1,13 @@
 package com.ivan.nexus.interfaces.deployment;
 
 import com.ivan.nexus.application.deployment.DeployProject;
+import com.ivan.nexus.application.deployment.DeploymentView;
+import com.ivan.nexus.application.deployment.GetDeployment;
+import com.ivan.nexus.application.deployment.GetDeploymentHistory;
+import com.ivan.nexus.application.deployment.RequireDeployment;
 import com.ivan.nexus.application.deployment.RollbackProject;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
-import com.ivan.nexus.domain.shared.DomainException;
-import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
@@ -28,17 +28,23 @@ import java.util.UUID;
 public class DeploymentController {
     private final DeployProject deployProject;
     private final RollbackProject rollbackProject;
-    private final DeploymentJpaRepository deployments;
+    private final GetDeploymentHistory getDeploymentHistory;
+    private final GetDeployment getDeployment;
+    private final RequireDeployment requireDeployment;
     private final DeploymentStreamHub hub;
 
     public DeploymentController(
             DeployProject deployProject,
             RollbackProject rollbackProject,
-            DeploymentJpaRepository deployments,
+            GetDeploymentHistory getDeploymentHistory,
+            GetDeployment getDeployment,
+            RequireDeployment requireDeployment,
             DeploymentStreamHub hub) {
         this.deployProject = deployProject;
         this.rollbackProject = rollbackProject;
-        this.deployments = deployments;
+        this.getDeploymentHistory = getDeploymentHistory;
+        this.getDeployment = getDeployment;
+        this.requireDeployment = requireDeployment;
         this.hub = hub;
     }
 
@@ -58,16 +64,14 @@ public class DeploymentController {
 
     @GetMapping("/api/projects/{id}/deployments")
     public List<DeploymentResponse> history(@PathVariable String id) {
-        return deployments.findByProjectIdOrderByCreatedAtDesc(id).stream()
+        return getDeploymentHistory.execute(id).stream()
                 .map(DeploymentResponse::from)
                 .toList();
     }
 
     @GetMapping("/api/projects/{id}/deployments/{deploymentId}")
     public DeploymentResponse one(@PathVariable String id, @PathVariable UUID deploymentId) {
-        DeploymentEntity entity = deployments.findByIdAndProjectId(deploymentId, id)
-                .orElseThrow(() -> new DomainException(NexusErrorCode.DEPLOYMENT_NOT_FOUND, "Deployment not found"));
-        return DeploymentResponse.from(entity);
+        return DeploymentResponse.from(getDeployment.execute(id, deploymentId));
     }
 
     @GetMapping(path = "/api/deployments/{id}/stream", produces = {
@@ -75,9 +79,7 @@ public class DeploymentController {
             MediaType.APPLICATION_JSON_VALUE
     })
     public SseEmitter stream(@PathVariable UUID id, HttpServletResponse response) {
-        if (deployments.findById(id).isEmpty()) {
-            throw new DomainException(NexusErrorCode.DEPLOYMENT_NOT_FOUND, "Deployment not found");
-        }
+        requireDeployment.execute(id);
         response.setHeader("Cache-Control", "no-cache");
         response.setHeader("X-Accel-Buffering", "no");
         SseEmitter emitter = new SseEmitter(0L);
@@ -100,19 +102,19 @@ public class DeploymentController {
             String outputSummary,
             Boolean healthOk,
             String kind) {
-        static DeploymentResponse from(DeploymentEntity entity) {
+        static DeploymentResponse from(DeploymentView view) {
             return new DeploymentResponse(
-                    entity.getId(),
-                    entity.getProjectId(),
-                    entity.getStatus(),
-                    entity.getStartedAt(),
-                    entity.getFinishedAt(),
-                    entity.getTriggeredBy(),
-                    entity.getCommitSha(),
-                    entity.getExitCode(),
-                    entity.getOutputSummary(),
-                    entity.getHealthOk(),
-                    entity.getKind());
+                    view.id(),
+                    view.projectId(),
+                    view.status(),
+                    view.startedAt(),
+                    view.finishedAt(),
+                    view.triggeredBy(),
+                    view.commitSha(),
+                    view.exitCode(),
+                    view.outputSummary(),
+                    view.healthOk(),
+                    view.kind());
         }
     }
 }

@@ -1,13 +1,15 @@
 package com.ivan.nexus.interfaces.deployment;
 
 import com.ivan.nexus.application.deployment.DeployProject;
+import com.ivan.nexus.application.deployment.DeploymentView;
+import com.ivan.nexus.application.deployment.GetDeployment;
+import com.ivan.nexus.application.deployment.GetDeploymentHistory;
+import com.ivan.nexus.application.deployment.RequireDeployment;
 import com.ivan.nexus.application.deployment.RollbackProject;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import com.ivan.nexus.infrastructure.security.SecurityConfig;
 import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.junit.jupiter.api.Test;
@@ -20,13 +22,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -49,7 +50,13 @@ class DeploymentControllerTest {
     RollbackProject rollbackProject;
 
     @MockitoBean
-    DeploymentJpaRepository deployments;
+    GetDeploymentHistory getDeploymentHistory;
+
+    @MockitoBean
+    GetDeployment getDeployment;
+
+    @MockitoBean
+    RequireDeployment requireDeployment;
 
     @MockitoBean
     DeploymentStreamHub hub;
@@ -109,8 +116,8 @@ class DeploymentControllerTest {
     @WithMockUser(roles = "VIEWER")
     void viewerGetHistoryReturns200() throws Exception {
         UUID id = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-        given(deployments.findByProjectIdOrderByCreatedAtDesc("lab"))
-                .willReturn(List.of(entity(id, "lab", DeploymentStatus.SUCCESS)));
+        given(getDeploymentHistory.execute("lab"))
+                .willReturn(List.of(view(id, "lab", DeploymentStatus.SUCCESS)));
 
         mockMvc.perform(get("/api/projects/lab/deployments"))
                 .andExpect(status().isOk())
@@ -131,7 +138,8 @@ class DeploymentControllerTest {
     @WithMockUser(roles = "VIEWER")
     void getStreamUnknownReturns404() throws Exception {
         UUID id = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
-        given(deployments.findById(id)).willReturn(Optional.empty());
+        willThrow(new DomainException(NexusErrorCode.DEPLOYMENT_NOT_FOUND, "Deployment not found"))
+                .given(requireDeployment).execute(id);
 
         mockMvc.perform(get("/api/deployments/{id}/stream", id))
                 .andExpect(status().isNotFound())
@@ -142,8 +150,8 @@ class DeploymentControllerTest {
         return new Deployment(id, "lab", status, Instant.parse("2026-01-01T00:00:00Z"), null, "admin", null, null, null, null);
     }
 
-    private static DeploymentEntity entity(UUID id, String projectId, DeploymentStatus status) {
-        DeploymentEntity entity = new DeploymentEntity(
+    private static DeploymentView view(UUID id, String projectId, DeploymentStatus status) {
+        return new DeploymentView(
                 id,
                 projectId,
                 status,
@@ -153,8 +161,7 @@ class DeploymentControllerTest {
                 null,
                 0,
                 "done",
-                true);
-        entity.setMetadata(Map.of("kind", "deploy"));
-        return entity;
+                true,
+                "deploy");
     }
 }
