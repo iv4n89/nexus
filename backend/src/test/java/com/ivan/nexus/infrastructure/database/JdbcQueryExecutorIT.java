@@ -19,6 +19,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -78,6 +79,19 @@ class JdbcQueryExecutorIT {
         QueryResult result = executor.preview(DatabaseEngine.POSTGRES, target, "public", "t");
         assertEquals(3, result.rowCount());
         assertEquals(List.of("n"), result.columns());
+    }
+
+    @Test
+    void previewAllowsSqlNullCells() throws Exception {
+        try (Connection conn = DriverManager.getConnection(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE nullable_t (id INT PRIMARY KEY, note TEXT)");
+            stmt.execute("INSERT INTO nullable_t (id, note) VALUES (1, NULL)");
+        }
+        QueryResult result = executor.preview(DatabaseEngine.POSTGRES, target(), "public", "nullable_t");
+        assertEquals(1, result.rowCount());
+        assertNull(result.rows().getFirst().get(1));
     }
 
     @Test
