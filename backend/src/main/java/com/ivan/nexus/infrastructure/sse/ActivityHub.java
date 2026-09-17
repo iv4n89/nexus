@@ -2,8 +2,7 @@ package com.ivan.nexus.infrastructure.sse;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventEntity;
-import com.ivan.nexus.interfaces.activity.ActivityResponse;
+import com.ivan.nexus.domain.activity.Activity;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,12 +44,12 @@ public class ActivityHub {
         emitter.onError(error -> emitters.remove(emitter));
     }
 
-    public void publish(ActivityEventEntity event) {
+    public void publish(Activity event) {
         String json;
         try {
-            json = objectMapper.writeValueAsString(ActivityResponse.from(event));
+            json = objectMapper.writeValueAsString(event);
         } catch (JsonProcessingException ex) {
-            log.warn("Failed to serialize activity event {}", event.getId(), ex);
+            log.warn("Failed to serialize activity event {}", event.id(), ex);
             return;
         }
         for (SseEmitter emitter : emitters.keySet()) {

@@ -3,20 +3,18 @@ package com.ivan.nexus.application.database;
 import com.ivan.nexus.domain.database.ControlPlaneDatabase;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
-import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
-import com.ivan.nexus.infrastructure.database.MongoQueryExecutor;
 import org.springframework.stereotype.Service;
 
 @Service
 public class PreviewTable {
     private final DiscoverProjectDatabases discover;
-    private final JdbcQueryExecutor jdbc;
-    private final MongoQueryExecutor mongo;
+    private final SqlExecutor jdbc;
+    private final MongoExecutor mongo;
 
     public PreviewTable(
             DiscoverProjectDatabases discover,
-            JdbcQueryExecutor jdbc,
-            MongoQueryExecutor mongo) {
+            SqlExecutor jdbc,
+            MongoExecutor mongo) {
         this.discover = discover;
         this.jdbc = jdbc;
         this.mongo = mongo;

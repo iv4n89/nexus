@@ -3,7 +3,7 @@ package com.ivan.nexus.application.activity;
 import com.ivan.nexus.infrastructure.config.NexusProperties;
 import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEventJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
+import com.ivan.nexus.application.log.FingerprintStore;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -27,7 +27,7 @@ class RetentionCleanupTest {
     void deletesRowsOlderThanConfiguredWindows() {
         ActivityEventJpaRepository activityEvents = mock(ActivityEventJpaRepository.class);
         DeploymentEventJpaRepository deploymentEvents = mock(DeploymentEventJpaRepository.class);
-        LogErrorFingerprintJpaRepository fingerprints = mock(LogErrorFingerprintJpaRepository.class);
+        FingerprintStore fingerprints = mock(FingerprintStore.class);
         Clock clock = Clock.fixed(Instant.parse("2026-09-16T03:00:00Z"), ZoneOffset.UTC);
 
         new RetentionCleanup(

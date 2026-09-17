@@ -4,20 +4,18 @@ import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.DatabaseStatus;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
-import com.ivan.nexus.infrastructure.database.MongoQueryExecutor;
 import org.springframework.stereotype.Service;
 
 @Service
 public class GetDatabaseMetadata {
     private final DiscoverProjectDatabases discover;
-    private final JdbcQueryExecutor jdbc;
-    private final MongoQueryExecutor mongo;
+    private final SqlExecutor jdbc;
+    private final MongoExecutor mongo;
 
     public GetDatabaseMetadata(
             DiscoverProjectDatabases discover,
-            JdbcQueryExecutor jdbc,
-            MongoQueryExecutor mongo) {
+            SqlExecutor jdbc,
+            MongoExecutor mongo) {
         this.discover = discover;
         this.jdbc = jdbc;
         this.mongo = mongo;
@@ -40,6 +38,6 @@ public class GetDatabaseMetadata {
 
     public record Metadata(
             DatabaseEngine engine,
-            JdbcQueryExecutor.SqlCatalog sql,
-            MongoQueryExecutor.MongoCatalog mongo) {}
+            SqlExecutor.SqlCatalog sql,
+            MongoExecutor.MongoCatalog mongo) {}
 }

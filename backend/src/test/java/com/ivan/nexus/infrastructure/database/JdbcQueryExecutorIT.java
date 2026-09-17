@@ -1,5 +1,6 @@
 package com.ivan.nexus.infrastructure.database;
 
+import com.ivan.nexus.application.database.SqlExecutor;
 import com.ivan.nexus.domain.database.CellPatchGrouper;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
@@ -73,6 +74,21 @@ class JdbcQueryExecutorIT {
                 2);
         assertTrue(capped.truncated());
         assertEquals(2, capped.rowCount());
+    }
+
+    @Test
+    void metadataLoadsTablesPrimaryKeysAndColumns() {
+        SqlExecutor.SqlCatalog catalog = executor.metadata(DatabaseEngine.POSTGRES, target());
+        SqlExecutor.SqlTable table = catalog.tables().stream()
+                .filter(item -> "public".equals(item.schema()) && "t".equals(item.name()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals("table", table.type());
+        assertEquals(List.of("n"), table.primaryKey());
+        assertEquals(1, table.columns().size());
+        assertEquals("n", table.columns().getFirst().name());
+        assertEquals("integer", table.columns().getFirst().dataType());
+        assertFalse(table.columns().getFirst().nullable());
     }
 
     @Test

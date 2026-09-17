@@ -6,8 +6,6 @@ import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.log.ErrorNormalizer;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintEntity;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -38,7 +36,7 @@ class AnalyzeLogsTest {
     LogProvider logProvider;
 
     @Mock
-    LogErrorFingerprintJpaRepository fingerprints;
+    FingerprintStore fingerprints;
 
     @Mock
     RecordActivity recordActivity;
@@ -53,17 +51,17 @@ class AnalyzeLogsTest {
 
         analyze("web").execute();
 
-        ArgumentCaptor<LogErrorFingerprintEntity> captor = ArgumentCaptor.forClass(LogErrorFingerprintEntity.class);
+        ArgumentCaptor<StoredErrorFingerprint> captor = ArgumentCaptor.forClass(StoredErrorFingerprint.class);
         verify(fingerprints).save(captor.capture());
-        LogErrorFingerprintEntity saved = captor.getValue();
-        assertThat(saved.getProjectId()).isEqualTo("lab");
-        assertThat(saved.getServiceId()).isEqualTo("web");
-        assertThat(saved.getCount()).isEqualTo(1L);
-        assertThat(saved.getSampleMessage()).isEqualTo("Connection to 10.0.0.31 failed at 12:42");
-        assertThat(saved.getFingerprint()).isEqualTo(
+        StoredErrorFingerprint saved = captor.getValue();
+        assertThat(saved.projectId()).isEqualTo("lab");
+        assertThat(saved.serviceId()).isEqualTo("web");
+        assertThat(saved.count()).isEqualTo(1L);
+        assertThat(saved.sampleMessage()).isEqualTo("Connection to 10.0.0.31 failed at 12:42");
+        assertThat(saved.fingerprint()).isEqualTo(
                 ErrorNormalizer.normalize("Connection to 10.0.0.31 failed at 12:42").orElseThrow().fingerprint());
-        assertThat(saved.getFirstSeen()).isNotNull();
-        assertThat(saved.getLastSeen()).isEqualTo(saved.getFirstSeen());
+        assertThat(saved.firstSeen()).isNotNull();
+        assertThat(saved.lastSeen()).isEqualTo(saved.firstSeen());
         verify(recordActivity).execute(
                 eq(ActivityType.ERROR_DETECTED), eq("lab"), eq("web"), eq("error detected"), any());
     }
@@ -73,7 +71,7 @@ class AnalyzeLogsTest {
         String line = "ERROR boom";
         String hash = ErrorNormalizer.normalize(line).orElseThrow().fingerprint();
         Instant firstSeen = Instant.parse("2026-01-01T00:00:00Z");
-        LogErrorFingerprintEntity existing = new LogErrorFingerprintEntity(
+        StoredErrorFingerprint existing = new StoredErrorFingerprint(
                 UUID.randomUUID(), "lab", "web", hash, firstSeen, firstSeen, 3L, line);
         given(logProvider.fetch(eq("web-id"), eq(2000), anyInt(), isNull(), eq(false)))
                 .willReturn(List.of(line));
@@ -82,10 +80,14 @@ class AnalyzeLogsTest {
 
         analyze("web").execute();
 
-        verify(fingerprints).save(existing);
-        assertThat(existing.getCount()).isEqualTo(4L);
-        assertThat(existing.getLastSeen()).isAfter(firstSeen);
-        assertThat(existing.getFirstSeen()).isEqualTo(firstSeen);
+        ArgumentCaptor<StoredErrorFingerprint> captor = ArgumentCaptor.forClass(StoredErrorFingerprint.class);
+        verify(fingerprints).save(captor.capture());
+        StoredErrorFingerprint saved = captor.getValue();
+        assertThat(saved.id()).isEqualTo(existing.id());
+        assertThat(saved.count()).isEqualTo(4L);
+        assertThat(saved.lastSeen()).isAfter(firstSeen);
+        assertThat(saved.firstSeen()).isEqualTo(firstSeen);
+        assertThat(existing.count()).isEqualTo(3L);
         verify(recordActivity, never()).execute(any(), any(), any(), any(), any());
     }
 
@@ -207,9 +209,9 @@ class AnalyzeLogsTest {
                 120);
         analyzeLogs.execute();
 
-        ArgumentCaptor<LogErrorFingerprintEntity> captor = ArgumentCaptor.forClass(LogErrorFingerprintEntity.class);
+        ArgumentCaptor<StoredErrorFingerprint> captor = ArgumentCaptor.forClass(StoredErrorFingerprint.class);
         verify(fingerprints).save(captor.capture());
-        assertThat(captor.getValue().getServiceId()).isEqualTo("orphan");
+        assertThat(captor.getValue().serviceId()).isEqualTo("orphan");
     }
 
     private AnalyzeLogs analyze(String service) {

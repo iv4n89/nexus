@@ -1,8 +1,9 @@
 package com.ivan.nexus.application.alert;
 
+import com.ivan.nexus.domain.alert.Alert;
 import com.ivan.nexus.domain.alert.AlertStatus;
+import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertEventJpaRepository;
-import com.ivan.nexus.interfaces.alert.AlertResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,10 +21,10 @@ public class GetAlerts {
     }
 
     @Transactional(readOnly = true)
-    public List<AlertResponse> execute(Collection<AlertStatus> statuses) {
+    public List<Alert> execute(Collection<AlertStatus> statuses) {
         Collection<AlertStatus> filter = (statuses == null || statuses.isEmpty()) ? OPEN : statuses;
         return events.findByStatusInOrderByOpenedAtDesc(filter).stream()
-                .map(AlertResponse::from)
+                .map(AlertEventEntity::toDomain)
                 .toList();
     }
 }

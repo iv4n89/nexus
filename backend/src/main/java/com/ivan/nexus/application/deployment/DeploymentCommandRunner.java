@@ -12,8 +12,6 @@ import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectEntity;
-import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -32,11 +30,10 @@ import java.util.concurrent.Executor;
 final class DeploymentCommandRunner {
     static final Duration SCRIPT_TIMEOUT = Duration.ofMinutes(15);
     private static final Duration DEFAULT_HEALTH_TIMEOUT = Duration.ofSeconds(5);
-    private static final int SUMMARY_LIMIT = 8000;
     private static final List<DeploymentStatus> IN_PROGRESS =
             List.of(DeploymentStatus.PENDING, DeploymentStatus.RUNNING);
 
-    private final ManagedProjectJpaRepository projects;
+    private final ManagedProjectUpsert projectUpsert;
     private final DeploymentJpaRepository deployments;
     private final DeploymentStreamHub hub;
     private final ProcessExecutor processExecutor;
@@ -47,7 +44,7 @@ final class DeploymentCommandRunner {
     private final Executor sseExecutor;
 
     DeploymentCommandRunner(
-            ManagedProjectJpaRepository projects,
+            ManagedProjectUpsert projectUpsert,
             DeploymentJpaRepository deployments,
             DeploymentStreamHub hub,
             ProcessExecutor processExecutor,
@@ -56,7 +53,7 @@ final class DeploymentCommandRunner {
             RecordActivity recordActivity,
             UserJpaRepository users,
             Executor sseExecutor) {
-        this.projects = projects;
+        this.projectUpsert = projectUpsert;
         this.deployments = deployments;
         this.hub = hub;
         this.processExecutor = processExecutor;
@@ -80,7 +77,7 @@ final class DeploymentCommandRunner {
         }
 
         Path workingDirectory = Path.of(manifest.project().workingDirectory()).toAbsolutePath().normalize();
-        upsertProject(manifest, workingDirectory, manifestPath);
+        projectUpsert.upsertProject(manifest, workingDirectory, manifestPath);
 
         UUID id = UUID.randomUUID();
         Map<String, Object> metadata = new HashMap<>();
@@ -195,7 +192,7 @@ final class DeploymentCommandRunner {
         }
         entity.applyStatus(DeploymentTransitions.next(entity.getStatus(), status));
         entity.setFinishedAt(Instant.now());
-        entity.setOutputSummary(summarize(summaryLines));
+        entity.setOutputSummary(DeploymentSummary.summarize(summaryLines));
         deployments.save(entity);
         hub.complete(entity.getId());
         UUID userId = users.findByUsername(username).orElseThrow().getId();
@@ -218,33 +215,6 @@ final class DeploymentCommandRunner {
         metadata.put("deploymentId", entity.getId().toString());
         metadata.put("kind", kind);
         recordActivity.execute(type, entity.getProjectId(), null, message, metadata);
-    }
-
-    private void upsertProject(ProjectManifest manifest, Path workingDirectory, Path manifestPath) {
-        String id = manifest.project().id();
-        String name = blankToId(manifest.project().name(), id);
-        String description = manifest.project().description();
-        String directory = workingDirectory.toString();
-        String path = manifestPath.toAbsolutePath().normalize().toString();
-        ManagedProjectEntity existing = projects.findById(id).orElse(null);
-        if (existing == null) {
-            projects.save(new ManagedProjectEntity(id, name, description, directory, path));
-            return;
-        }
-        existing.applyManifest(name, description, directory, path);
-        projects.save(existing);
-    }
-
-    private static String blankToId(String name, String id) {
-        return name == null || name.isBlank() ? id : name;
-    }
-
-    private static String summarize(List<String> lines) {
-        String joined = String.join("\n", lines);
-        if (joined.length() <= SUMMARY_LIMIT) {
-            return joined;
-        }
-        return joined.substring(joined.length() - SUMMARY_LIMIT);
     }
 
     static Deployment toDomain(DeploymentEntity entity) {

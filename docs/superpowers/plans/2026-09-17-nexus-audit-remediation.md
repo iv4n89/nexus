@@ -229,12 +229,12 @@ Anti-patterns: do not add `attribution-reporting` to Permissions-Policy. Do not 
 
 ### Tasks
 
-- [ ] **B5.1** `ContainerRuntime` port; `RestartService` drops docker-java imports. Adapter in `infrastructure/docker`.
-- [ ] **B5.2** `ManifestValidator.validate(manifest, Path allowedRoot)` — no Spring. Factory in infrastructure reads `NexusProperties`.
-- [ ] **B5.3** Application ports: `SqlExecutor`, `MongoExecutor`, `FingerprintStore`. Use cases stop importing `*JpaRepository` and `JdbcQueryExecutor`.
-- [ ] **B5.4** `GetAlerts` / `GetActivityTimeline` return application/domain types; controllers map to DTOs. `ActivityHub` stops importing `interfaces.activity.ActivityResponse`.
-- [ ] **B5.5** `DeploymentController` history/get/SSE go through use cases, not JPA.
-- [ ] **B5.6** Split `EvaluateAlerts`, `DeploymentCommandRunner`, `JdbcQueryExecutor` along the SRP table in the audit canvas. Keep tests green with characterization tests first if missing.
+- [x] **B5.1** `ContainerRuntime` port; `RestartService` drops docker-java imports. Adapter in `infrastructure/docker`.
+- [x] **B5.2** `ManifestValidator.validate(manifest, Path allowedRoot)` — no Spring. Factory in infrastructure reads `NexusProperties`.
+- [x] **B5.3** Application ports: `SqlExecutor`, `MongoExecutor`, `FingerprintStore`. Use cases stop importing `*JpaRepository` and `JdbcQueryExecutor`.
+- [x] **B5.4** `GetAlerts` / `GetActivityTimeline` return application/domain types; controllers map to DTOs. `ActivityHub` stops importing `interfaces.activity.ActivityResponse`.
+- [x] **B5.5** `DeploymentController` history/get/SSE go through use cases, not JPA.
+- [x] **B5.6** Split `EvaluateAlerts`, `DeploymentCommandRunner`, `JdbcQueryExecutor` along the SRP table in the audit canvas. Keep tests green with characterization tests first if missing.
 
 ### Verification
 

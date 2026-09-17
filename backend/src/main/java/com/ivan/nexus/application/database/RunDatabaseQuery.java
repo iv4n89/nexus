@@ -12,8 +12,6 @@ import com.ivan.nexus.domain.database.SqlStatementClassifier;
 import com.ivan.nexus.domain.database.StatementClass;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
-import com.ivan.nexus.infrastructure.database.MongoQueryExecutor;
 import com.ivan.nexus.infrastructure.persistence.user.UserEntity;
 import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import org.springframework.stereotype.Service;
@@ -26,16 +24,16 @@ public class RunDatabaseQuery {
     private static final int QUERY_LIMIT = 500;
 
     private final DiscoverProjectDatabases discover;
-    private final JdbcQueryExecutor jdbc;
-    private final MongoQueryExecutor mongo;
+    private final SqlExecutor jdbc;
+    private final MongoExecutor mongo;
     private final RecordAudit recordAudit;
     private final UserJpaRepository users;
     private final ObjectMapper objectMapper;
 
     public RunDatabaseQuery(
             DiscoverProjectDatabases discover,
-            JdbcQueryExecutor jdbc,
-            MongoQueryExecutor mongo,
+            SqlExecutor jdbc,
+            MongoExecutor mongo,
             RecordAudit recordAudit,
             UserJpaRepository users,
             ObjectMapper objectMapper) {

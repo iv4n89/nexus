@@ -11,8 +11,6 @@ import com.ivan.nexus.domain.database.ResolvedTarget;
 import com.ivan.nexus.domain.database.StatementClass;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
-import com.ivan.nexus.infrastructure.database.MongoQueryExecutor;
 import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,9 +37,9 @@ class RunDatabaseQueryTest {
     @Mock
     DiscoverProjectDatabases discover;
     @Mock
-    JdbcQueryExecutor jdbc;
+    SqlExecutor jdbc;
     @Mock
-    MongoQueryExecutor mongo;
+    MongoExecutor mongo;
     @Mock
     RecordAudit recordAudit;
     @Mock

@@ -7,8 +7,6 @@ import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.log.ErrorFingerprint;
 import com.ivan.nexus.domain.log.ErrorNormalizer;
 import com.ivan.nexus.domain.project.ProjectGrouping;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintEntity;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,7 +28,7 @@ public class AnalyzeLogs {
 
     private final DiscoverProjects discoverProjects;
     private final LogProvider logProvider;
-    private final LogErrorFingerprintJpaRepository fingerprints;
+    private final FingerprintStore fingerprints;
     private final RecordActivity recordActivity;
     private final int logWindowSeconds;
     private final ConcurrentHashMap<String, Integer> watermarks = new ConcurrentHashMap<>();
@@ -38,7 +36,7 @@ public class AnalyzeLogs {
     public AnalyzeLogs(
             DiscoverProjects discoverProjects,
             LogProvider logProvider,
-            LogErrorFingerprintJpaRepository fingerprints,
+            FingerprintStore fingerprints,
             RecordActivity recordActivity,
             @Value("${nexus.alerts.log-window-seconds:120}") int logWindowSeconds) {
         this.discoverProjects = discoverProjects;
@@ -52,7 +50,7 @@ public class AnalyzeLogs {
     public void execute() {
         int nowEpoch = (int) Instant.now().getEpochSecond();
         Instant now = Instant.now();
-        Map<FingerprintKey, LogErrorFingerprintEntity> pending = new HashMap<>();
+        Map<FingerprintKey, StoredErrorFingerprint> pending = new HashMap<>();
         for (var entry : discoverProjects.groupByProject().entrySet()) {
             String projectId = entry.getKey();
             for (ContainerSnapshot container : entry.getValue()) {
@@ -84,13 +82,13 @@ public class AnalyzeLogs {
     }
 
     private void upsert(
-            Map<FingerprintKey, LogErrorFingerprintEntity> pending,
+            Map<FingerprintKey, StoredErrorFingerprint> pending,
             String projectId,
             String serviceId,
             ErrorFingerprint error,
             Instant now) {
         FingerprintKey key = new FingerprintKey(projectId, serviceId, error.fingerprint());
-        LogErrorFingerprintEntity entity = pending.get(key);
+        StoredErrorFingerprint entity = pending.get(key);
         boolean created = false;
         if (entity == null) {
             entity = fingerprints
@@ -98,7 +96,7 @@ public class AnalyzeLogs {
                     .orElse(null);
         }
         if (entity == null) {
-            entity = new LogErrorFingerprintEntity(
+            entity = new StoredErrorFingerprint(
                     UUID.randomUUID(),
                     projectId,
                     serviceId,
@@ -109,7 +107,7 @@ public class AnalyzeLogs {
                     error.sampleMessage());
             created = true;
         } else {
-            entity.recordHit(now);
+            entity = entity.recordHit(now);
         }
         pending.put(key, entity);
         fingerprints.save(entity);

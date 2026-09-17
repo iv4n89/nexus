@@ -10,13 +10,14 @@ import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
+import com.ivan.nexus.domain.metrics.ContainerMetrics;
 import com.ivan.nexus.domain.metrics.SystemMetrics;
 import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertEventJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
+import com.ivan.nexus.application.log.FingerprintStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,7 +46,7 @@ class EvaluateAlertsTest {
     @Mock
     GetSystemMetrics getSystemMetrics;
     @Mock
-    LogErrorFingerprintJpaRepository fingerprints;
+    FingerprintStore fingerprints;
     @Mock
     HealthChecker healthChecker;
     @Mock
@@ -63,16 +64,15 @@ class EvaluateAlertsTest {
         given(getSystemMetrics.execute()).willReturn(new SystemMetrics(0, 0, 1, 10, 100, 0, 0));
         given(fingerprints.findAll()).willReturn(List.of());
         given(rules.findByEnabledTrue()).willReturn(List.of(rule(AlertType.CONTAINER_STOPPED)));
+        DiscoverProjects discoverProjects = new DiscoverProjects(inventory(), "/tmp/nexus-no-manifests");
         evaluateAlerts = new EvaluateAlerts(
-                new DiscoverProjects(inventory(), "/tmp/nexus-no-manifests"),
-                statsProvider,
-                getSystemMetrics,
-                fingerprints,
-                healthChecker,
+                discoverProjects,
                 new YamlManifestLoader(),
                 rules,
                 new PersistAlertEvaluation(events, recordActivity),
-                recordActivity,
+                new AlertFactCollector(
+                        discoverProjects, statsProvider, getSystemMetrics, fingerprints, healthChecker),
+                new ContainerLifecycleNotifier(recordActivity),
                 "/tmp/nexus-no-manifests");
     }
 
@@ -156,6 +156,49 @@ class EvaluateAlertsTest {
                 eq(ActivityType.CONTAINER_STARTED), eq("lab"), eq("web"), eq("started"), any());
     }
 
+    @Test
+    void recordsRestartWhenRestartCountIncreases() {
+        inventory.add(snapshot("running", 0));
+        evaluateAlerts.execute();
+        inventory.clear();
+        inventory.add(snapshot("running", 2));
+        evaluateAlerts.execute();
+
+        verify(recordActivity).execute(
+                eq(ActivityType.CONTAINER_RESTARTED), eq("lab"), eq("web"), eq("restarted"), any());
+    }
+
+    @Test
+    void persistsHighMemoryWhenUsageExceedsDefaultThreshold() {
+        given(rules.findByEnabledTrue()).willReturn(List.of(rule(AlertType.HIGH_MEMORY)));
+        given(statsProvider.stats("web-id")).willReturn(new ContainerMetrics("web-id", 0, 95, 100, 0, 0));
+        given(events.findOpenByTypeAndProjectAndService(any(), any(), any())).willReturn(Optional.empty());
+        given(events.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        inventory.add(snapshot("running"));
+        evaluateAlerts.execute();
+
+        ArgumentCaptor<AlertEventEntity> captor = ArgumentCaptor.forClass(AlertEventEntity.class);
+        verify(events).save(captor.capture());
+        assertThat(captor.getValue().getRule().getType()).isEqualTo(AlertType.HIGH_MEMORY);
+        assertThat(captor.getValue().getStatus()).isEqualTo(AlertStatus.ACTIVE);
+    }
+
+    @Test
+    void persistsDiskAlertWhenUsageExceedsDefaultThreshold() {
+        given(rules.findByEnabledTrue()).willReturn(List.of(rule(AlertType.DISK)));
+        given(getSystemMetrics.execute()).willReturn(new SystemMetrics(0, 0, 1, 90, 100, 0, 0));
+        given(events.findOpenByTypeAndProjectAndService(any(), any(), any())).willReturn(Optional.empty());
+        given(events.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        evaluateAlerts.execute();
+
+        ArgumentCaptor<AlertEventEntity> captor = ArgumentCaptor.forClass(AlertEventEntity.class);
+        verify(events).save(captor.capture());
+        assertThat(captor.getValue().getRule().getType()).isEqualTo(AlertType.DISK);
+        assertThat(captor.getValue().getStatus()).isEqualTo(AlertStatus.ACTIVE);
+    }
+
     private static Optional<AlertEventEntity> openOfType(List<AlertEventEntity> saved, AlertType type) {
         return saved.stream()
                 .filter(event -> event.getStatus() == AlertStatus.ACTIVE
@@ -183,6 +226,10 @@ class EvaluateAlertsTest {
     }
 
     private static ContainerSnapshot snapshot(String state) {
+        return snapshot(state, 0);
+    }
+
+    private static ContainerSnapshot snapshot(String state, int restartCount) {
         return new ContainerSnapshot(
                 "web-id",
                 "lab-web-1",
@@ -193,7 +240,7 @@ class EvaluateAlertsTest {
                 Instant.parse("2026-01-01T00:00:00Z"),
                 Map.of("nexus.project", "lab", "nexus.service", "web"),
                 List.of(),
-                0,
+                restartCount,
                 Instant.parse("2026-01-01T00:00:01Z"));
     }
 }

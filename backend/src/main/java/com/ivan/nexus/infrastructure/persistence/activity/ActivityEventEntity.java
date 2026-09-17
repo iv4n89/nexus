@@ -1,5 +1,6 @@
 package com.ivan.nexus.infrastructure.persistence.activity;
 
+import com.ivan.nexus.domain.activity.Activity;
 import com.ivan.nexus.domain.activity.ActivityType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -89,5 +90,9 @@ public class ActivityEventEntity {
 
     public Map<String, Object> getMetadata() {
         return metadata;
+    }
+
+    public Activity toDomain() {
+        return new Activity(id, createdAt, type, projectId, serviceId, message, metadata);
     }
 }

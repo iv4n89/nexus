@@ -1,6 +1,7 @@
 package com.ivan.nexus.application.alert;
 
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.domain.alert.Alert;
 import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -65,10 +66,21 @@ class AcknowledgeAlertTest {
         given(users.findByUsername("admin")).willReturn(Optional.empty());
         given(events.save(event)).willReturn(event);
 
-        new AcknowledgeAlert(events, users, recordAudit).execute(id, "admin", "10.0.0.1");
+        Alert result = new AcknowledgeAlert(events, users, recordAudit).execute(id, "admin", "10.0.0.1");
 
         assertThat(event.getStatus()).isEqualTo(AlertStatus.ACKNOWLEDGED);
         assertThat(event.getAcknowledgedAt()).isNotNull();
+        assertThat(result).isEqualTo(new Alert(
+                id,
+                event.getRule().getId(),
+                null,
+                null,
+                AlertStatus.ACKNOWLEDGED,
+                "Host disk is 90%",
+                Instant.parse("2026-01-01T00:00:00Z"),
+                event.getAcknowledgedAt(),
+                null,
+                AlertType.DISK));
         verify(recordAudit).execute(
                 eq(null),
                 eq(AuditAction.ALERT_ACKNOWLEDGE),

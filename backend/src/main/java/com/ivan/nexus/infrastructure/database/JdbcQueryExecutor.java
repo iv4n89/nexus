@@ -1,5 +1,7 @@
 package com.ivan.nexus.infrastructure.database;
 
+import com.ivan.nexus.application.database.SqlExecutor;
+import com.ivan.nexus.application.database.SqlExecutor.SqlCatalog;
 import com.ivan.nexus.domain.database.CellPatchGrouper;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
@@ -22,33 +24,29 @@ import java.sql.SQLTimeoutException;
 import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 
 @Component
-public class JdbcQueryExecutor {
+public class JdbcQueryExecutor implements SqlExecutor {
     private static final Logger log = LoggerFactory.getLogger(JdbcQueryExecutor.class);
-    private static final int CONNECT_TIMEOUT_SECONDS = 5;
-    private static final int SOCKET_TIMEOUT_SECONDS = 15;
-    private static final int QUERY_TIMEOUT_SECONDS = 10;
     static final int MAX_CELL_CHARS = 8192;
+    private final JdbcCatalogLoader catalogLoader = new JdbcCatalogLoader(this);
 
+    @Override
     public QueryResult query(
             DatabaseEngine engine,
             ResolvedTarget target,
             String sql,
             StatementClass statementClass,
             int limit) {
-        Properties props = connectionProperties(engine, target);
-        String url = jdbcUrl(engine, target);
+        Properties props = JdbcConnectionSettings.connectionProperties(engine, target);
+        String url = JdbcConnectionSettings.jdbcUrl(engine, target);
         long start = System.nanoTime();
         try (Connection conn = DriverManager.getConnection(url, props);
              Statement stmt = conn.createStatement()) {
-            stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+            stmt.setQueryTimeout(JdbcConnectionSettings.QUERY_TIMEOUT_SECONDS);
             stmt.setMaxFieldSize(MAX_CELL_CHARS);
             if (returnsResultSet(sql, statementClass)) {
                 stmt.setMaxRows(limit + 1);
@@ -84,6 +82,7 @@ public class JdbcQueryExecutor {
         }
     }
 
+    @Override
     public QueryResult preview(DatabaseEngine engine, ResolvedTarget target, String schema, String table) {
         String sql = "SELECT * FROM "
                 + SqlIdentifierQuoter.quote(engine, schema)
@@ -126,6 +125,7 @@ public class JdbcQueryExecutor {
                 new CellPatchGrouper.SqlWriteBatch(List.of(), grouped, List.of()));
     }
 
+    @Override
     public QueryResult applyCells(
             DatabaseEngine engine,
             ResolvedTarget target,
@@ -136,8 +136,8 @@ public class JdbcQueryExecutor {
                 || (batch.deletes().isEmpty() && batch.updates().isEmpty() && batch.inserts().isEmpty())) {
             throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Patches are required");
         }
-        Properties props = connectionProperties(engine, target);
-        String url = jdbcUrl(engine, target);
+        Properties props = JdbcConnectionSettings.connectionProperties(engine, target);
+        String url = JdbcConnectionSettings.jdbcUrl(engine, target);
         long start = System.nanoTime();
         int written = batch.deletes().size() + batch.updates().size() + batch.inserts().size();
         try (Connection conn = DriverManager.getConnection(url, props)) {
@@ -146,7 +146,7 @@ public class JdbcQueryExecutor {
                 for (CellPatchGrouper.SqlDelete row : batch.deletes()) {
                     String sql = buildDeleteSql(engine, schema, table, row);
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                        stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                        stmt.setQueryTimeout(JdbcConnectionSettings.QUERY_TIMEOUT_SECONDS);
                         int index = 1;
                         for (Object value : row.primaryKey().values()) {
                             stmt.setObject(index++, value);
@@ -157,7 +157,7 @@ public class JdbcQueryExecutor {
                 for (CellPatchGrouper.GroupedSqlUpdate row : batch.updates()) {
                     String sql = buildUpdateSql(engine, schema, table, row);
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                        stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                        stmt.setQueryTimeout(JdbcConnectionSettings.QUERY_TIMEOUT_SECONDS);
                         int index = 1;
                         for (Object value : row.columns().values()) {
                             stmt.setObject(index++, value);
@@ -171,7 +171,7 @@ public class JdbcQueryExecutor {
                 for (CellPatchGrouper.SqlInsert row : batch.inserts()) {
                     String sql = buildInsertSql(engine, schema, table, row);
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                        stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                        stmt.setQueryTimeout(JdbcConnectionSettings.QUERY_TIMEOUT_SECONDS);
                         int index = 1;
                         for (Object value : row.values().values()) {
                             stmt.setObject(index++, value);
@@ -287,74 +287,9 @@ public class JdbcQueryExecutor {
         return "INSERT INTO " + tableRef + " (" + columns + ") VALUES (" + placeholders + ")";
     }
 
+    @Override
     public SqlCatalog metadata(DatabaseEngine engine, ResolvedTarget target) {
-        String excluded = engine == DatabaseEngine.MYSQL
-                ? "'mysql','sys','performance_schema','information_schema'"
-                : "'pg_catalog','information_schema'";
-        String tablesSql = """
-                SELECT table_schema, table_name, table_type
-                FROM information_schema.tables
-                WHERE table_schema NOT IN (%s)
-                ORDER BY 1, 2
-                """.formatted(excluded);
-        QueryResult tables = query(engine, target, tablesSql, StatementClass.READ, 500);
-        Map<String, Set<String>> primaryKeys = loadPrimaryKeys(engine, target, excluded);
-        Map<String, List<SqlColumn>> columns = loadColumns(engine, target, excluded);
-        List<SqlTable> mapped = new ArrayList<>();
-        for (List<Object> row : tables.rows()) {
-            String schema = String.valueOf(row.get(0));
-            String name = String.valueOf(row.get(1));
-            String typeRaw = String.valueOf(row.get(2));
-            String type = typeRaw != null && typeRaw.toUpperCase().contains("VIEW") ? "view" : "table";
-            String key = schema + "." + name;
-            mapped.add(new SqlTable(
-                    schema,
-                    name,
-                    type,
-                    List.copyOf(primaryKeys.getOrDefault(key, Set.of())),
-                    columns.getOrDefault(key, List.of())));
-        }
-        return new SqlCatalog(mapped);
-    }
-
-    private Map<String, Set<String>> loadPrimaryKeys(DatabaseEngine engine, ResolvedTarget target, String excluded) {
-        String sql = """
-                SELECT kcu.table_schema, kcu.table_name, kcu.column_name
-                FROM information_schema.table_constraints tc
-                JOIN information_schema.key_column_usage kcu
-                  ON tc.constraint_name = kcu.constraint_name
-                 AND tc.table_schema = kcu.table_schema
-                 AND tc.table_name = kcu.table_name
-                WHERE tc.constraint_type = 'PRIMARY KEY'
-                  AND kcu.table_schema NOT IN (%s)
-                ORDER BY kcu.ordinal_position
-                """.formatted(excluded);
-        QueryResult result = query(engine, target, sql, StatementClass.READ, 500);
-        Map<String, Set<String>> keys = new LinkedHashMap<>();
-        for (List<Object> row : result.rows()) {
-            String key = row.get(0) + "." + row.get(1);
-            keys.computeIfAbsent(key, ignored -> new LinkedHashSet<>()).add(String.valueOf(row.get(2)));
-        }
-        return keys;
-    }
-
-    private Map<String, List<SqlColumn>> loadColumns(DatabaseEngine engine, ResolvedTarget target, String excluded) {
-        String sql = """
-                SELECT table_schema, table_name, column_name, data_type, is_nullable
-                FROM information_schema.columns
-                WHERE table_schema NOT IN (%s)
-                ORDER BY ordinal_position
-                """.formatted(excluded);
-        QueryResult result = query(engine, target, sql, StatementClass.READ, 2000);
-        Map<String, List<SqlColumn>> columns = new LinkedHashMap<>();
-        for (List<Object> row : result.rows()) {
-            String key = row.get(0) + "." + row.get(1);
-            columns.computeIfAbsent(key, ignored -> new ArrayList<>()).add(new SqlColumn(
-                    String.valueOf(row.get(2)),
-                    String.valueOf(row.get(3)),
-                    "YES".equalsIgnoreCase(String.valueOf(row.get(4)))));
-        }
-        return columns;
+        return catalogLoader.metadata(engine, target);
     }
 
     private static QueryResult readResult(ResultSet rs, int limit, long durationMs) throws SQLException {
@@ -427,36 +362,6 @@ public class JdbcQueryExecutor {
         return value.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
-    static Properties connectionProperties(DatabaseEngine engine, ResolvedTarget target) {
-        Properties props = new Properties();
-        if (target.username() != null) {
-            props.setProperty("user", safeName(target.username()));
-        }
-        if (target.password() != null) {
-            props.setProperty("password", target.password());
-        }
-        if (engine == DatabaseEngine.MYSQL) {
-            props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SECONDS * 1000));
-            props.setProperty("socketTimeout", String.valueOf(SOCKET_TIMEOUT_SECONDS * 1000));
-        } else {
-            props.setProperty("connectTimeout", String.valueOf(CONNECT_TIMEOUT_SECONDS));
-            props.setProperty("socketTimeout", String.valueOf(SOCKET_TIMEOUT_SECONDS));
-        }
-        if (engine == DatabaseEngine.POSTGRES) {
-            props.setProperty("options", "-c statement_timeout=10000");
-        }
-        return props;
-    }
-
-    static String jdbcUrl(DatabaseEngine engine, ResolvedTarget target) {
-        String database = safeName(target.defaultDatabase());
-        if (engine == DatabaseEngine.POSTGRES) {
-            return "jdbc:postgresql://%s:%d/%s".formatted(target.host(), target.port(), database);
-        }
-        return "jdbc:mysql://%s:%d/%s?useSSL=false&allowPublicKeyRetrieval=true".formatted(
-                target.host(), target.port(), database);
-    }
-
     static String safeName(String value) {
         if (value == null || !value.matches("[A-Za-z0-9_.]+") || value.contains("..")
                 || value.startsWith(".") || value.endsWith(".")) {
@@ -473,10 +378,4 @@ public class JdbcQueryExecutor {
     private static long elapsedMs(long startNanos) {
         return Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
     }
-
-    public record SqlCatalog(List<SqlTable> tables) {}
-
-    public record SqlTable(String schema, String name, String type, List<String> primaryKey, List<SqlColumn> columns) {}
-
-    public record SqlColumn(String name, String dataType, boolean nullable) {}
 }

@@ -1,8 +1,8 @@
 package com.ivan.nexus.interfaces.alert;
 
+import com.ivan.nexus.domain.alert.Alert;
 import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -19,17 +19,17 @@ public record AlertResponse(
         Instant resolvedAt,
         AlertType type) {
 
-    public static AlertResponse from(AlertEventEntity entity) {
+    public static AlertResponse from(Alert alert) {
         return new AlertResponse(
-                entity.getId(),
-                entity.getRule() == null ? null : entity.getRule().getId(),
-                entity.getProjectId(),
-                entity.getServiceId(),
-                entity.getStatus(),
-                entity.getMessage(),
-                entity.getOpenedAt(),
-                entity.getAcknowledgedAt(),
-                entity.getResolvedAt(),
-                entity.getRule() == null ? null : entity.getRule().getType());
+                alert.id(),
+                alert.ruleId(),
+                alert.projectId(),
+                alert.serviceId(),
+                alert.status(),
+                alert.message(),
+                alert.openedAt(),
+                alert.acknowledgedAt(),
+                alert.resolvedAt(),
+                alert.type());
     }
 }

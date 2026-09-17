@@ -37,6 +37,6 @@ public class RecordActivity {
                 message,
                 payload);
         events.save(entity);
-        hub.publish(entity);
+        hub.publish(entity.toDomain());
     }
 }

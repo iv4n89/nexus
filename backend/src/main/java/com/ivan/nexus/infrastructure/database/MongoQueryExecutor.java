@@ -1,5 +1,8 @@
 package com.ivan.nexus.infrastructure.database;
 
+import com.ivan.nexus.application.database.MongoExecutor;
+import com.ivan.nexus.application.database.MongoExecutor.MongoCatalog;
+import com.ivan.nexus.application.database.MongoExecutor.MongoDb;
 import com.ivan.nexus.domain.database.CellPatchGrouper;
 import com.ivan.nexus.domain.database.MongoStatement;
 import com.ivan.nexus.domain.database.QueryResult;
@@ -34,9 +37,10 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 @Component
-public class MongoQueryExecutor {
+public class MongoQueryExecutor implements MongoExecutor {
     private static final Set<String> SYSTEM_DBS = Set.of("admin", "local", "config");
 
+    @Override
     public QueryResult execute(ResolvedTarget target, MongoStatement stmt) {
         long start = System.nanoTime();
         try (MongoClient client = MongoClients.create(uri(target))) {
@@ -74,6 +78,7 @@ public class MongoQueryExecutor {
         }
     }
 
+    @Override
     public QueryResult preview(ResolvedTarget target, String database, String collection) {
         MongoStatement stmt = new MongoStatement(
                 "find",
@@ -99,6 +104,7 @@ public class MongoQueryExecutor {
                 CellPatchGrouper.groupMongo(List.of(new CellPatchGrouper.MongoPatch(id, field, value))));
     }
 
+    @Override
     public QueryResult updateDocuments(
             ResolvedTarget target,
             String database,
@@ -204,6 +210,7 @@ public class MongoQueryExecutor {
         return false;
     }
 
+    @Override
     public MongoCatalog metadata(ResolvedTarget target) {
         try (MongoClient client = MongoClients.create(uri(target))) {
             List<MongoDb> databases = new ArrayList<>();
@@ -324,8 +331,4 @@ public class MongoQueryExecutor {
     private static long elapsedMs(long startNanos) {
         return Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
     }
-
-    public record MongoCatalog(List<MongoDb> databases) {}
-
-    public record MongoDb(String name, List<String> collections) {}
 }

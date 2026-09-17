@@ -2,6 +2,7 @@ package com.ivan.nexus.interfaces.alert;
 
 import com.ivan.nexus.application.alert.AcknowledgeAlert;
 import com.ivan.nexus.application.alert.GetAlerts;
+import com.ivan.nexus.domain.alert.Alert;
 import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.shared.DomainException;
@@ -47,7 +48,7 @@ class AlertControllerTest {
     @WithMockUser(roles = "VIEWER")
     void viewerListsOpenAlertsByDefault() throws Exception {
         UUID id = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-        given(getAlerts.execute(null)).willReturn(List.of(response(id, AlertStatus.ACTIVE)));
+        given(getAlerts.execute(null)).willReturn(List.of(alert(id, AlertStatus.ACTIVE)));
 
         mockMvc.perform(get("/api/alerts"))
                 .andExpect(status().isOk())
@@ -78,7 +79,7 @@ class AlertControllerTest {
     void adminAcknowledgeSetsAcknowledged() throws Exception {
         UUID id = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
         given(acknowledgeAlert.execute(eq(id), eq("admin"), any()))
-                .willReturn(response(id, AlertStatus.ACKNOWLEDGED));
+                .willReturn(alert(id, AlertStatus.ACKNOWLEDGED));
 
         mockMvc.perform(post("/api/alerts/{id}/acknowledge", id).with(csrf()))
                 .andExpect(status().isOk())
@@ -108,8 +109,8 @@ class AlertControllerTest {
                 .andExpect(jsonPath("$.error.code").value("ALERT_NOT_FOUND"));
     }
 
-    private static AlertResponse response(UUID id, AlertStatus status) {
-        return new AlertResponse(
+    private static Alert alert(UUID id, AlertStatus status) {
+        return new Alert(
                 id,
                 UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
                 "lab",

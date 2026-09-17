@@ -1,6 +1,6 @@
 package com.ivan.nexus.interfaces.database;
 
-import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
+import com.ivan.nexus.application.database.SqlExecutor;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -12,14 +12,14 @@ class DatabaseDtosTest {
 
     @Test
     void fromSqlIncludesCatalogColumns() {
-        var catalog = new JdbcQueryExecutor.SqlCatalog(List.of(
-                new JdbcQueryExecutor.SqlTable(
+        var catalog = new SqlExecutor.SqlCatalog(List.of(
+                new SqlExecutor.SqlTable(
                         "public",
                         "jobs",
                         "table",
                         List.of("id"),
-                        List.of(new JdbcQueryExecutor.SqlColumn("id", "uuid", false),
-                                new JdbcQueryExecutor.SqlColumn("name", "text", true)))));
+                        List.of(new SqlExecutor.SqlColumn("id", "uuid", false),
+                                new SqlExecutor.SqlColumn("name", "text", true)))));
 
         DatabaseDtos.MetadataResponse response = DatabaseDtos.fromSql(
                 com.ivan.nexus.domain.database.DatabaseEngine.POSTGRES, catalog);
