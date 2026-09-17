@@ -21,13 +21,7 @@ public class JpaManagedProjectStore implements ManagedProjectStore {
         String description = manifest.project().description();
         String directory = workingDirectory.toString();
         String path = manifestPath.toString();
-        ManagedProjectEntity entity = repository.findById(id).orElse(null);
-        if (entity == null) {
-            entity = new ManagedProjectEntity(id, name, description, directory, path);
-        } else {
-            entity.applyManifest(name, description, directory, path);
-        }
-        repository.save(entity);
+        repository.upsertProject(id, name, description, directory, path);
     }
 
     static String blankToId(String name, String id) {

@@ -1,7 +1,9 @@
 package com.ivan.nexus.infrastructure.persistence.deployment;
 
 import com.ivan.nexus.application.deployment.DeploymentStore;
+import com.ivan.nexus.application.deployment.ManagedProjectStore;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
+import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectEntity;
@@ -15,8 +17,14 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,6 +45,9 @@ class DeploymentPersistenceIT {
 
     @Autowired
     DeploymentStore deploymentStore;
+
+    @Autowired
+    ManagedProjectStore managedProjectStore;
 
     @Autowired
     DeploymentEventJpaRepository events;
@@ -132,6 +143,79 @@ class DeploymentPersistenceIT {
                 .isEqualTo(NexusErrorCode.DEPLOYMENT_IN_PROGRESS);
     }
 
+    @Test
+    void managedProjectStoreInsertsAndUpdatesAllFieldsWithoutResettingCreatedAt() throws Exception {
+        String projectId = "managed-" + UUID.randomUUID();
+        managedProjectStore.upsert(
+                manifest(projectId, "  ", "first"),
+                Path.of("/srv/first"),
+                Path.of("/srv/first/nexus.yml"));
+        ManagedProjectEntity created = projects.findById(projectId).orElseThrow();
+        Instant createdAt = created.getCreatedAt();
+        Instant firstUpdatedAt = created.getUpdatedAt();
+        assertThat(created.getName()).isEqualTo(projectId);
+        assertThat(created.getDescription()).isEqualTo("first");
+        assertThat(created.getWorkingDirectory()).isEqualTo("/srv/first");
+        assertThat(created.getManifestPath()).isEqualTo("/srv/first/nexus.yml");
+        Thread.sleep(20);
+
+        managedProjectStore.upsert(
+                manifest(projectId, "Renamed", "second"),
+                Path.of("/srv/second"),
+                Path.of("/srv/second/custom.yml"));
+
+        ManagedProjectEntity updated = projects.findById(projectId).orElseThrow();
+        assertThat(updated.getName()).isEqualTo("Renamed");
+        assertThat(updated.getDescription()).isEqualTo("second");
+        assertThat(updated.getWorkingDirectory()).isEqualTo("/srv/second");
+        assertThat(updated.getManifestPath()).isEqualTo("/srv/second/custom.yml");
+        assertThat(updated.getCreatedAt()).isEqualTo(createdAt);
+        assertThat(updated.getUpdatedAt()).isAfter(firstUpdatedAt);
+    }
+
+    @Test
+    void concurrentFirstManagedProjectUpsertsCreateOneCompleteRow() throws Exception {
+        String projectId = "concurrent-" + UUID.randomUUID();
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                managedProjectStore.upsert(
+                        manifest(projectId, "First", "first description"),
+                        Path.of("/srv/first"),
+                        Path.of("/srv/first/nexus.yml"));
+                return null;
+            });
+            var second = executor.submit(() -> {
+                ready.countDown();
+                start.await();
+                managedProjectStore.upsert(
+                        manifest(projectId, "Second", "second description"),
+                        Path.of("/srv/second"),
+                        Path.of("/srv/second/nexus.yml"));
+                return null;
+            });
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            first.get(10, TimeUnit.SECONDS);
+            second.get(10, TimeUnit.SECONDS);
+        }
+
+        List<ManagedProjectEntity> rows = projects.findAllById(List.of(projectId));
+        assertThat(rows).hasSize(1);
+        ManagedProjectEntity row = rows.getFirst();
+        Map<String, List<String>> expectedByName = Map.of(
+                "First", List.of("first description", "/srv/first", "/srv/first/nexus.yml"),
+                "Second", List.of("second description", "/srv/second", "/srv/second/nexus.yml"));
+        assertThat(expectedByName).containsKey(row.getName());
+        assertThat(List.of(row.getDescription(), row.getWorkingDirectory(), row.getManifestPath()))
+                .isEqualTo(expectedByName.get(row.getName()));
+        assertThat(row.getCreatedAt()).isNotNull();
+        assertThat(row.getUpdatedAt()).isNotNull();
+    }
+
     private static DeploymentEntity runningDeployment(String projectId, String triggeredBy) {
         return new DeploymentEntity(
                 UUID.randomUUID(),
@@ -141,6 +225,19 @@ class DeploymentPersistenceIT {
                 null,
                 triggeredBy,
                 null,
+                null,
+                null,
+                null);
+    }
+
+    private static ProjectManifest manifest(
+            String projectId,
+            String name,
+            String description) {
+        return new ProjectManifest(
+                new ProjectManifest.ProjectBlock(projectId, name, description, "/ignored"),
+                List.of(),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
                 null,
                 null,
                 null);
