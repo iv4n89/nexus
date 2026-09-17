@@ -5,21 +5,23 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 class HexagonalArchitectureTest {
+    private static final String MONGO_STATEMENT_PARSER =
+            "com.ivan.nexus.application.database.MongoStatementParser";
+
+    // Add application.database.. after its remaining adapter dependencies are migrated.
     private static final String[] CLEAN_APPLICATION_PACKAGES = {
             "com.ivan.nexus.application.log..",
             "com.ivan.nexus.application.metrics..",
             "com.ivan.nexus.application.project.."
     };
 
-    private static final String[] DOMAIN_FORBIDDEN_DEPENDENCIES = {
-            "org.springframework..",
-            "com.fasterxml.jackson..",
-            "com.ivan.nexus.application..",
-            "com.ivan.nexus.infrastructure..",
-            "com.ivan.nexus.interfaces.."
+    private static final String[] DOMAIN_ALLOWED_DEPENDENCIES = {
+            "com.ivan.nexus.domain..",
+            "java.."
     };
 
     private static final String[] APPLICATION_FORBIDDEN_DEPENDENCIES = {
@@ -40,10 +42,10 @@ class HexagonalArchitectureTest {
                     .importPackages("com.ivan.nexus");
 
     @Test
-    void domainMustNotDependOnFrameworkOrOuterLayers() {
-        noClasses()
+    void domainMayDependOnlyOnDomainAndJdkClasses() {
+        classes()
                 .that().resideInAPackage("com.ivan.nexus.domain..")
-                .should().dependOnClassesThat().resideInAnyPackage(DOMAIN_FORBIDDEN_DEPENDENCIES)
+                .should().onlyDependOnClassesThat().resideInAnyPackage(DOMAIN_ALLOWED_DEPENDENCIES)
                 .check(NEXUS_CLASSES);
     }
 
@@ -51,6 +53,14 @@ class HexagonalArchitectureTest {
     void cleanApplicationPackagesMustNotDependOnAdaptersOrPersistenceFrameworks() {
         noClasses()
                 .that().resideInAnyPackage(CLEAN_APPLICATION_PACKAGES)
+                .should().dependOnClassesThat().resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
+                .check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void mongoStatementParserMustRemainAFrameworkIndependentPort() {
+        noClasses()
+                .that().haveFullyQualifiedName(MONGO_STATEMENT_PARSER)
                 .should().dependOnClassesThat().resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
                 .check(NEXUS_CLASSES);
     }

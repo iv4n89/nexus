@@ -3,13 +3,13 @@ package com.ivan.nexus.infrastructure.database;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivan.nexus.application.database.MongoStatementParser;
-import com.ivan.nexus.domain.database.MongoStatement;
-import com.ivan.nexus.domain.database.StatementClass;
+import com.ivan.nexus.domain.database.ParsedMongoStatement;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.springframework.stereotype.Component;
 
-import java.util.Locale;
+import java.util.ArrayList;
+import java.util.List;
 
 @Component
 public class JacksonMongoStatementParser implements MongoStatementParser {
@@ -20,7 +20,7 @@ public class JacksonMongoStatementParser implements MongoStatementParser {
     }
 
     @Override
-    public MongoStatement parse(String json) {
+    public ParsedMongoStatement parse(String json) {
         JsonNode root;
         try {
             root = objectMapper.readTree(json);
@@ -36,7 +36,6 @@ public class JacksonMongoStatementParser implements MongoStatementParser {
         if (op == null || database == null || collection == null) {
             throw notAllowed();
         }
-        op = op.toLowerCase(Locale.ROOT);
         JsonNode filterNode = root.get("filter");
         boolean emptyFilter = filterNode == null
                 || filterNode.isNull()
@@ -46,47 +45,10 @@ public class JacksonMongoStatementParser implements MongoStatementParser {
         String pipelineJson = jsonOrNull(root.get("pipeline"));
         String documentJson = jsonOrNull(root.get("document"));
         String updateJson = jsonOrNull(root.get("update"));
-        int limit = root.path("limit").isNumber() ? root.get("limit").asInt() : 100;
-        if (limit < 1) {
-            limit = 100;
-        }
-        if (limit > 500) {
-            limit = 500;
-        }
+        Integer requestedLimit = root.path("limit").isNumber() ? root.get("limit").asInt() : null;
         boolean multi = root.path("multi").asBoolean(false);
 
-        StatementClass statementClass;
-        boolean requiresConfirmation = false;
-        switch (op) {
-            case "find" -> statementClass = StatementClass.READ;
-            case "aggregate" -> {
-                if (writesDocuments(root.get("pipeline"))) {
-                    throw notAllowed();
-                }
-                statementClass = StatementClass.READ;
-            }
-            case "insert" -> statementClass = StatementClass.WRITE;
-            case "update" -> {
-                if (emptyFilter) {
-                    statementClass = StatementClass.DESTRUCTIVE;
-                    requiresConfirmation = true;
-                } else {
-                    statementClass = StatementClass.WRITE;
-                }
-            }
-            case "delete" -> {
-                if (emptyFilter) {
-                    statementClass = StatementClass.DESTRUCTIVE;
-                    requiresConfirmation = true;
-                } else {
-                    statementClass = StatementClass.WRITE;
-                    requiresConfirmation = multi;
-                }
-            }
-            default -> throw notAllowed();
-        }
-
-        return new MongoStatement(
+        return new ParsedMongoStatement(
                 op,
                 database,
                 collection,
@@ -95,10 +57,10 @@ public class JacksonMongoStatementParser implements MongoStatementParser {
                 pipelineJson,
                 documentJson,
                 updateJson,
-                limit,
+                requestedLimit,
                 multi,
-                statementClass,
-                requiresConfirmation);
+                emptyFilter,
+                pipelineStageOperators(root.get("pipeline")));
     }
 
     private static String text(JsonNode root, String field) {
@@ -110,9 +72,10 @@ public class JacksonMongoStatementParser implements MongoStatementParser {
         return value.isBlank() ? null : value;
     }
 
-    private static boolean writesDocuments(JsonNode pipeline) {
+    private static List<String> pipelineStageOperators(JsonNode pipeline) {
+        List<String> operators = new ArrayList<>();
         if (pipeline == null || !pipeline.isArray()) {
-            return false;
+            return operators;
         }
         for (JsonNode stage : pipeline) {
             if (stage == null || !stage.isObject()) {
@@ -120,13 +83,10 @@ public class JacksonMongoStatementParser implements MongoStatementParser {
             }
             var names = stage.fieldNames();
             while (names.hasNext()) {
-                String key = names.next();
-                if ("$out".equalsIgnoreCase(key) || "$merge".equalsIgnoreCase(key)) {
-                    return true;
-                }
+                operators.add(names.next());
             }
         }
-        return false;
+        return operators;
     }
 
     private static String jsonOrNull(JsonNode node) {

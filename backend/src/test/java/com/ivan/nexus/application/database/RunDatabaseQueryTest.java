@@ -6,6 +6,7 @@ import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.DatabaseInstance;
 import com.ivan.nexus.domain.database.DatabaseStatus;
 import com.ivan.nexus.domain.database.MongoStatement;
+import com.ivan.nexus.domain.database.ParsedMongoStatement;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
 import com.ivan.nexus.domain.database.StatementClass;
@@ -146,12 +147,15 @@ class RunDatabaseQueryTest {
                 DatabaseEngine.MONGO,
                 DatabaseStatus.READY,
                 "lab");
-        MongoStatement parsed = new MongoStatement(
+        ParsedMongoStatement parsed = new ParsedMongoStatement(
+                "FiNd", "lab", "users", "{}", null, null, null, null,
+                null, false, true, List.of());
+        MongoStatement classified = new MongoStatement(
                 "find", "lab", "users", "{}", null, null, null, null,
                 100, false, StatementClass.READ, false);
         given(discover.resolve("lab", "lab:bbbbbbbbbbbb")).willReturn(new InstanceResolution(mongoInstance, target));
         given(mongoStatementParser.parse(statement)).willReturn(parsed);
-        given(mongo.execute(target, parsed))
+        given(mongo.execute(target, classified))
                 .willReturn(new QueryResult(List.of("name"), List.of(List.of("Ada")), false, 2, 1));
         given(users.findByUsername("admin")).willReturn(Optional.empty());
 
@@ -160,6 +164,6 @@ class RunDatabaseQueryTest {
 
         assertEquals(1, result.rowCount());
         verify(mongoStatementParser).parse(statement);
-        verify(mongo).execute(target, parsed);
+        verify(mongo).execute(target, classified);
     }
 }

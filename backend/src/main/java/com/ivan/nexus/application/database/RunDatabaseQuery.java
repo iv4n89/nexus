@@ -5,6 +5,7 @@ import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.database.ControlPlaneDatabase;
 import com.ivan.nexus.domain.database.DatabaseStatus;
 import com.ivan.nexus.domain.database.MongoStatement;
+import com.ivan.nexus.domain.database.MongoStatementClassifier;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.SqlStatementClassifier;
 import com.ivan.nexus.domain.database.StatementClass;
@@ -60,7 +61,7 @@ public class RunDatabaseQuery {
         boolean requiresConfirmation;
         MongoStatement mongoStatement = null;
         if (resolution.instance().engine() == com.ivan.nexus.domain.database.DatabaseEngine.MONGO) {
-            mongoStatement = mongoStatementParser.parse(statement);
+            mongoStatement = MongoStatementClassifier.classify(mongoStatementParser.parse(statement));
             statementClass = mongoStatement.statementClass();
             requiresConfirmation = mongoStatement.requiresConfirmation();
         } else {
