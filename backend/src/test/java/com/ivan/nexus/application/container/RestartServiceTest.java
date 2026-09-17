@@ -1,8 +1,5 @@
 package com.ivan.nexus.application.container;
 
-import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.command.RestartContainerCmd;
-import com.github.dockerjava.api.exception.NotFoundException;
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -28,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,15 +34,13 @@ import static org.mockito.Mockito.when;
 class RestartServiceTest {
 
     @Mock
-    DockerClient dockerClient;
+    ContainerRuntime runtime;
     @Mock
     ContainerInventory inventory;
     @Mock
     RecordAudit recordAudit;
     @Mock
     UserJpaRepository users;
-    @Mock
-    RestartContainerCmd restartCmd;
     @Mock
     UserEntity admin;
 
@@ -53,7 +49,7 @@ class RestartServiceTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new RestartService(dockerClient, inventory, recordAudit, users);
+        useCase = new RestartService(runtime, inventory, recordAudit, users);
     }
 
     @Test
@@ -65,16 +61,15 @@ class RestartServiceTest {
                 .satisfies(ex -> assertThat(((DomainException) ex).getCode())
                         .isEqualTo(NexusErrorCode.CONTAINER_NOT_FOUND));
 
-        verify(dockerClient, never()).restartContainerCmd(any());
+        verify(runtime, never()).restart(any());
         verify(recordAudit, never()).execute(any(), any(), any(), any(), any(), any());
     }
 
     @Test
-    void dockerNotFoundThrowsContainerNotFound() {
+    void runtimeMissingThrowsContainerNotFound() {
         when(inventory.findById("abc123")).thenReturn(Optional.of(snapshot()));
-        when(dockerClient.restartContainerCmd("abc123")).thenReturn(restartCmd);
-        when(restartCmd.exec
-                ()).thenThrow(new NotFoundException("no such container"));
+        doThrow(new DomainException(NexusErrorCode.CONTAINER_NOT_FOUND, "Container not found"))
+                .when(runtime).restart("abc123");
 
         assertThatThrownBy(() -> useCase.execute("abc123", "admin"))
                 .isInstanceOf(DomainException.class)
@@ -87,15 +82,12 @@ class RestartServiceTest {
     @Test
     void restartsAndAuditsServiceRestartFromLabels() {
         when(inventory.findById("abc123")).thenReturn(Optional.of(snapshot()));
-        when(dockerClient.restartContainerCmd("abc123")).thenReturn(restartCmd);
         when(admin.getId()).thenReturn(adminId);
         when(users.findByUsername("admin")).thenReturn(Optional.of(admin));
 
         useCase.execute("abc123", "admin");
 
-        verify(dockerClient).restartContainerCmd("abc123");
-        verify(restartCmd).exec
-                ();
+        verify(runtime).restart("abc123");
         verify(recordAudit).execute(
                 eq(adminId),
                 eq(AuditAction.SERVICE_RESTART),
