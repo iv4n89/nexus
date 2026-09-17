@@ -1,7 +1,5 @@
 package com.ivan.nexus.domain.database;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 
@@ -10,52 +8,23 @@ import java.util.Locale;
 public final class MongoStatementClassifier {
     private MongoStatementClassifier() {}
 
-    public static MongoStatement parse(ObjectMapper mapper, String json) {
-        JsonNode root;
-        try {
-            root = mapper.readTree(json);
-        } catch (Exception ex) {
-            throw notAllowed();
-        }
-        if (root == null || !root.isObject()) {
-            throw notAllowed();
-        }
-        String op = text(root, "op");
-        String database = text(root, "database");
-        String collection = text(root, "collection");
-        if (op == null || database == null || collection == null) {
-            throw notAllowed();
-        }
-        op = op.toLowerCase(Locale.ROOT);
-        JsonNode filterNode = root.get("filter");
-        boolean emptyFilter = filterNode == null || filterNode.isNull() || (filterNode.isObject() && filterNode.isEmpty());
-        String filterJson = emptyFilter ? "{}" : filterNode.toString();
-        String projectionJson = jsonOrNull(root.get("projection"));
-        String pipelineJson = jsonOrNull(root.get("pipeline"));
-        String documentJson = jsonOrNull(root.get("document"));
-        String updateJson = jsonOrNull(root.get("update"));
-        int limit = root.path("limit").isNumber() ? root.get("limit").asInt() : 100;
-        if (limit < 1) {
-            limit = 100;
-        }
-        if (limit > 500) {
-            limit = 500;
-        }
-        boolean multi = root.path("multi").asBoolean(false);
-
+    public static MongoStatement classify(ParsedMongoStatement input) {
+        String op = input.op().toLowerCase(Locale.ROOT);
+        int limit = normalizeLimit(input.requestedLimit());
         StatementClass statementClass;
         boolean requiresConfirmation = false;
+
         switch (op) {
             case "find" -> statementClass = StatementClass.READ;
             case "aggregate" -> {
-                if (writesDocuments(root.get("pipeline"))) {
+                if (writesDocuments(input)) {
                     throw notAllowed();
                 }
                 statementClass = StatementClass.READ;
             }
             case "insert" -> statementClass = StatementClass.WRITE;
             case "update" -> {
-                if (emptyFilter) {
+                if (input.emptyFilter()) {
                     statementClass = StatementClass.DESTRUCTIVE;
                     requiresConfirmation = true;
                 } else {
@@ -63,12 +32,12 @@ public final class MongoStatementClassifier {
                 }
             }
             case "delete" -> {
-                if (emptyFilter) {
+                if (input.emptyFilter()) {
                     statementClass = StatementClass.DESTRUCTIVE;
                     requiresConfirmation = true;
                 } else {
                     statementClass = StatementClass.WRITE;
-                    requiresConfirmation = multi;
+                    requiresConfirmation = input.multi();
                 }
             }
             default -> throw notAllowed();
@@ -76,52 +45,33 @@ public final class MongoStatementClassifier {
 
         return new MongoStatement(
                 op,
-                database,
-                collection,
-                filterJson,
-                projectionJson,
-                pipelineJson,
-                documentJson,
-                updateJson,
+                input.database(),
+                input.collection(),
+                input.filterJson(),
+                input.projectionJson(),
+                input.pipelineJson(),
+                input.documentJson(),
+                input.updateJson(),
                 limit,
-                multi,
+                input.multi(),
                 statementClass,
                 requiresConfirmation);
     }
 
-    private static String text(JsonNode root, String field) {
-        JsonNode node = root.get(field);
-        if (node == null || node.isNull() || !node.isTextual()) {
-            return null;
+    private static int normalizeLimit(Integer requestedLimit) {
+        if (requestedLimit == null || requestedLimit < 1) {
+            return 100;
         }
-        String value = node.asText();
-        return value.isBlank() ? null : value;
+        return Math.min(requestedLimit, 500);
     }
 
-    private static boolean writesDocuments(JsonNode pipeline) {
-        if (pipeline == null || !pipeline.isArray()) {
-            return false;
-        }
-        for (JsonNode stage : pipeline) {
-            if (stage == null || !stage.isObject()) {
-                continue;
-            }
-            var names = stage.fieldNames();
-            while (names.hasNext()) {
-                String key = names.next();
-                if ("$out".equalsIgnoreCase(key) || "$merge".equalsIgnoreCase(key)) {
-                    return true;
-                }
+    private static boolean writesDocuments(ParsedMongoStatement input) {
+        for (String operator : input.pipelineStageOperators()) {
+            if ("$out".equalsIgnoreCase(operator) || "$merge".equalsIgnoreCase(operator)) {
+                return true;
             }
         }
         return false;
-    }
-
-    private static String jsonOrNull(JsonNode node) {
-        if (node == null || node.isNull()) {
-            return null;
-        }
-        return node.toString();
     }
 
     private static DomainException notAllowed() {

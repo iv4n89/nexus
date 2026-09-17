@@ -1,8 +1,7 @@
 package com.ivan.nexus.application.audit;
 
 import com.ivan.nexus.domain.audit.AuditAction;
-import com.ivan.nexus.infrastructure.persistence.audit.AuditEventEntity;
-import com.ivan.nexus.infrastructure.persistence.audit.AuditEventJpaRepository;
+import com.ivan.nexus.domain.audit.AuditEvent;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -12,10 +11,10 @@ import java.util.UUID;
 
 @Service
 public class RecordAudit {
-    private final AuditEventJpaRepository auditEvents;
+    private final AuditStore auditStore;
 
-    public RecordAudit(AuditEventJpaRepository auditEvents) {
-        this.auditEvents = auditEvents;
+    public RecordAudit(AuditStore auditStore) {
+        this.auditStore = auditStore;
     }
 
     public void execute(
@@ -25,7 +24,7 @@ public class RecordAudit {
             String serviceId,
             String ip,
             Map<String, Object> metadata) {
-        auditEvents.save(new AuditEventEntity(
+        auditStore.append(new AuditEvent(
                 UUID.randomUUID(),
                 userId,
                 action,

@@ -2,6 +2,7 @@ package com.ivan.nexus.interfaces.database;
 
 import com.ivan.nexus.application.database.DiscoverProjectDatabases;
 import com.ivan.nexus.application.database.EditDatabaseCells;
+import com.ivan.nexus.application.database.EditDatabaseCellsCommand;
 import com.ivan.nexus.application.database.GetDatabaseMetadata;
 import com.ivan.nexus.application.database.PreviewTable;
 import com.ivan.nexus.application.database.RunDatabaseQuery;
@@ -108,13 +109,32 @@ public class DatabaseController {
             @RequestBody DatabaseDtos.CellsRequest body,
             Authentication authentication,
             HttpServletRequest request) {
-        return toResponse(editCells.execute(
+        return toResponse(editCells.execute(new EditDatabaseCellsCommand(
                 projectId,
                 databaseId,
-                body,
                 role(authentication),
                 authentication.getName(),
-                ClientIp.resolve(request)));
+                ClientIp.resolve(request),
+                body.schema(),
+                body.table(),
+                body.mongoDatabase(),
+                body.collection(),
+                body.patches() == null
+                        ? List.of()
+                        : body.patches().stream()
+                                .map(patch -> new EditDatabaseCellsCommand.CellPatch(
+                                        patch.primaryKey(),
+                                        patch.column(),
+                                        patch.value(),
+                                        patch.id(),
+                                        patch.field()))
+                                .toList(),
+                body.inserts() == null
+                        ? List.of()
+                        : body.inserts().stream()
+                                .map(insert -> new EditDatabaseCellsCommand.InsertValues(insert.values()))
+                                .toList(),
+                body.deletes() == null ? List.of() : body.deletes())));
     }
 
     private static DatabaseDtos.QueryResponse toResponse(QueryResult result) {

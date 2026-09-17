@@ -2,6 +2,7 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
@@ -13,8 +14,6 @@ import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectEntity;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.user.UserEntity;
-import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,7 +54,7 @@ class RollbackProjectTest {
     private final FakeHealthChecker healthChecker = new FakeHealthChecker();
     private final RecordAudit recordAudit = mock(RecordAudit.class);
     private final RecordActivity recordActivity = mock(RecordActivity.class);
-    private final UserJpaRepository users = mock(UserJpaRepository.class);
+    private final UserDirectory users = mock(UserDirectory.class);
     private final UUID adminId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private final Map<String, ManagedProjectEntity> projectStore = new ConcurrentHashMap<>();
@@ -73,9 +72,7 @@ class RollbackProjectTest {
         deployments = mockDeployments();
         hub = mockHub();
 
-        UserEntity admin = mock(UserEntity.class);
-        when(admin.getId()).thenReturn(adminId);
-        when(users.findByUsername("admin")).thenReturn(Optional.of(admin));
+        when(users.findIdByUsername("admin")).thenReturn(Optional.of(adminId));
 
         useCase = useCaseWithExecutor(Runnable::run);
     }

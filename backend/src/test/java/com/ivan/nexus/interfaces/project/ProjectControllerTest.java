@@ -8,14 +8,21 @@ import com.ivan.nexus.application.project.GetProjectServices;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.infrastructure.security.SecurityConfig;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +37,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = ProjectController.class)
 @Import({DiscoverProjects.class, GetProject.class, GetProjectServices.class, SecurityConfig.class})
 class ProjectControllerTest {
+
+    @TempDir
+    static Path manifestRoot;
+
+    @DynamicPropertySource
+    static void configureManifestRoot(DynamicPropertyRegistry registry) {
+        Path absoluteRoot = manifestRoot.toAbsolutePath().normalize();
+        try {
+            Path manifest = absoluteRoot.resolve("lab").resolve("nexus.yml");
+            Files.createDirectories(manifest.getParent());
+            Files.writeString(manifest, "");
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+        registry.add("nexus.manifest.allowed-root", absoluteRoot::toString);
+    }
 
     @Autowired
     MockMvc mockMvc;

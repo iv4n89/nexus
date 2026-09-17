@@ -1,7 +1,7 @@
 package com.ivan.nexus.application.database;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.database.ControlPlaneDatabase;
 import com.ivan.nexus.domain.database.DatabaseStatus;
@@ -12,8 +12,6 @@ import com.ivan.nexus.domain.database.SqlStatementClassifier;
 import com.ivan.nexus.domain.database.StatementClass;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.user.UserEntity;
-import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
@@ -27,22 +25,22 @@ public class RunDatabaseQuery {
     private final SqlExecutor jdbc;
     private final MongoExecutor mongo;
     private final RecordAudit recordAudit;
-    private final UserJpaRepository users;
-    private final ObjectMapper objectMapper;
+    private final UserDirectory users;
+    private final MongoStatementParser mongoStatementParser;
 
     public RunDatabaseQuery(
             DiscoverProjectDatabases discover,
             SqlExecutor jdbc,
             MongoExecutor mongo,
             RecordAudit recordAudit,
-            UserJpaRepository users,
-            ObjectMapper objectMapper) {
+            UserDirectory users,
+            MongoStatementParser mongoStatementParser) {
         this.discover = discover;
         this.jdbc = jdbc;
         this.mongo = mongo;
         this.recordAudit = recordAudit;
         this.users = users;
-        this.objectMapper = objectMapper;
+        this.mongoStatementParser = mongoStatementParser;
     }
 
     public QueryResult execute(
@@ -62,7 +60,7 @@ public class RunDatabaseQuery {
         boolean requiresConfirmation;
         MongoStatement mongoStatement = null;
         if (resolution.instance().engine() == com.ivan.nexus.domain.database.DatabaseEngine.MONGO) {
-            mongoStatement = MongoStatementClassifier.parse(objectMapper, statement);
+            mongoStatement = MongoStatementClassifier.classify(mongoStatementParser.parse(statement));
             statementClass = mongoStatement.statementClass();
             requiresConfirmation = mongoStatement.requiresConfirmation();
         } else {
@@ -78,7 +76,7 @@ public class RunDatabaseQuery {
         QueryResult result = resolution.instance().engine() == com.ivan.nexus.domain.database.DatabaseEngine.MONGO
                 ? mongo.execute(resolution.target(), mongoStatement)
                 : jdbc.query(resolution.instance().engine(), resolution.target(), statement, statementClass, QUERY_LIMIT);
-        UUID userId = users.findByUsername(username).map(UserEntity::getId).orElse(null);
+        UUID userId = users.findIdByUsername(username).orElse(null);
         String truncated = statement == null ? "" : statement.substring(0, Math.min(statement.length(), 2000));
         recordAudit.execute(
                 userId,

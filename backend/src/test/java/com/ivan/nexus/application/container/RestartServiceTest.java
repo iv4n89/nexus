@@ -2,12 +2,11 @@ package com.ivan.nexus.application.container;
 
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.application.project.ContainerInventory;
+import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.user.UserEntity;
-import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,9 +39,7 @@ class RestartServiceTest {
     @Mock
     RecordAudit recordAudit;
     @Mock
-    UserJpaRepository users;
-    @Mock
-    UserEntity admin;
+    UserDirectory users;
 
     private final UUID adminId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private RestartService useCase;
@@ -82,8 +79,7 @@ class RestartServiceTest {
     @Test
     void restartsAndAuditsServiceRestartFromLabels() {
         when(inventory.findById("abc123")).thenReturn(Optional.of(snapshot()));
-        when(admin.getId()).thenReturn(adminId);
-        when(users.findByUsername("admin")).thenReturn(Optional.of(admin));
+        when(users.findIdByUsername("admin")).thenReturn(Optional.of(adminId));
 
         useCase.execute("abc123", "admin");
 
@@ -95,6 +91,18 @@ class RestartServiceTest {
                 eq("web"),
                 isNull(),
                 any());
+    }
+
+    @Test
+    void missingUserStillThrowsAfterRestart() {
+        when(inventory.findById("abc123")).thenReturn(Optional.of(snapshot()));
+        when(users.findIdByUsername("missing")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.execute("abc123", "missing"))
+                .isInstanceOf(java.util.NoSuchElementException.class);
+
+        verify(runtime).restart("abc123");
+        verify(recordAudit, never()).execute(any(), any(), any(), any(), any(), any());
     }
 
     private static ContainerSnapshot snapshot() {
