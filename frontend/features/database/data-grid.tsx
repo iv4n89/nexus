@@ -77,6 +77,7 @@ export function DataGrid({
                       value={displayValue(draft, key, column, original)}
                       dirty={dirty}
                       resetToken={resetToken}
+                      struck={deleted}
                       editable={
                         canEdit &&
                         !deleted &&
@@ -89,10 +90,10 @@ export function DataGrid({
                   )
                 })}
                 {showRowActions ? (
-                  <td className="px-3 py-2 align-top">
+                  <td className={`px-3 py-2 align-top${deleted ? ' line-through text-[#666]' : ''}`}>
                     <button
                       type="button"
-                      className="text-[#888]"
+                      className={deleted ? 'line-through text-[#666]' : 'text-[#888]'}
                       onClick={() => onToggleDelete?.(key)}
                     >
                       ×
@@ -138,12 +139,14 @@ function EditableCell({
   dirty,
   resetToken,
   editable,
+  struck = false,
   onCommit,
 }: {
   value: unknown
   dirty: boolean
   resetToken: number
   editable: boolean
+  struck?: boolean
   onCommit: (input: string) => void
 }) {
   const [localInput, setLocalInput] = useState(value == null ? '' : String(value))
@@ -154,7 +157,8 @@ function EditableCell({
   const dirtyClass = dirty ? 'outline outline-1 outline-[#f5f5f5]' : ''
 
   if (!editable) {
-    return <td className={`px-3 py-2 align-top text-[#f5f5f5] ${dirtyClass}`}>{display}</td>
+    const struckClass = struck ? 'line-through text-[#666]' : 'text-[#f5f5f5]'
+    return <td className={`px-3 py-2 align-top ${struckClass} ${dirtyClass}`}>{display}</td>
   }
 
   return (
