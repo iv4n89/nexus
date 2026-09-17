@@ -1,6 +1,7 @@
 package com.ivan.nexus.architecture;
 
 import com.ivan.nexus.application.architecturefixture.AdapterDependentApplicationFixture;
+import com.ivan.nexus.application.architecturefixture.JdbcDependentApplicationFixture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -9,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 class HexagonalArchitectureTest {
     private static final String APPLICATION_PACKAGES = "com.ivan.nexus.application..";
@@ -30,13 +32,21 @@ class HexagonalArchitectureTest {
             "org.springframework.boot.autoconfigure.condition.."
     };
 
-    private static final ArchRule APPLICATION_DEPENDENCY_RULE =
+    private static final ArchRule APPLICATION_ALLOWLIST_RULE =
             classes()
                     .that().resideInAPackage(APPLICATION_PACKAGES)
                     .should().onlyDependOnClassesThat()
                     .resideInAnyPackage(APPLICATION_ALLOWED_DEPENDENCIES)
                     .as("application layer may depend only on application/domain code, the JDK, "
-                            + "SLF4J, and narrowly approved Spring orchestration annotations");
+                            + "SLF4J, and narrowly approved Spring orchestration annotations; "
+                            + "JDBC is excluded by a separate explicit rule");
+
+    private static final ArchRule APPLICATION_JDBC_PROHIBITION_RULE =
+            noClasses()
+                    .that().resideInAPackage(APPLICATION_PACKAGES)
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage("java.sql..", "javax.sql..")
+                    .as("application layer must not depend on JDBC APIs (java.sql or javax.sql)");
 
     private static final JavaClasses NEXUS_CLASSES =
             new ClassFileImporter()
@@ -53,7 +63,12 @@ class HexagonalArchitectureTest {
 
     @Test
     void applicationMayDependOnlyOnExplicitlyAllowedPackages() {
-        APPLICATION_DEPENDENCY_RULE.check(NEXUS_CLASSES);
+        APPLICATION_ALLOWLIST_RULE.check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void applicationMustNotDependOnJdbcApis() {
+        APPLICATION_JDBC_PROHIBITION_RULE.check(NEXUS_CLASSES);
     }
 
     @Test
@@ -61,9 +76,20 @@ class HexagonalArchitectureTest {
         JavaClasses fixture = new ClassFileImporter()
                 .importClasses(AdapterDependentApplicationFixture.class);
 
-        assertThatThrownBy(() -> APPLICATION_DEPENDENCY_RULE.check(fixture))
+        assertThatThrownBy(() -> APPLICATION_ALLOWLIST_RULE.check(fixture))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("application layer may depend only")
                 .hasMessageContaining("UnknownSdkType");
+    }
+
+    @Test
+    void globalApplicationJdbcRuleRejectsJavaSqlDependency() {
+        JavaClasses fixture = new ClassFileImporter()
+                .importClasses(JdbcDependentApplicationFixture.class);
+
+        assertThatThrownBy(() -> APPLICATION_JDBC_PROHIBITION_RULE.check(fixture))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("application layer must not depend on JDBC APIs")
+                .hasMessageContaining("java.sql.Connection");
     }
 }
