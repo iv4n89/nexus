@@ -54,6 +54,8 @@ export function postCells(
       id?: string
       field?: string
     }>
+    inserts?: Array<{ values: Record<string, unknown> }>
+    deletes?: Array<Record<string, unknown>>
   },
 ) {
   return api<QueryResult>(

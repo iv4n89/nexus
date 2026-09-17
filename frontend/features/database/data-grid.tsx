@@ -12,6 +12,12 @@ export function DataGrid({
   draft,
   resetToken,
   onDraftChange,
+  insertRows = [],
+  deletedKeys = [],
+  showRowActions = false,
+  onInsertChange,
+  onToggleDelete,
+  onRemoveInsert,
 }: {
   result: QueryResult
   canEdit: boolean
@@ -20,6 +26,12 @@ export function DataGrid({
   draft: CellDraft
   resetToken: number
   onDraftChange: (row: Record<string, unknown>, column: string, input: string, original: unknown) => void
+  insertRows?: { localId: string; values: Record<string, unknown> }[]
+  deletedKeys?: string[]
+  showRowActions?: boolean
+  onInsertChange?: (localId: string, column: string, input: string) => void
+  onToggleDelete?: (key: string) => void
+  onRemoveInsert?: (localId: string) => void
 }) {
   return (
     <div className="overflow-auto border border-[#2a2a2a]">
@@ -31,6 +43,7 @@ export function DataGrid({
                 {column}
               </th>
             ))}
+            {showRowActions ? <th className="border-b border-[#2a2a2a] px-3 py-2 font-normal" /> : null}
           </tr>
         </thead>
         <tbody>
@@ -45,8 +58,16 @@ export function DataGrid({
                   Object.fromEntries(primaryKey.map((column) => [column, record[column]])),
                   primaryKey,
                 )
+            const deleted = deletedKeys.includes(key)
             return (
-              <tr key={rowIndex} className="border-b border-[#2a2a2a]">
+              <tr
+                key={rowIndex}
+                className={
+                  deleted
+                    ? 'border-b border-[#2a2a2a] line-through text-[#666]'
+                    : 'border-b border-[#2a2a2a]'
+                }
+              >
                 {result.columns.map((column, columnIndex) => {
                   const original = row[columnIndex]
                   const dirty = draft[key] != null && column in draft[key]
@@ -58,6 +79,7 @@ export function DataGrid({
                       resetToken={resetToken}
                       editable={
                         canEdit &&
+                        !deleted &&
                         (primaryKey.length > 0 || idColumn !== null) &&
                         column !== idColumn &&
                         !primaryKey.includes(column)
@@ -66,9 +88,45 @@ export function DataGrid({
                     />
                   )
                 })}
+                {showRowActions ? (
+                  <td className="px-3 py-2 align-top">
+                    <button
+                      type="button"
+                      className="text-[#888]"
+                      onClick={() => onToggleDelete?.(key)}
+                    >
+                      ×
+                    </button>
+                  </td>
+                ) : null}
               </tr>
             )
           })}
+          {insertRows.map((row) => (
+            <tr key={row.localId} className="border-b border-[#2a2a2a]">
+              {result.columns.map((column) => (
+                <EditableCell
+                  key={column}
+                  value={column in row.values ? row.values[column] : ''}
+                  dirty={column in row.values}
+                  resetToken={resetToken}
+                  editable={canEdit}
+                  onCommit={(input) => onInsertChange?.(row.localId, column, input)}
+                />
+              ))}
+              {showRowActions ? (
+                <td className="px-3 py-2 align-top">
+                  <button
+                    type="button"
+                    className="text-[#888]"
+                    onClick={() => onRemoveInsert?.(row.localId)}
+                  >
+                    ×
+                  </button>
+                </td>
+              ) : null}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>
