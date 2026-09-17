@@ -192,6 +192,43 @@ class DeployProjectTest {
                         .isEqualTo(NexusErrorCode.MANIFEST_NOT_FOUND));
     }
 
+    @Test
+    void upsertsManagedProjectFromManifestAndKeepsLastSummary() throws Exception {
+        writeLabManifest(null);
+        processExecutor.exitCode = 0;
+        processExecutor.lines = List.of("pulling repository");
+
+        Deployment started = useCase.execute("lab", "admin");
+
+        ManagedProjectEntity stored = projectStore.get("lab");
+        assertThat(stored.getName()).isEqualTo("Lab");
+        assertThat(stored.getDescription()).isEqualTo("Test fixture");
+        assertThat(stored.getWorkingDirectory())
+                .isEqualTo(allowedRoot.resolve("lab").toAbsolutePath().normalize().toString());
+        assertThat(stored.getManifestPath())
+                .isEqualTo(allowedRoot.resolve("lab").resolve("nexus.yml").toAbsolutePath().normalize().toString());
+        assertThat(deploymentStore.get(started.id()).getOutputSummary()).isEqualTo(
+                "deployment started\npulling repository\nDEPLOYMENT SUCCESS");
+    }
+
+    @Test
+    void blankProjectNameFallsBackToId() throws Exception {
+        writeLabManifest(null);
+        Path dir = allowedRoot.resolve("lab");
+        Files.writeString(dir.resolve("nexus.yml"), """
+                project:
+                  id: lab
+                  name: "  "
+                  workingDirectory: %s
+                deployment:
+                  command: ./deploy.sh
+                """.formatted(dir.toAbsolutePath()));
+
+        useCase.execute("lab", "admin");
+
+        assertThat(projectStore.get("lab").getName()).isEqualTo("lab");
+    }
+
     private DeployProject useCaseWithExecutor(Executor executor) {
         return new DeployProject(
                 loader,

@@ -39,7 +39,7 @@ public class RollbackProject {
         this.loader = loader;
         this.allowedRoot = allowedRoot;
         this.runner = new DeploymentCommandRunner(
-                projects,
+                new ManagedProjectUpsert(projects),
                 deployments,
                 hub,
                 processExecutor,
