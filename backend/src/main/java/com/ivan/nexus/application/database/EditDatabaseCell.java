@@ -2,6 +2,7 @@ package com.ivan.nexus.application.database;
 
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.domain.audit.AuditAction;
+import com.ivan.nexus.domain.database.ControlPlaneDatabase;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.shared.DomainException;
@@ -48,8 +49,10 @@ public class EditDatabaseCell {
             String collection,
             String id,
             String field,
+            String role,
             String username,
             String ip) {
+        ControlPlaneDatabase.requireAdminForDataAccess(projectId, role);
         InstanceResolution resolution = GetDatabaseMetadata.requireReady(discover.resolve(projectId, databaseId));
         QueryResult result;
         if (resolution.instance().engine() == DatabaseEngine.MONGO) {

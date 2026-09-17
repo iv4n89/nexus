@@ -55,6 +55,11 @@ class HttpHealthCheckerTest {
                 .doesNotThrowAnyException();
     }
 
+    @Test
+    void metadataUrlIsRejectedWithoutSending() {
+        assertThat(checker.check("http://169.254.169.254/", Duration.ofSeconds(2))).isFalse();
+    }
+
     private static HttpServer startServer(int status) throws IOException {
         HttpServer httpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         httpServer.createContext("/", exchange -> {

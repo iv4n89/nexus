@@ -29,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -61,7 +62,7 @@ class RunDatabaseQueryTest {
     @BeforeEach
     void setUp() {
         useCase = new RunDatabaseQuery(discover, jdbc, mongo, recordAudit, users, new ObjectMapper());
-        given(discover.resolve("lab", "lab:aaaaaaaaaaaa")).willReturn(new InstanceResolution(instance, target));
+        lenient().when(discover.resolve("lab", "lab:aaaaaaaaaaaa")).thenReturn(new InstanceResolution(instance, target));
     }
 
     @Test
@@ -93,5 +94,44 @@ class RunDatabaseQueryTest {
 
         assertEquals(1, result.rowCount());
         verify(recordAudit).execute(any(), eq(AuditAction.DB_QUERY), eq("lab"), eq("db"), eq("127.0.0.1"), any());
+    }
+
+    @Test
+    void viewerCannotQueryControlPlaneDatabase() {
+        DomainException ex = assertThrows(
+                DomainException.class,
+                () -> useCase.execute(
+                        "nexus",
+                        "nexus:cccccccccccc",
+                        "SELECT 1",
+                        false,
+                        "VIEWER",
+                        "viewer",
+                        "127.0.0.1"));
+        assertEquals(NexusErrorCode.FORBIDDEN, ex.getCode());
+        verify(jdbc, never()).query(any(), any(), any(), any(), any(Integer.class));
+        verify(discover, never()).resolve("nexus", "nexus:cccccccccccc");
+    }
+
+    @Test
+    void adminCanQueryControlPlaneDatabase() {
+        ResolvedTarget nexusTarget = new ResolvedTarget("127.0.0.1", 5432, "nexus", "nexus", "nexus");
+        DatabaseInstance nexus = new DatabaseInstance(
+                "nexus:cccccccccccc",
+                "nexus",
+                "cccccccccccc0000",
+                "postgres",
+                DatabaseEngine.POSTGRES,
+                DatabaseStatus.READY,
+                "nexus");
+        given(discover.resolve("nexus", "nexus:cccccccccccc")).willReturn(new InstanceResolution(nexus, nexusTarget));
+        given(jdbc.query(eq(DatabaseEngine.POSTGRES), eq(nexusTarget), eq("SELECT 1"), eq(StatementClass.READ), eq(500)))
+                .willReturn(new QueryResult(List.of("?column?"), List.of(List.of(1)), false, 1, 1));
+        given(users.findByUsername("admin")).willReturn(Optional.empty());
+
+        QueryResult result = useCase.execute(
+                "nexus", "nexus:cccccccccccc", "SELECT 1", false, "ADMIN", "admin", "127.0.0.1");
+
+        assertEquals(1, result.rowCount());
     }
 }

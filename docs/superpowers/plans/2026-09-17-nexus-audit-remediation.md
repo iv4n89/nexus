@@ -117,26 +117,26 @@ Anti-patterns: do not add `attribution-reporting` to Permissions-Policy. Do not 
 
 ### Tasks
 
-- [ ] **B2.1 Bind frontend localhost**
+- [x] **B2.1 Bind frontend localhost**
   - `ports: ["127.0.0.1:3000:3000"]`. Caddy on the same host still reaches it via `host.docker.internal:3000`.
   - Failing check: compose file must not contain `"3000:3000"` unbound.
 
-- [ ] **B2.2 Narrow :8080**
+- [x] **B2.2 Narrow :8080**
   - Detect Ava Caddy container IPv4 (docker inspect) and allow only that IP (plus `172.17.0.1` host-gateway if required). Fallback comment if detection fails — do not silently keep `/12` without logging it.
   - Probe still uses a container on the Caddy network, not a random bridge.
 
-- [ ] **B2.3 Health URL allowlist**
+- [x] **B2.3 Health URL allowlist**
   - Fail closed: only `http`/`https`. Block link-local, metadata (`169.254.169.254`), and `file:`.
   - Product choice (lock in a test): allow RFC1918 + loopback **or** deny them. Recommended for this VPS: allow loopback + docker bridges so project healthchecks work; deny cloud metadata and non-http schemes.
   - `HttpHealthChecker` must reject before `URI.create` + send.
 
-- [ ] **B2.4 Control-plane database**
+- [x] **B2.4 Control-plane database**
   - Do **not** hide the Nexus postgres from `/projects/nexus` (that was PR #19 and the empty-state lie).
   - VIEWER: metadata maybe; `preview` / `query` / `cell` on compose project `nexus` → `FORBIDDEN`.
   - ADMIN: allowed, existing destructive confirm still required for writes.
   - Tests in `DatabaseControllerTest` / `RunDatabaseQueryTest`.
 
-- [ ] **B2.5 Cookies + login throttle**
+- [x] **B2.5 Cookies + login throttle**
   - `server.servlet.session.cookie.secure: true`, `same-site: lax`, `http-only: true` for `JSESSIONID`. CSRF cookie stays readable (`withHttpOnlyFalse`).
   - Rate-limit `POST /api/auth/login` by IP (use `X-Forwarded-For` only when the peer is Caddy). Test 429 after N failures.
 

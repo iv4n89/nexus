@@ -6,6 +6,7 @@ import com.ivan.nexus.application.database.GetDatabaseMetadata;
 import com.ivan.nexus.application.database.PreviewTable;
 import com.ivan.nexus.application.database.RunDatabaseQuery;
 import com.ivan.nexus.domain.database.QueryResult;
+import com.ivan.nexus.infrastructure.security.ClientIp;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -71,8 +72,16 @@ public class DatabaseController {
             @RequestParam(required = false) String schema,
             @RequestParam(required = false) String table,
             @RequestParam(required = false) String mongoDatabase,
-            @RequestParam(required = false) String collection) {
-        return toResponse(previewTable.execute(projectId, databaseId, schema, table, mongoDatabase, collection));
+            @RequestParam(required = false) String collection,
+            Authentication authentication) {
+        return toResponse(previewTable.execute(
+                projectId,
+                databaseId,
+                schema,
+                table,
+                mongoDatabase,
+                collection,
+                role(authentication)));
     }
 
     @PostMapping("/instances/{databaseId}/query")
@@ -89,7 +98,7 @@ public class DatabaseController {
                 body.confirmDestructive(),
                 role(authentication),
                 authentication.getName(),
-                clientIp(request)));
+                ClientIp.resolve(request)));
     }
 
     @PostMapping("/instances/{databaseId}/cell")
@@ -111,8 +120,9 @@ public class DatabaseController {
                 body.collection(),
                 body.id(),
                 body.field(),
+                role(authentication),
                 authentication.getName(),
-                clientIp(request)));
+                ClientIp.resolve(request)));
     }
 
     private static DatabaseDtos.QueryResponse toResponse(QueryResult result) {
@@ -131,13 +141,5 @@ public class DatabaseController {
                 .map(authority -> authority.substring("ROLE_".length()))
                 .findFirst()
                 .orElse("VIEWER");
-    }
-
-    private static String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

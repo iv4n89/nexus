@@ -3,6 +3,7 @@ package com.ivan.nexus.interfaces.auth;
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
+import com.ivan.nexus.infrastructure.security.ClientIp;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -70,18 +71,10 @@ public class AuthController {
                 AuditAction.LOGIN,
                 null,
                 null,
-                clientIp(httpRequest),
+                ClientIp.resolve(httpRequest),
                 Map.of("username", authentication.getName()));
 
         return toResponse(authentication);
-    }
-
-    private static String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",", 2)[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
     @GetMapping("/me")

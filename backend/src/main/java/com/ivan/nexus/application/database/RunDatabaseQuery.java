@@ -3,6 +3,7 @@ package com.ivan.nexus.application.database;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.domain.audit.AuditAction;
+import com.ivan.nexus.domain.database.ControlPlaneDatabase;
 import com.ivan.nexus.domain.database.DatabaseStatus;
 import com.ivan.nexus.domain.database.MongoStatement;
 import com.ivan.nexus.domain.database.MongoStatementClassifier;
@@ -54,6 +55,7 @@ public class RunDatabaseQuery {
             String role,
             String username,
             String ip) {
+        ControlPlaneDatabase.requireAdminForDataAccess(projectId, role);
         InstanceResolution resolution = discover.resolve(projectId, databaseId);
         if (resolution.instance().status() == DatabaseStatus.UNREACHABLE || resolution.target() == null) {
             throw new DomainException(NexusErrorCode.DATABASE_UNREACHABLE, "Cannot connect");

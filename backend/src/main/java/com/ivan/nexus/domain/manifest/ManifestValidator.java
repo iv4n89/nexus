@@ -49,6 +49,11 @@ public class ManifestValidator {
         if (manifest.rollback() != null && !isBlank(manifest.rollback().command())) {
             validateCommand(manifest.rollback().command(), "rollback.command");
         }
+
+        if (manifest.health() != null && !isBlank(manifest.health().url())
+                && !HealthUrlPolicy.allowed(manifest.health().url())) {
+            fail("health.url is not an allowed http(s) endpoint");
+        }
     }
 
     private static void validateCommand(String command, String field) {
