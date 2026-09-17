@@ -1,13 +1,11 @@
 package com.ivan.nexus.application.project;
 
+import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.project.Project;
 import com.ivan.nexus.domain.project.ProjectGrouping;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -17,13 +15,11 @@ import java.util.Map;
 @Service
 public class DiscoverProjects {
     private final ContainerInventory inventory;
-    private final Path allowedRoot;
+    private final ManifestCatalog manifests;
 
-    public DiscoverProjects(
-            ContainerInventory inventory,
-            @Value("${nexus.manifest.allowed-root}") String allowedRoot) {
+    public DiscoverProjects(ContainerInventory inventory, ManifestCatalog manifests) {
         this.inventory = inventory;
-        this.allowedRoot = Path.of(allowedRoot).toAbsolutePath().normalize();
+        this.manifests = manifests;
     }
 
     public List<Project> execute() {
@@ -44,15 +40,8 @@ public class DiscoverProjects {
     }
 
     private void addManifestOnlyProjects(Map<String, List<ContainerSnapshot>> grouped) {
-        if (!Files.isDirectory(allowedRoot)) {
-            return;
-        }
-        try (var stream = Files.list(allowedRoot)) {
-            stream.filter(Files::isDirectory)
-                    .filter(dir -> Files.isRegularFile(dir.resolve("nexus.yml")))
-                    .forEach(dir -> grouped.putIfAbsent(dir.getFileName().toString(), new ArrayList<>()));
-        } catch (java.io.IOException ignored) {
-            // Inventory remains the source of running projects if the root cannot be listed.
+        for (String projectId : manifests.discoverProjectIds()) {
+            grouped.putIfAbsent(projectId, new ArrayList<>());
         }
     }
 
@@ -77,7 +66,7 @@ public class DiscoverProjects {
     }
 
     boolean isDeployable(String projectId) {
-        return Files.isRegularFile(allowedRoot.resolve(projectId).resolve("nexus.yml"));
+        return manifests.exists(projectId);
     }
 
     private static String status(int runningCount, int totalCount, int unhealthyCount) {

@@ -2,14 +2,15 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.manifest.FakeManifestCatalog;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
+import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectEntity;
@@ -49,7 +50,7 @@ class RollbackProjectTest {
     @TempDir
     Path allowedRoot;
 
-    private final YamlManifestLoader loader = new YamlManifestLoader();
+    private final FakeManifestCatalog manifests = new FakeManifestCatalog();
     private final FakeProcessExecutor processExecutor = new FakeProcessExecutor();
     private final FakeHealthChecker healthChecker = new FakeHealthChecker();
     private final RecordAudit recordAudit = mock(RecordAudit.class);
@@ -161,8 +162,7 @@ class RollbackProjectTest {
 
     private RollbackProject useCaseWithExecutor(Executor executor) {
         return new RollbackProject(
-                loader,
-                allowedRoot,
+                manifests,
                 projects,
                 deployments,
                 hub,
@@ -225,30 +225,21 @@ class RollbackProjectTest {
         Path rollback = dir.resolve("rollback.sh");
         Files.writeString(rollback, "#!/bin/sh\necho rollback\n");
         assertThat(rollback.toFile().setExecutable(true, false)).isTrue();
-        String health = healthUrl == null
-                ? ""
-                : """
-                health:
-                  url: %s
-                  timeoutSeconds: 5
-                """.formatted(healthUrl);
-        String rollbackBlock = rollbackCommand == null
-                ? ""
-                : """
-                rollback:
-                  command: %s
-                """.formatted(rollbackCommand);
-        Files.writeString(dir.resolve("nexus.yml"), """
-                project:
-                  id: lab
-                  name: Lab
-                  description: Test fixture
-                  workingDirectory: %s
-                deployment:
-                  command: ./deploy.sh
-                %s
-                %s
-                """.formatted(dir.toAbsolutePath(), rollbackBlock, health));
+        ProjectManifest.CommandBlock rollbackCommandBlock = rollbackCommand == null
+                ? null
+                : new ProjectManifest.CommandBlock(rollbackCommand);
+        ProjectManifest.HealthBlock health = healthUrl == null
+                ? null
+                : new ProjectManifest.HealthBlock(healthUrl, 5);
+        ProjectManifest manifest = new ProjectManifest(
+                new ProjectManifest.ProjectBlock(
+                        "lab", "Lab", "Test fixture", dir.toAbsolutePath().toString()),
+                List.of(),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
+                rollbackCommandBlock,
+                health,
+                null);
+        manifests.add("lab", manifest, dir.resolve("nexus.yml"));
     }
 
     static final class FakeProcessExecutor implements ProcessExecutor {

@@ -1,5 +1,6 @@
 package com.ivan.nexus.application.log;
 
+import com.ivan.nexus.application.manifest.FakeManifestCatalog;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.application.project.DiscoverProjects;
 import com.ivan.nexus.application.activity.RecordActivity;
@@ -117,7 +118,7 @@ class AnalyzeLogsTest {
                 0,
                 Instant.parse("2026-01-01T00:00:01Z"));
         AnalyzeLogs analyzeLogs = new AnalyzeLogs(
-                new DiscoverProjects(inventory(stopped), "/tmp/nexus-no-manifests"),
+                new DiscoverProjects(inventory(stopped), new FakeManifestCatalog()),
                 logProvider,
                 fingerprints,
                 recordActivity,
@@ -202,7 +203,7 @@ class AnalyzeLogsTest {
                 0,
                 Instant.parse("2026-01-01T00:00:01Z"));
         AnalyzeLogs analyzeLogs = new AnalyzeLogs(
-                new DiscoverProjects(inventory(snapshot), "/tmp/nexus-no-manifests"),
+                new DiscoverProjects(inventory(snapshot), new FakeManifestCatalog()),
                 logProvider,
                 fingerprints,
                 recordActivity,
@@ -216,7 +217,7 @@ class AnalyzeLogsTest {
 
     private AnalyzeLogs analyze(String service) {
         return new AnalyzeLogs(
-                new DiscoverProjects(inventory(snapshot(service)), "/tmp/nexus-no-manifests"),
+                new DiscoverProjects(inventory(snapshot(service)), new FakeManifestCatalog()),
                 logProvider,
                 fingerprints,
                 recordActivity,

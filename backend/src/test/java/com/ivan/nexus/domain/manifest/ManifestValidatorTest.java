@@ -2,16 +2,12 @@ package com.ivan.nexus.domain.manifest;
 
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -19,24 +15,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ManifestValidatorTest {
-    private static final Path ALLOWED_ROOT = Path.of("/tmp/nexus-manifest-fixtures");
-    private static final Path WORKING_DIR = ALLOWED_ROOT.resolve("lab");
-
-    private final YamlManifestLoader loader = new YamlManifestLoader();
-
-    @BeforeAll
-    static void createWorkingDir() throws IOException {
-        Files.createDirectories(WORKING_DIR);
-    }
+    @TempDir
+    Path allowedRoot;
 
     @Test
     void validManifestLoadsAndValidates() {
-        ProjectManifest manifest = load("/manifests/valid.yml");
+        ProjectManifest manifest = new ProjectManifest(
+                project("lab", workingDirectory().toString()),
+                List.of("api", "web"),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
+                new ProjectManifest.CommandBlock("./rollback.sh"),
+                new ProjectManifest.HealthBlock("http://127.0.0.1:18080", 5),
+                new ProjectManifest.AlertsBlock(10, 3, 90));
 
-        ManifestValidator.validate(manifest, ALLOWED_ROOT);
+        ManifestValidator.validate(manifest, allowedRoot);
 
         assertThat(manifest.project().id()).isEqualTo("lab");
-        assertThat(manifest.project().workingDirectory()).isEqualTo(WORKING_DIR.toString());
+        assertThat(manifest.project().workingDirectory()).isEqualTo(workingDirectory().toString());
         assertThat(manifest.services()).containsExactly("api", "web");
         assertThat(manifest.deployment().command()).isEqualTo("./deploy.sh");
         assertThat(manifest.rollback().command()).isEqualTo("./rollback.sh");
@@ -46,9 +41,15 @@ class ManifestValidatorTest {
 
     @Test
     void missingCommandIsInvalid() {
-        ProjectManifest manifest = load("/manifests/missing-command.yml");
+        ProjectManifest manifest = new ProjectManifest(
+                project("lab", workingDirectory().toString()),
+                List.of("api"),
+                null,
+                null,
+                null,
+                null);
 
-        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
+        assertInvalid(() -> ManifestValidator.validate(manifest, allowedRoot));
     }
 
     @ParameterizedTest
@@ -59,20 +60,20 @@ class ManifestValidatorTest {
             "./deploy.sh `id`"
     })
     void rejectsDestructiveCommands(String command) {
-        assertInvalid(() -> ManifestValidator.validate(validManifest(command), ALLOWED_ROOT));
+        assertInvalid(() -> ManifestValidator.validate(validManifest(command), allowedRoot));
     }
 
     @Test
     void rejectsRollbackCommandWithShellMetacharacters() {
         ProjectManifest manifest = new ProjectManifest(
-                project("lab", WORKING_DIR.toString()),
+                project("lab", workingDirectory().toString()),
                 List.of("api"),
                 new ProjectManifest.CommandBlock("./deploy.sh"),
                 new ProjectManifest.CommandBlock("./rollback.sh && rm -rf /"),
                 null,
                 null);
 
-        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
+        assertInvalid(() -> ManifestValidator.validate(manifest, allowedRoot));
     }
 
     @Test
@@ -85,20 +86,20 @@ class ManifestValidatorTest {
                 null,
                 null);
 
-        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
+        assertInvalid(() -> ManifestValidator.validate(manifest, allowedRoot));
     }
 
     @Test
     void rejectsWorkingDirectoryEscapingAllowedRoot() {
         ProjectManifest manifest = new ProjectManifest(
-                project("lab", ALLOWED_ROOT.resolve("lab/../../elsewhere").toString()),
+                project("lab", allowedRoot.resolve("lab/../../elsewhere").toString()),
                 List.of("api"),
                 new ProjectManifest.CommandBlock("./deploy.sh"),
                 null,
                 null,
                 null);
 
-        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
+        assertInvalid(() -> ManifestValidator.validate(manifest, allowedRoot));
     }
 
     @ParameterizedTest
@@ -106,54 +107,49 @@ class ManifestValidatorTest {
     @ValueSource(strings = {"  "})
     void rejectsMissingProjectId(String id) {
         ProjectManifest manifest = new ProjectManifest(
-                project(id, WORKING_DIR.toString()),
+                project(id, workingDirectory().toString()),
                 List.of("api"),
                 new ProjectManifest.CommandBlock("./deploy.sh"),
                 null,
                 null,
                 null);
 
-        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
+        assertInvalid(() -> ManifestValidator.validate(manifest, allowedRoot));
     }
 
     @Test
     void rejectsMetadataHealthUrl() {
         ProjectManifest manifest = new ProjectManifest(
-                project("lab", WORKING_DIR.toString()),
+                project("lab", workingDirectory().toString()),
                 List.of("api"),
                 new ProjectManifest.CommandBlock("./deploy.sh"),
                 null,
                 new ProjectManifest.HealthBlock("http://169.254.169.254/", 5),
                 null);
 
-        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
+        assertInvalid(() -> ManifestValidator.validate(manifest, allowedRoot));
     }
 
     @Test
     void allowsMissingHealthRollbackAndAlerts() {
         ProjectManifest manifest = new ProjectManifest(
-                project("lab", WORKING_DIR.toString()),
+                project("lab", workingDirectory().toString()),
                 List.of("api"),
                 new ProjectManifest.CommandBlock("./deploy.sh"),
                 null,
                 null,
                 null);
 
-        ManifestValidator.validate(manifest, ALLOWED_ROOT);
+        ManifestValidator.validate(manifest, allowedRoot);
     }
 
-    private ProjectManifest load(String classpath) {
-        try (InputStream in = getClass().getResourceAsStream(classpath)) {
-            assertThat(in).as("fixture %s", classpath).isNotNull();
-            return loader.load(in);
-        } catch (IOException ex) {
-            throw new AssertionError("failed to load " + classpath, ex);
-        }
+    private Path workingDirectory() {
+        return allowedRoot.resolve("lab");
     }
 
-    private static ProjectManifest validManifest(String command) {
+    private ProjectManifest validManifest(String command) {
         return new ProjectManifest(
-                project("lab", WORKING_DIR.toString()),
+                project("lab", workingDirectory().toString()),
                 List.of("api"),
                 new ProjectManifest.CommandBlock(command),
                 null,

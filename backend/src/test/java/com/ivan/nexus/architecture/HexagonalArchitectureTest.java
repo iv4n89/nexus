@@ -15,10 +15,13 @@ class HexagonalArchitectureTest {
             "com.ivan.nexus.application.database.MongoStatementParser";
 
     private static final String[] CLEAN_APPLICATION_PACKAGES = {
+            "com.ivan.nexus.application.activity..",
+            "com.ivan.nexus.application.alert..",
             "com.ivan.nexus.application.audit..",
             "com.ivan.nexus.application.container..",
             "com.ivan.nexus.application.database..",
             "com.ivan.nexus.application.log..",
+            "com.ivan.nexus.application.manifest..",
             "com.ivan.nexus.application.metrics..",
             "com.ivan.nexus.application.project..",
             "com.ivan.nexus.application.user.."
@@ -66,6 +69,25 @@ class HexagonalArchitectureTest {
         noClasses()
                 .that().resideInAPackage(APPLICATION_PACKAGES)
                 .should().dependOnClassesThat().resideInAPackage(JACKSON_PACKAGES)
+                .check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void deploymentMustNotImportInfrastructureManifestAdapters() {
+        noClasses()
+                .that().resideInAPackage("com.ivan.nexus.application.deployment..")
+                .should().dependOnClassesThat()
+                .resideInAPackage("com.ivan.nexus.infrastructure.manifest..")
+                .check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void retentionCleanupMustUseDeploymentEventStoreSeam() {
+        noClasses()
+                .that().haveFullyQualifiedName(
+                        "com.ivan.nexus.application.activity.RetentionCleanup")
+                .should().dependOnClassesThat().haveFullyQualifiedName(
+                        "com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEventJpaRepository")
                 .check(NEXUS_CLASSES);
     }
 

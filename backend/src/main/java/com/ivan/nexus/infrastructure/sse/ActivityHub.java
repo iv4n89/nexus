@@ -2,6 +2,7 @@ package com.ivan.nexus.infrastructure.sse;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ivan.nexus.application.activity.ActivityPublisher;
 import com.ivan.nexus.domain.activity.Activity;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -15,7 +16,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @Component
-public class ActivityHub {
+public class ActivityHub implements ActivityPublisher {
     private static final Logger log = LoggerFactory.getLogger(ActivityHub.class);
     private static final long HEARTBEAT_SECONDS = 15;
 
@@ -44,6 +45,7 @@ public class ActivityHub {
         emitter.onError(error -> emitters.remove(emitter));
     }
 
+    @Override
     public void publish(Activity event) {
         String json;
         try {

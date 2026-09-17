@@ -7,6 +7,7 @@ import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetSystemMetrics;
 import com.ivan.nexus.application.project.DiscoverProjects;
 import com.ivan.nexus.domain.alert.AlertEvaluator;
+import com.ivan.nexus.domain.alert.AlertRule;
 import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.alert.ErrorRateState;
 import com.ivan.nexus.domain.alert.HttpHealthState;
@@ -15,7 +16,6 @@ import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.metrics.ContainerMetrics;
 import com.ivan.nexus.domain.metrics.SystemMetrics;
 import com.ivan.nexus.domain.project.Project;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -111,7 +111,7 @@ class AlertFactCollectorTest {
 
     @Test
     void memoryThresholdPrefersRuleThenManifestThenDefault() {
-        AlertRuleEntity rule = rule(AlertType.HIGH_MEMORY, Map.of("memoryPercent", 70));
+        AlertRule rule = rule(AlertType.HIGH_MEMORY, Map.of("memoryPercent", 70));
         assertThat(AlertFactCollector.memoryThreshold(List.of(rule), "lab", manifest(null, null))).isEqualTo(70);
         assertThat(AlertFactCollector.memoryThreshold(List.of(), "lab", alertsManifest(80, null))).isEqualTo(80);
         assertThat(AlertFactCollector.memoryThreshold(List.of(), "lab", null))
@@ -119,8 +119,20 @@ class AlertFactCollectorTest {
     }
 
     @Test
+    void projectRuleTakesPrecedenceOverGlobalRule() {
+        AlertRule global = rule(AlertType.HIGH_MEMORY, Map.of("memoryPercent", 70));
+        AlertRule project = new AlertRule(
+                UUID.randomUUID(), "lab", AlertType.HIGH_MEMORY, Map.of("memoryPercent", 65), true);
+
+        assertThat(AlertFactCollector.memoryThreshold(
+                List.of(global, project), "lab", alertsManifest(80, null))).isEqualTo(65);
+        assertThat(AlertFactCollector.memoryThreshold(
+                List.of(global, project), "other", alertsManifest(80, null))).isEqualTo(70);
+    }
+
+    @Test
     void diskThresholdPrefersRuleThenDefault() {
-        AlertRuleEntity rule = rule(AlertType.DISK, Map.of("diskPercent", 60));
+        AlertRule rule = rule(AlertType.DISK, Map.of("diskPercent", 60));
         assertThat(AlertFactCollector.diskThreshold(List.of(rule))).isEqualTo(60);
         assertThat(AlertFactCollector.diskThreshold(List.of())).isEqualTo(AlertEvaluator.DEFAULT_DISK_PERCENT);
     }
@@ -164,8 +176,8 @@ class AlertFactCollectorTest {
                 "boom");
     }
 
-    private static AlertRuleEntity rule(AlertType type, Map<String, Object> threshold) {
-        return new AlertRuleEntity(UUID.randomUUID(), null, type, threshold, true);
+    private static AlertRule rule(AlertType type, Map<String, Object> threshold) {
+        return new AlertRule(UUID.randomUUID(), null, type, threshold, true);
     }
 
     private static ProjectManifest manifest(String healthUrl, Integer timeoutSeconds) {

@@ -10,9 +10,8 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.OptionalInt;
 import java.util.UUID;
 
 @Entity
@@ -48,19 +47,10 @@ public class AlertRuleEntity {
         this.id = id;
         this.projectId = projectId;
         this.type = type;
-        this.thresholdJson = thresholdJson == null ? new HashMap<>() : new HashMap<>(thresholdJson);
+        this.thresholdJson = thresholdJson == null
+                ? new LinkedHashMap<>()
+                : new LinkedHashMap<>(thresholdJson);
         this.enabled = enabled;
-    }
-
-    public OptionalInt threshold(String key) {
-        if (thresholdJson == null) {
-            return OptionalInt.empty();
-        }
-        Object value = thresholdJson.get(key);
-        if (value instanceof Number number) {
-            return OptionalInt.of(number.intValue());
-        }
-        return OptionalInt.empty();
     }
 
     public UUID getId() {

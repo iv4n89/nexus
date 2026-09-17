@@ -1,9 +1,7 @@
 package com.ivan.nexus.application.activity;
 
+import com.ivan.nexus.domain.activity.Activity;
 import com.ivan.nexus.domain.activity.ActivityType;
-import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventEntity;
-import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventJpaRepository;
-import com.ivan.nexus.infrastructure.sse.ActivityHub;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -13,12 +11,12 @@ import java.util.UUID;
 
 @Service
 public class RecordActivity {
-    private final ActivityEventJpaRepository events;
-    private final ActivityHub hub;
+    private final ActivityStore store;
+    private final ActivityPublisher publisher;
 
-    public RecordActivity(ActivityEventJpaRepository events, ActivityHub hub) {
-        this.events = events;
-        this.hub = hub;
+    public RecordActivity(ActivityStore store, ActivityPublisher publisher) {
+        this.store = store;
+        this.publisher = publisher;
     }
 
     public void execute(
@@ -28,7 +26,7 @@ public class RecordActivity {
             String message,
             Map<String, Object> metadata) {
         Map<String, Object> payload = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
-        ActivityEventEntity entity = new ActivityEventEntity(
+        Activity activity = new Activity(
                 UUID.randomUUID(),
                 Instant.now(),
                 type,
@@ -36,7 +34,7 @@ public class RecordActivity {
                 serviceId,
                 message,
                 payload);
-        events.save(entity);
-        hub.publish(entity.toDomain());
+        store.append(activity);
+        publisher.publish(activity);
     }
 }

@@ -1,5 +1,6 @@
 package com.ivan.nexus.application.metrics;
 
+import com.ivan.nexus.application.manifest.FakeManifestCatalog;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.application.project.DiscoverProjects;
 import com.ivan.nexus.application.project.GetProject;
@@ -61,7 +62,9 @@ class GetProjectMetricsTest {
     }
 
     private static GetProjectMetrics useCase(ContainerStatsProvider stats, ContainerSnapshot... snapshots) {
-        return new GetProjectMetrics(new GetProject(new DiscoverProjects(inventory(snapshots), "/tmp/nexus-no-manifests")), stats);
+        return new GetProjectMetrics(
+                new GetProject(new DiscoverProjects(inventory(snapshots), new FakeManifestCatalog())),
+                stats);
     }
 
     private static ContainerInventory inventory(ContainerSnapshot... snapshots) {

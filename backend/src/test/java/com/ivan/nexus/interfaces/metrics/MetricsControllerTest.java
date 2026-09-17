@@ -1,5 +1,6 @@
 package com.ivan.nexus.interfaces.metrics;
 
+import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetProjectMetrics;
 import com.ivan.nexus.application.metrics.GetSystemMetrics;
@@ -45,6 +46,9 @@ class MetricsControllerTest {
 
     @MockitoBean
     ContainerInventory inventory;
+
+    @MockitoBean
+    ManifestCatalog manifests;
 
     @Test
     @WithMockUser(roles = "VIEWER")

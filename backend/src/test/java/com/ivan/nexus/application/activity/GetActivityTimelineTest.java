@@ -2,11 +2,7 @@ package com.ivan.nexus.application.activity;
 
 import com.ivan.nexus.domain.activity.Activity;
 import com.ivan.nexus.domain.activity.ActivityType;
-import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventEntity;
-import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventJpaRepository;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.data.domain.Pageable;
 
 import java.time.Instant;
 import java.util.List;
@@ -14,7 +10,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,29 +18,14 @@ class GetActivityTimelineTest {
 
     @Test
     void returnsNewestFirstUpToRequestedLimit() {
-        ActivityEventJpaRepository events = mock(ActivityEventJpaRepository.class);
-        ActivityEventEntity newer = event("newer", Instant.parse("2026-01-01T01:00:00Z"));
-        ActivityEventEntity older = event("older", Instant.parse("2026-01-01T00:00:00Z"));
-        when(events.findAllByOrderByCreatedAtDesc(any())).thenAnswer(invocation -> {
-            Pageable pageable = invocation.getArgument(0);
-            List<ActivityEventEntity> all = List.of(newer, older);
-            return all.subList(0, Math.min(pageable.getPageSize(), all.size()));
-        });
+        ActivityStore store = mock(ActivityStore.class);
+        Activity newer = activity("newer", Instant.parse("2026-01-01T01:00:00Z"));
+        when(store.latest(1)).thenReturn(List.of(newer));
 
-        List<Activity> result = new GetActivityTimeline(events).execute(1);
+        List<Activity> result = new GetActivityTimeline(store).execute(1);
 
-        assertThat(result).containsExactly(new Activity(
-                newer.getId(),
-                Instant.parse("2026-01-01T01:00:00Z"),
-                ActivityType.DEPLOYMENT_STARTED,
-                "lab",
-                "api",
-                "newer",
-                Map.of()));
-        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(events).findAllByOrderByCreatedAtDesc(captor.capture());
-        assertThat(captor.getValue().getPageSize()).isEqualTo(1);
-        assertThat(captor.getValue().getPageNumber()).isZero();
+        assertThat(result).containsExactly(newer);
+        verify(store).latest(1);
     }
 
     @Test
@@ -60,18 +40,16 @@ class GetActivityTimelineTest {
 
     @Test
     void executeUsesClampedPageSizeForOversizedLimit() {
-        ActivityEventJpaRepository events = mock(ActivityEventJpaRepository.class);
-        when(events.findAllByOrderByCreatedAtDesc(any())).thenReturn(List.of());
+        ActivityStore store = mock(ActivityStore.class);
+        when(store.latest(200)).thenReturn(List.of());
 
-        new GetActivityTimeline(events).execute(500);
+        new GetActivityTimeline(store).execute(500);
 
-        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(events).findAllByOrderByCreatedAtDesc(captor.capture());
-        assertThat(captor.getValue().getPageSize()).isEqualTo(200);
+        verify(store).latest(200);
     }
 
-    private static ActivityEventEntity event(String message, Instant createdAt) {
-        return new ActivityEventEntity(
+    private static Activity activity(String message, Instant createdAt) {
+        return new Activity(
                 UUID.randomUUID(),
                 createdAt,
                 ActivityType.DEPLOYMENT_STARTED,
