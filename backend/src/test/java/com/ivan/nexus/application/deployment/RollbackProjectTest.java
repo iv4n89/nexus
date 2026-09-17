@@ -6,10 +6,8 @@ import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
-import com.ivan.nexus.domain.manifest.ManifestValidator;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.config.NexusProperties;
 import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
@@ -165,12 +163,9 @@ class RollbackProjectTest {
     }
 
     private RollbackProject useCaseWithExecutor(Executor executor) {
-        NexusProperties properties = new NexusProperties();
-        properties.getManifest().setAllowedRoot(allowedRoot.toString());
         return new RollbackProject(
                 loader,
-                new ManifestValidator(allowedRoot),
-                properties,
+                allowedRoot,
                 projects,
                 deployments,
                 hub,

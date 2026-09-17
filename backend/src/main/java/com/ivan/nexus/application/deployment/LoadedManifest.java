@@ -21,8 +21,7 @@ final class LoadedManifest {
     static LoadedManifest load(
             String projectId,
             Path allowedRoot,
-            YamlManifestLoader loader,
-            ManifestValidator validator) {
+            YamlManifestLoader loader) {
         Path manifestPath = allowedRoot.resolve(projectId).resolve("nexus.yml");
         if (!Files.isRegularFile(manifestPath)) {
             throw new DomainException(NexusErrorCode.MANIFEST_NOT_FOUND, "Manifest not found");
@@ -31,7 +30,7 @@ final class LoadedManifest {
         if (!projectId.equals(manifest.project().id())) {
             throw new DomainException(NexusErrorCode.MANIFEST_INVALID, "project.id does not match");
         }
-        validator.validate(manifest);
+        ManifestValidator.validate(manifest, allowedRoot);
         return new LoadedManifest(manifest, manifestPath);
     }
 

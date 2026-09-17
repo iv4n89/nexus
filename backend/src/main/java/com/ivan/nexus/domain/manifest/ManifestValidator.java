@@ -2,30 +2,19 @@ package com.ivan.nexus.domain.manifest;
 
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.config.NexusProperties;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
 import java.util.regex.Pattern;
 
-@Component
-public class ManifestValidator {
+public final class ManifestValidator {
     private static final Pattern COMMAND_PATTERN =
             Pattern.compile("^[./a-zA-Z0-9._-]+(?:\\s+[./a-zA-Z0-9._-]+)*$");
 
-    private final Path allowedRoot;
-
-    public ManifestValidator(Path allowedRoot) {
-        this.allowedRoot = allowedRoot.toAbsolutePath().normalize();
+    private ManifestValidator() {
     }
 
-    @Autowired
-    public ManifestValidator(NexusProperties properties) {
-        this(Path.of(properties.getManifest().getAllowedRoot()));
-    }
-
-    public void validate(ProjectManifest manifest) {
+    public static void validate(ProjectManifest manifest, Path allowedRoot) {
+        Path root = allowedRoot.toAbsolutePath().normalize();
         if (manifest == null || manifest.project() == null) {
             fail("project is required");
         }
@@ -37,7 +26,7 @@ public class ManifestValidator {
         }
 
         Path workingDirectory = Path.of(manifest.project().workingDirectory()).toAbsolutePath().normalize();
-        if (!workingDirectory.startsWith(allowedRoot)) {
+        if (!workingDirectory.startsWith(root)) {
             fail("project.workingDirectory must be under the allowed root");
         }
 

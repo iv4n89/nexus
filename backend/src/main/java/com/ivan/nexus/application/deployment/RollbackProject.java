@@ -4,11 +4,9 @@ import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
-import com.ivan.nexus.domain.manifest.ManifestValidator;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.config.NexusProperties;
 import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectJpaRepository;
@@ -23,14 +21,12 @@ import java.util.concurrent.Executor;
 @Service
 public class RollbackProject {
     private final YamlManifestLoader loader;
-    private final ManifestValidator validator;
     private final Path allowedRoot;
     private final DeploymentCommandRunner runner;
 
     public RollbackProject(
             YamlManifestLoader loader,
-            ManifestValidator validator,
-            NexusProperties properties,
+            @Qualifier("manifestAllowedRoot") Path allowedRoot,
             ManagedProjectJpaRepository projects,
             DeploymentJpaRepository deployments,
             DeploymentStreamHub hub,
@@ -41,8 +37,7 @@ public class RollbackProject {
             UserJpaRepository users,
             @Qualifier("deploymentExecutor") Executor sseExecutor) {
         this.loader = loader;
-        this.validator = validator;
-        this.allowedRoot = Path.of(properties.getManifest().getAllowedRoot()).toAbsolutePath().normalize();
+        this.allowedRoot = allowedRoot;
         this.runner = new DeploymentCommandRunner(
                 projects,
                 deployments,
@@ -56,7 +51,7 @@ public class RollbackProject {
     }
 
     public Deployment execute(String projectId, String username) {
-        LoadedManifest loaded = LoadedManifest.load(projectId, allowedRoot, loader, validator);
+        LoadedManifest loaded = LoadedManifest.load(projectId, allowedRoot, loader);
         String command = rollbackCommand(loaded.manifest());
         if (command == null) {
             throw new DomainException(NexusErrorCode.OPERATION_NOT_ALLOWED, "Rollback command is not configured");

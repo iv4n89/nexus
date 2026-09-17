@@ -23,7 +23,6 @@ class ManifestValidatorTest {
     private static final Path WORKING_DIR = ALLOWED_ROOT.resolve("lab");
 
     private final YamlManifestLoader loader = new YamlManifestLoader();
-    private final ManifestValidator validator = new ManifestValidator(ALLOWED_ROOT);
 
     @BeforeAll
     static void createWorkingDir() throws IOException {
@@ -34,7 +33,7 @@ class ManifestValidatorTest {
     void validManifestLoadsAndValidates() {
         ProjectManifest manifest = load("/manifests/valid.yml");
 
-        validator.validate(manifest);
+        ManifestValidator.validate(manifest, ALLOWED_ROOT);
 
         assertThat(manifest.project().id()).isEqualTo("lab");
         assertThat(manifest.project().workingDirectory()).isEqualTo(WORKING_DIR.toString());
@@ -49,7 +48,7 @@ class ManifestValidatorTest {
     void missingCommandIsInvalid() {
         ProjectManifest manifest = load("/manifests/missing-command.yml");
 
-        assertInvalid(() -> validator.validate(manifest));
+        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
     }
 
     @ParameterizedTest
@@ -60,7 +59,7 @@ class ManifestValidatorTest {
             "./deploy.sh `id`"
     })
     void rejectsDestructiveCommands(String command) {
-        assertInvalid(() -> validator.validate(validManifest(command)));
+        assertInvalid(() -> ManifestValidator.validate(validManifest(command), ALLOWED_ROOT));
     }
 
     @Test
@@ -73,7 +72,7 @@ class ManifestValidatorTest {
                 null,
                 null);
 
-        assertInvalid(() -> validator.validate(manifest));
+        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
     }
 
     @Test
@@ -86,7 +85,7 @@ class ManifestValidatorTest {
                 null,
                 null);
 
-        assertInvalid(() -> validator.validate(manifest));
+        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
     }
 
     @Test
@@ -99,7 +98,7 @@ class ManifestValidatorTest {
                 null,
                 null);
 
-        assertInvalid(() -> validator.validate(manifest));
+        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
     }
 
     @ParameterizedTest
@@ -114,7 +113,7 @@ class ManifestValidatorTest {
                 null,
                 null);
 
-        assertInvalid(() -> validator.validate(manifest));
+        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
     }
 
     @Test
@@ -127,7 +126,7 @@ class ManifestValidatorTest {
                 new ProjectManifest.HealthBlock("http://169.254.169.254/", 5),
                 null);
 
-        assertInvalid(() -> validator.validate(manifest));
+        assertInvalid(() -> ManifestValidator.validate(manifest, ALLOWED_ROOT));
     }
 
     @Test
@@ -140,7 +139,7 @@ class ManifestValidatorTest {
                 null,
                 null);
 
-        validator.validate(manifest);
+        ManifestValidator.validate(manifest, ALLOWED_ROOT);
     }
 
     private ProjectManifest load(String classpath) {
