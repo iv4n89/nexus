@@ -60,6 +60,18 @@ class DiscoverProjectsTest {
         assertThat(discover.execute()).containsExactly(new Project("lab", "lab", "HEALTHY", 1, 1, true));
     }
 
+    @Test
+    void includesManifestOnlyProjectWithNoContainers(@TempDir Path allowedRoot) throws IOException {
+        Path manifest = allowedRoot.resolve("solo").resolve("nexus.yml");
+        Files.createDirectories(manifest.getParent());
+        Files.writeString(manifest, "project:\n  id: solo\n");
+
+        DiscoverProjects discover = new DiscoverProjects(inventory(), allowedRoot.toString());
+
+        assertThat(discover.execute()).containsExactly(new Project("solo", "solo", "DOWN", 0, 0, true));
+        assertThat(discover.groupByProject().get("solo")).isEmpty();
+    }
+
     private static ContainerInventory inventory(ContainerSnapshot... snapshots) {
         List<ContainerSnapshot> all = List.of(snapshots);
         return new ContainerInventory() {

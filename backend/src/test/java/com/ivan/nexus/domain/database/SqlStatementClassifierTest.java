@@ -42,4 +42,9 @@ class SqlStatementClassifierTest {
     void rejectsSecondStatement() {
         assertThrows(DomainException.class, () -> SqlStatementClassifier.classify("SELECT 1; DELETE FROM users"));
     }
+
+    @Test
+    void dashesInsideStringLiteralsAreNotComments() {
+        assertEquals(StatementClass.READ, SqlStatementClassifier.classify("SELECT '-- not a comment'"));
+    }
 }

@@ -13,4 +13,8 @@ describe('classifySql', () => {
   it('marks DROP as destructive', () => {
     expect(isDestructiveSql('DROP TABLE users')).toBe(true)
   })
+
+  it('does not treat dashes inside strings as comments', () => {
+    expect(isReadSql("SELECT '-- not a comment'")).toBe(true)
+  })
 })

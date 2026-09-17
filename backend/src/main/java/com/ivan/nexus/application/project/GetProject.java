@@ -18,7 +18,7 @@ public class GetProject {
 
     public Result execute(String projectId) {
         List<ContainerSnapshot> containers = discoverProjects.groupByProject().get(projectId);
-        if (containers == null || containers.isEmpty()) {
+        if (containers == null) {
             throw new DomainException(NexusErrorCode.PROJECT_NOT_FOUND, "Project not found");
         }
         return new Result(discoverProjects.toProject(projectId, containers), List.copyOf(containers));

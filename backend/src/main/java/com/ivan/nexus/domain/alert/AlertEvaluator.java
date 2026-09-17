@@ -16,8 +16,10 @@ public class AlertEvaluator {
     public static final int DEFAULT_ERROR_RATE_PER_MINUTE = 10;
     static final int RESTART_SPIKE_DELTA = 3;
     static final Duration RESTART_SPIKE_WINDOW = Duration.ofMinutes(5);
+    static final Duration ERROR_RATE_WINDOW = Duration.ofMinutes(1);
 
     private final Map<String, List<RestartSample>> restartHistory = new HashMap<>();
+    private final Map<String, List<ErrorHitSample>> errorHistory = new HashMap<>();
     private final Set<String> stoppedContainers = new HashSet<>();
 
     public AlertEvaluation evaluate(AlertFacts facts) {
@@ -37,7 +39,7 @@ public class AlertEvaluator {
         }
 
         evaluateDisk(facts, firings, resolveKeys);
-        evaluateErrorRates(facts, firings, resolveKeys);
+        this.evaluateErrorRates(facts, firings, resolveKeys);
         evaluateHttpHealth(facts, firings, resolveKeys);
 
         return new AlertEvaluation(firings, List.copyOf(resolveKeys.keySet()));
@@ -142,14 +144,24 @@ public class AlertEvaluator {
         resolveKeys.put(key, key);
     }
 
-    private static void evaluateErrorRates(
+    private void evaluateErrorRates(
             AlertFacts facts,
             List<AlertFiring> firings,
             Map<AlertKey, AlertKey> resolveKeys) {
         for (ErrorRateState rate : facts.errorRates()) {
             AlertKey key = new AlertKey(AlertType.ERROR_RATE, rate.projectId(), rate.serviceId());
-            if (rate.newHits() > rate.threshold()) {
-                fire(firings, key, "Error rate is " + rate.newHits() + " hits this scan");
+            String historyKey = rate.projectId() + "\0" + rate.serviceId();
+            List<ErrorHitSample> samples = errorHistory.computeIfAbsent(historyKey, ignored -> new ArrayList<>());
+            samples.add(new ErrorHitSample(facts.now(), rate.newHits()));
+            Instant cutoff = facts.now().minus(ERROR_RATE_WINDOW);
+            samples.removeIf(sample -> sample.at().isBefore(cutoff));
+            int sum = 0;
+            for (ErrorHitSample sample : samples) {
+                sum += sample.hits();
+            }
+            boolean spanned = !samples.isEmpty() && !samples.getFirst().at().isAfter(cutoff);
+            if (spanned && sum > rate.threshold()) {
+                fire(firings, key, "Error rate is " + sum + " hits per minute");
             } else {
                 resolveKeys.put(key, key);
             }
@@ -212,5 +224,8 @@ public class AlertEvaluator {
     }
 
     private record RestartSample(Instant at, int restartCount) {
+    }
+
+    private record ErrorHitSample(Instant at, int hits) {
     }
 }

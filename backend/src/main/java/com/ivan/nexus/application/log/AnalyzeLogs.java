@@ -24,7 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@ConditionalOnProperty(name = "nexus.alerts.enabled", havingValue = "true")
+@ConditionalOnProperty(name = "nexus.logs.analysis-enabled", havingValue = "true", matchIfMissing = true)
 public class AnalyzeLogs {
     private static final Logger log = LoggerFactory.getLogger(AnalyzeLogs.class);
 

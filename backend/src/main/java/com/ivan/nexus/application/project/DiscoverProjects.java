@@ -39,7 +39,21 @@ public class DiscoverProjects {
             String projectId = ProjectGrouping.projectId(snapshot.name(), snapshot.labels());
             grouped.computeIfAbsent(projectId, key -> new ArrayList<>()).add(snapshot);
         }
+        addManifestOnlyProjects(grouped);
         return grouped;
+    }
+
+    private void addManifestOnlyProjects(Map<String, List<ContainerSnapshot>> grouped) {
+        if (!Files.isDirectory(allowedRoot)) {
+            return;
+        }
+        try (var stream = Files.list(allowedRoot)) {
+            stream.filter(Files::isDirectory)
+                    .filter(dir -> Files.isRegularFile(dir.resolve("nexus.yml")))
+                    .forEach(dir -> grouped.putIfAbsent(dir.getFileName().toString(), new ArrayList<>()));
+        } catch (java.io.IOException ignored) {
+            // Inventory remains the source of running projects if the root cannot be listed.
+        }
     }
 
     Project toProject(String id, List<ContainerSnapshot> containers) {

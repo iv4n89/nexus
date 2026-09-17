@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
+import { alertsPath } from '@/features/alerts/api'
 import { ActivityTimeline, useActivityEvents } from '@/features/activity/timeline'
 import { ProjectList } from '@/features/projects/project-list'
 import { api } from '@/lib/api'
@@ -19,8 +20,8 @@ export function DashboardView() {
   })
 
   const alerts = useQuery({
-    queryKey: ['alerts'],
-    queryFn: () => api<Alert[]>('/api/alerts'),
+    queryKey: ['alerts', 'ACTIVE'],
+    queryFn: () => api<Alert[]>(alertsPath('ACTIVE')),
     refetchInterval: 30_000,
   })
   const activity = useActivityEvents(8)
