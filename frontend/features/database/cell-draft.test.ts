@@ -39,3 +39,71 @@ describe('cell-draft', () => {
     expect(draft['[["id",1]]'].name).toBeNull()
   })
 })
+
+import {
+  addInsertRow,
+  affectedRowCount,
+  applyInsertCell,
+  emptyBrowseDraft,
+  MAX_AFFECTED_ROWS,
+  removeInsertRow,
+  sqlWritePayload,
+  toggleDelete,
+} from './cell-draft'
+
+describe('browse draft writes', () => {
+  const keys = ['[["id",1]]', '[["id",2]]']
+  const pks = { '[["id",1]]': { id: 1 }, '[["id",2]]': { id: 2 } }
+  const columns = ['id', 'email', 'role']
+
+  it('adds an empty insert that counts as one dirty row', () => {
+    const draft = addInsertRow(emptyBrowseDraft(), 'i1')
+    expect(affectedRowCount(draft)).toBe(1)
+    expect(sqlWritePayload(draft, keys, pks, columns)).toEqual({
+      patches: [],
+      inserts: [{ values: {} }],
+      deletes: [],
+    })
+  })
+
+  it('omits empty insert cells and includes typed PK', () => {
+    let draft = addInsertRow(emptyBrowseDraft(), 'i1')
+    draft = applyInsertCell(draft, 'i1', 'email', 'nuevo@x')
+    draft = applyInsertCell(draft, 'i1', 'id', '')
+    expect(draft.inserts[0].values).toEqual({ email: 'nuevo@x' })
+  })
+
+  it('toggle delete skips UPDATE patches for that PK', () => {
+    let draft = emptyBrowseDraft()
+    draft = {
+      ...draft,
+      cells: applyCell(draft.cells, '[["id",2]]', 'role', 'ADMIN', 'VIEWER'),
+    }
+    draft = toggleDelete(draft, '[["id",2]]')
+    expect(sqlWritePayload(draft, keys, pks, columns)).toEqual({
+      patches: [],
+      inserts: [],
+      deletes: [{ id: 2 }],
+    })
+    draft = toggleDelete(draft, '[["id",2]]')
+    expect(sqlWritePayload(draft, keys, pks, columns).patches).toEqual([
+      { primaryKey: { id: 2 }, column: 'role', value: 'ADMIN' },
+    ])
+  })
+
+  it('removeInsertRow drops a new row with no DELETE', () => {
+    let draft = addInsertRow(emptyBrowseDraft(), 'i1')
+    draft = removeInsertRow(draft, 'i1')
+    expect(affectedRowCount(draft)).toBe(0)
+    expect(sqlWritePayload(draft, keys, pks, columns).deletes).toEqual([])
+  })
+
+  it('does not add an insert at the 100-row cap', () => {
+    let draft = emptyBrowseDraft()
+    for (let i = 0; i < MAX_AFFECTED_ROWS; i++) {
+      draft = addInsertRow(draft, `i${i}`)
+    }
+    const blocked = addInsertRow(draft, 'overflow')
+    expect(blocked.inserts).toHaveLength(MAX_AFFECTED_ROWS)
+  })
+})

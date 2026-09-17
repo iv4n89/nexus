@@ -223,6 +223,93 @@ class JdbcQueryExecutorIT {
         assertTrue(ex.getMessage().toLowerCase().contains("primary key"));
     }
 
+    @Test
+    void applyCellsDeletesUpdatesAndInsertsInOneTransaction() throws Exception {
+        try (Connection conn = DriverManager.getConnection(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("""
+                    CREATE TABLE users_write (
+                        id INT PRIMARY KEY,
+                        email TEXT UNIQUE,
+                        role TEXT NOT NULL
+                    )
+                    """);
+            stmt.execute(
+                    "INSERT INTO users_write (id, email, role) VALUES (2, 'bob@x', 'VIEWER'), (3, 'old@x', 'VIEWER')");
+        }
+        CellPatchGrouper.SqlWriteBatch batch = CellPatchGrouper.planSql(
+                List.of(new CellPatchGrouper.SqlPatch(Map.of("id", 2), "role", "ADMIN")),
+                List.of(new CellPatchGrouper.SqlInsert(Map.of("id", 4, "email", "nuevo@x", "role", "VIEWER"))),
+                List.of(Map.of("id", 3)));
+        QueryResult result = executor.applyCells(
+                DatabaseEngine.POSTGRES, target(), "public", "users_write", batch);
+        assertEquals(3, result.rowCount());
+        QueryResult rows = executor.query(
+                DatabaseEngine.POSTGRES,
+                target(),
+                "SELECT id, email, role FROM users_write ORDER BY id",
+                StatementClass.READ,
+                10);
+        assertEquals(2, rows.rows().size());
+        assertEquals(2, ((Number) rows.rows().get(0).get(0)).intValue());
+        assertEquals("ADMIN", rows.rows().get(0).get(2));
+        assertEquals(4, ((Number) rows.rows().get(1).get(0)).intValue());
+        assertEquals("nuevo@x", rows.rows().get(1).get(1));
+    }
+
+    @Test
+    void applyCellsRollsBackWhenDeleteMatchesNoRow() throws Exception {
+        try (Connection conn = DriverManager.getConnection(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("CREATE TABLE users_rollback (id INT PRIMARY KEY, name TEXT)");
+            stmt.execute("INSERT INTO users_rollback (id, name) VALUES (1, 'ada')");
+        }
+        CellPatchGrouper.SqlWriteBatch batch = CellPatchGrouper.planSql(
+                List.of(),
+                List.of(new CellPatchGrouper.SqlInsert(Map.of("id", 2, "name", "bob"))),
+                List.of(Map.of("id", 99)));
+        DomainException ex = assertThrows(
+                DomainException.class,
+                () -> executor.applyCells(
+                        DatabaseEngine.POSTGRES, target(), "public", "users_rollback", batch));
+        assertEquals(NexusErrorCode.QUERY_FAILED, ex.getCode());
+        QueryResult still = executor.query(
+                DatabaseEngine.POSTGRES,
+                target(),
+                "SELECT count(*) FROM users_rollback",
+                StatementClass.READ,
+                10);
+        assertEquals(1, ((Number) still.rows().get(0).get(0)).intValue());
+    }
+
+    @Test
+    void applyCellsInsertsDefaultValues() throws Exception {
+        try (Connection conn = DriverManager.getConnection(
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("""
+                    CREATE TABLE flags_default (
+                        id SERIAL PRIMARY KEY,
+                        name TEXT NOT NULL DEFAULT 'x'
+                    )
+                    """);
+        }
+        CellPatchGrouper.SqlWriteBatch batch = CellPatchGrouper.planSql(
+                List.of(), List.of(new CellPatchGrouper.SqlInsert(Map.of())), List.of());
+        QueryResult result = executor.applyCells(
+                DatabaseEngine.POSTGRES, target(), "public", "flags_default", batch);
+        assertEquals(1, result.rowCount());
+        QueryResult rows = executor.query(
+                DatabaseEngine.POSTGRES,
+                target(),
+                "SELECT name FROM flags_default",
+                StatementClass.READ,
+                10);
+        assertEquals("x", rows.rows().get(0).get(0));
+    }
+
     private static ResolvedTarget target() {
         return new ResolvedTarget(
                 postgres.getHost(),

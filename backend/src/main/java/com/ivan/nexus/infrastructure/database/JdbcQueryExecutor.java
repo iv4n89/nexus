@@ -118,13 +118,43 @@ public class JdbcQueryExecutor {
         if (grouped == null || grouped.isEmpty()) {
             throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Patches are required");
         }
+        return applyCells(
+                engine,
+                target,
+                schema,
+                table,
+                new CellPatchGrouper.SqlWriteBatch(List.of(), grouped, List.of()));
+    }
+
+    public QueryResult applyCells(
+            DatabaseEngine engine,
+            ResolvedTarget target,
+            String schema,
+            String table,
+            CellPatchGrouper.SqlWriteBatch batch) {
+        if (batch == null
+                || (batch.deletes().isEmpty() && batch.updates().isEmpty() && batch.inserts().isEmpty())) {
+            throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Patches are required");
+        }
         Properties props = connectionProperties(engine, target);
         String url = jdbcUrl(engine, target);
         long start = System.nanoTime();
+        int written = batch.deletes().size() + batch.updates().size() + batch.inserts().size();
         try (Connection conn = DriverManager.getConnection(url, props)) {
             conn.setAutoCommit(false);
             try {
-                for (CellPatchGrouper.GroupedSqlUpdate row : grouped) {
+                for (CellPatchGrouper.SqlDelete row : batch.deletes()) {
+                    String sql = buildDeleteSql(engine, schema, table, row);
+                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                        stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                        int index = 1;
+                        for (Object value : row.primaryKey().values()) {
+                            stmt.setObject(index++, value);
+                        }
+                        expectOneRow(conn, stmt);
+                    }
+                }
+                for (CellPatchGrouper.GroupedSqlUpdate row : batch.updates()) {
                     String sql = buildUpdateSql(engine, schema, table, row);
                     try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                         stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
@@ -135,22 +165,27 @@ public class JdbcQueryExecutor {
                         for (Object value : row.primaryKey().values()) {
                             stmt.setObject(index++, value);
                         }
-                        int updated = stmt.executeUpdate();
-                        if (updated != 1) {
-                            conn.rollback();
-                            throw new DomainException(
-                                    NexusErrorCode.QUERY_FAILED,
-                                    "No row matched primary key");
+                        expectOneRow(conn, stmt);
+                    }
+                }
+                for (CellPatchGrouper.SqlInsert row : batch.inserts()) {
+                    String sql = buildInsertSql(engine, schema, table, row);
+                    try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                        stmt.setQueryTimeout(QUERY_TIMEOUT_SECONDS);
+                        int index = 1;
+                        for (Object value : row.values().values()) {
+                            stmt.setObject(index++, value);
                         }
+                        expectOneRow(conn, stmt);
                     }
                 }
                 conn.commit();
                 return new QueryResult(
                         List.of("updateCount"),
-                        List.of(List.of(grouped.size())),
+                        List.of(List.of(written)),
                         false,
                         elapsedMs(start),
-                        grouped.size());
+                        written);
             } catch (DomainException ex) {
                 try {
                     conn.rollback();
@@ -171,6 +206,14 @@ public class JdbcQueryExecutor {
             throw new DomainException(
                     NexusErrorCode.QUERY_FAILED,
                     SecretSanitizer.strip(target.password(), ex.getMessage()));
+        }
+    }
+
+    private static void expectOneRow(Connection conn, PreparedStatement stmt) throws SQLException {
+        int updated = stmt.executeUpdate();
+        if (updated != 1) {
+            conn.rollback();
+            throw new DomainException(NexusErrorCode.QUERY_FAILED, "No row matched primary key");
         }
     }
 
@@ -200,6 +243,48 @@ public class JdbcQueryExecutor {
             sql.append(SqlIdentifierQuoter.quote(engine, column)).append(" = ?");
         }
         return sql.toString();
+    }
+
+    static String buildDeleteSql(
+            DatabaseEngine engine, String schema, String table, CellPatchGrouper.SqlDelete row) {
+        StringBuilder sql = new StringBuilder("DELETE FROM ")
+                .append(SqlIdentifierQuoter.quote(engine, schema))
+                .append('.')
+                .append(SqlIdentifierQuoter.quote(engine, table))
+                .append(" WHERE ");
+        int i = 0;
+        for (String column : row.primaryKey().keySet()) {
+            if (i++ > 0) {
+                sql.append(" AND ");
+            }
+            sql.append(SqlIdentifierQuoter.quote(engine, column)).append(" = ?");
+        }
+        return sql.toString();
+    }
+
+    static String buildInsertSql(
+            DatabaseEngine engine, String schema, String table, CellPatchGrouper.SqlInsert row) {
+        String tableRef = SqlIdentifierQuoter.quote(engine, schema)
+                + "."
+                + SqlIdentifierQuoter.quote(engine, table);
+        if (row.values() == null || row.values().isEmpty()) {
+            if (engine == DatabaseEngine.MYSQL) {
+                return "INSERT INTO " + tableRef + " () VALUES ()";
+            }
+            return "INSERT INTO " + tableRef + " DEFAULT VALUES";
+        }
+        StringBuilder columns = new StringBuilder();
+        StringBuilder placeholders = new StringBuilder();
+        int i = 0;
+        for (String column : row.values().keySet()) {
+            if (i++ > 0) {
+                columns.append(", ");
+                placeholders.append(", ");
+            }
+            columns.append(SqlIdentifierQuoter.quote(engine, column));
+            placeholders.append("?");
+        }
+        return "INSERT INTO " + tableRef + " (" + columns + ") VALUES (" + placeholders + ")";
     }
 
     public SqlCatalog metadata(DatabaseEngine engine, ResolvedTarget target) {

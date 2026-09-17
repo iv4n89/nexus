@@ -6,19 +6,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { me } from '@/features/auth/api'
 import { boundTreeSelection } from '@/features/database/browse-selection'
 import {
+  addInsertRow,
+  affectedRowCount,
   applyCell,
-  dirtyCount,
+  applyInsertCell,
+  emptyBrowseDraft,
   emptyDraft,
+  MAX_AFFECTED_ROWS,
   mongoPatches,
+  removeInsertRow,
   rowKey,
-  sqlPatches,
+  sqlWritePayload,
   toMongoRows,
-  toSqlRows,
-  type CellDraft,
+  toSqlDraftParts,
+  toggleDelete,
 } from '@/features/database/cell-draft'
 import { ConfirmDestructive } from '@/features/database/confirm-destructive'
 import { DataGrid } from '@/features/database/data-grid'
-import { formatMongoStatements, formatSqlStatements } from '@/features/database/draft-sql'
+import { formatMongoStatements, formatSqlDraft } from '@/features/database/draft-sql'
 import { InstanceSelect } from '@/features/database/instance-select'
 import { QueryEditor } from '@/features/database/query-editor'
 import { SchemaTree, type TreeSelection } from '@/features/database/schema-tree'
@@ -37,7 +42,7 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   const [browseError, setBrowseError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [selectionInstanceId, setSelectionInstanceId] = useState('')
-  const [draft, setDraft] = useState<CellDraft>(emptyDraft())
+  const [draft, setDraft] = useState(emptyBrowseDraft())
   const [resetToken, setResetToken] = useState(0)
   const [navBlocked, setNavBlocked] = useState(false)
   const queryClient = useQueryClient()
@@ -54,7 +59,7 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   const selectedId = instanceId || instances.data?.[0]?.id || ''
   const selected: DatabaseInstance | undefined = instances.data?.find((item) => item.id === selectedId)
   const previewSelection = boundTreeSelection(selection, selectionInstanceId, selectedId)
-  const changes = dirtyCount(draft)
+  const changes = affectedRowCount(draft)
 
   if (selectionInstanceId && selectedId && selectionInstanceId !== selectedId && changes === 0) {
     setSelectionInstanceId(selectedId)
@@ -96,6 +101,8 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   })
 
   const isAdmin = auth.data?.role === 'ADMIN'
+  const canAddSqlRow =
+    Boolean(isAdmin) && previewSelection?.kind === 'sql' && previewSelection.primaryKey.length > 0
   const engine = selected?.engine ?? 'POSTGRES'
   const clientAllowsExecute = useMemo(() => {
     if (isAdmin) {
@@ -123,7 +130,7 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   const save = useMutation({
     mutationFn: (payload: Parameters<typeof postCells>[2]) => postCells(projectId, selectedId, payload),
     onSuccess: () => {
-      setDraft(emptyDraft())
+      setDraft(emptyBrowseDraft())
       setResetToken((n) => n + 1)
       setBrowseError(null)
       void queryClient.invalidateQueries({
@@ -145,7 +152,7 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   }
 
   function guardNav(): boolean {
-    if (dirtyCount(draft) > 0) {
+    if (affectedRowCount(draft) > 0) {
       setNavBlocked(true)
       return true
     }
@@ -153,7 +160,7 @@ export function DatabasePage({ projectId }: { projectId: string }) {
   }
 
   function onCancel() {
-    setDraft(emptyDraft())
+    setDraft(emptyBrowseDraft())
     setResetToken((n) => n + 1)
     setBrowseError(null)
   }
@@ -165,17 +172,25 @@ export function DatabasePage({ projectId }: { projectId: string }) {
     const result = preview.data
     const keys = previewRowKeys(result, previewSelection)
     if (previewSelection.kind === 'sql') {
+      const payload = sqlWritePayload(
+        draft,
+        keys,
+        sqlPrimaryKeys(result, previewSelection.primaryKey),
+        result.columns,
+      )
       save.mutate({
         schema: previewSelection.schema,
         table: previewSelection.table,
-        patches: sqlPatches(draft, keys, sqlPrimaryKeys(result, previewSelection.primaryKey), result.columns),
+        patches: payload.patches,
+        inserts: payload.inserts,
+        deletes: payload.deletes,
       })
       return
     }
     save.mutate({
       mongoDatabase: previewSelection.database,
       collection: previewSelection.collection,
-      patches: mongoPatches(draft, keys, result.columns),
+      patches: mongoPatches(draft.cells, keys, result.columns),
     })
   }
 
@@ -188,7 +203,22 @@ export function DatabasePage({ projectId }: { projectId: string }) {
           Object.fromEntries(primaryKey.map((name) => [name, row[name]])),
           primaryKey,
         )
-    setDraft((current) => applyCell(current, key, column, input, original))
+    setDraft((current) => ({
+      ...current,
+      cells: applyCell(current.cells, key, column, input, original),
+    }))
+  }
+
+  function onInsertChange(localId: string, column: string, input: string) {
+    setDraft((current) => applyInsertCell(current, localId, column, input))
+  }
+
+  function onToggleDelete(key: string) {
+    setDraft((current) => toggleDelete(current, key))
+  }
+
+  function onRemoveInsert(localId: string) {
+    setDraft((current) => removeInsertRow(current, localId))
   }
 
   if (instances.isPending) {
@@ -276,12 +306,26 @@ export function DatabasePage({ projectId }: { projectId: string }) {
                   {preview.data.truncated ? (
                     <p className="text-sm text-[#888]">Result truncated at {preview.data.rowCount} rows</p>
                   ) : null}
-                  {changes > 0 ? (
-                    <>
-                      <div className="flex items-center justify-between text-sm text-[#888]">
-                        <span>
-                          {changes} {changes === 1 ? 'cambio' : 'cambios'}
-                        </span>
+                  {canAddSqlRow || changes > 0 ? (
+                    <div className="flex items-center justify-between text-sm text-[#888]">
+                      <span className="flex items-center gap-3">
+                        {canAddSqlRow ? (
+                          <button
+                            type="button"
+                            onClick={() => setDraft((current) => addInsertRow(current))}
+                            disabled={save.isPending || affectedRowCount(draft) >= MAX_AFFECTED_ROWS}
+                            className="text-[#f5f5f5]"
+                          >
+                            + Fila
+                          </button>
+                        ) : null}
+                        {changes > 0 ? (
+                          <span>
+                            {changes} {changes === 1 ? 'cambio' : 'cambios'}
+                          </span>
+                        ) : null}
+                      </span>
+                      {changes > 0 ? (
                         <span className="flex gap-3">
                           <button
                             type="button"
@@ -300,35 +344,51 @@ export function DatabasePage({ projectId }: { projectId: string }) {
                             Guardar
                           </button>
                         </span>
-                      </div>
-                      <pre className="overflow-auto border border-[#2a2a2a] p-3 font-mono text-sm text-[#888] whitespace-pre-wrap">
-                        {previewSelection.kind === 'sql'
-                          ? formatSqlStatements(
-                              engine === 'MYSQL' ? 'MYSQL' : 'POSTGRES',
-                              previewSelection.schema,
-                              previewSelection.table,
-                              toSqlRows(
-                                draft,
-                                previewRowKeys(preview.data, previewSelection),
-                                sqlPrimaryKeys(preview.data, previewSelection.primaryKey),
-                                preview.data.columns,
-                              ),
-                            )
-                          : formatMongoStatements(
-                              previewSelection.collection,
-                              toMongoRows(draft, previewRowKeys(preview.data, previewSelection), preview.data.columns),
-                            )}
-                      </pre>
-                    </>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {changes > 0 ? (
+                    <pre className="overflow-auto border border-[#2a2a2a] p-3 font-mono text-sm text-[#888] whitespace-pre-wrap">
+                      {previewSelection.kind === 'sql'
+                        ? formatSqlDraft(
+                            engine === 'MYSQL' ? 'MYSQL' : 'POSTGRES',
+                            previewSelection.schema,
+                            previewSelection.table,
+                            toSqlDraftParts(
+                              draft,
+                              previewRowKeys(preview.data, previewSelection),
+                              sqlPrimaryKeys(preview.data, previewSelection.primaryKey),
+                              preview.data.columns,
+                            ),
+                          )
+                        : formatMongoStatements(
+                            previewSelection.collection,
+                            toMongoRows(
+                              draft.cells,
+                              previewRowKeys(preview.data, previewSelection),
+                              preview.data.columns,
+                            ),
+                          )}
+                    </pre>
                   ) : null}
                   <DataGrid
                     result={preview.data}
                     canEdit={Boolean(isAdmin)}
                     primaryKey={previewSelection.kind === 'sql' ? previewSelection.primaryKey : []}
                     idColumn={previewSelection.kind === 'mongo' ? '_id' : null}
-                    draft={draft}
+                    draft={draft.cells}
                     resetToken={resetToken}
                     onDraftChange={onDraftChange}
+                    insertRows={previewSelection.kind === 'sql' ? draft.inserts : []}
+                    deletedKeys={previewSelection.kind === 'sql' ? draft.deletes : []}
+                    showRowActions={
+                      previewSelection.kind === 'sql' &&
+                      Boolean(isAdmin) &&
+                      previewSelection.primaryKey.length > 0
+                    }
+                    onInsertChange={onInsertChange}
+                    onToggleDelete={onToggleDelete}
+                    onRemoveInsert={onRemoveInsert}
                   />
                 </>
               ) : (
@@ -355,6 +415,7 @@ export function DatabasePage({ projectId }: { projectId: string }) {
                     draft={emptyDraft()}
                     resetToken={0}
                     onDraftChange={() => undefined}
+                    showRowActions={false}
                   />
                 ) : null}
               </>

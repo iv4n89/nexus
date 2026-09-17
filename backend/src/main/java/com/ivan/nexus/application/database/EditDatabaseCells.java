@@ -53,9 +53,15 @@ public class EditDatabaseCells {
         DatabaseEngine engine = resolution.instance().engine();
         boolean sqlBody = hasText(body.schema()) && hasText(body.table());
         boolean mongoBody = hasText(body.mongoDatabase()) && hasText(body.collection());
+        List<DatabaseDtos.SqlInsertValues> insertValues =
+                body.inserts() == null ? List.of() : body.inserts();
+        List<Map<String, Object>> deleteMaps = body.deletes() == null ? List.of() : body.deletes();
         QueryResult result;
         if (engine == DatabaseEngine.MONGO) {
             if (!mongoBody || sqlBody) {
+                throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Statement is not allowed");
+            }
+            if (!insertValues.isEmpty() || !deleteMaps.isEmpty()) {
                 throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Statement is not allowed");
             }
             List<CellPatchGrouper.MongoPatch> mongoPatches = new ArrayList<>();
@@ -81,12 +87,17 @@ public class EditDatabaseCells {
                 }
                 sqlPatches.add(new CellPatchGrouper.SqlPatch(patch.primaryKey(), patch.column(), patch.value()));
             }
-            result = jdbc.updateCells(
+            List<CellPatchGrouper.SqlInsert> sqlInserts = new ArrayList<>();
+            for (DatabaseDtos.SqlInsertValues insert : insertValues) {
+                sqlInserts.add(new CellPatchGrouper.SqlInsert(
+                        insert.values() == null ? Map.of() : insert.values()));
+            }
+            result = jdbc.applyCells(
                     engine,
                     resolution.target(),
                     body.schema(),
                     body.table(),
-                    CellPatchGrouper.groupSql(sqlPatches));
+                    CellPatchGrouper.planSql(sqlPatches, sqlInserts, deleteMaps));
         }
         UUID userId = users.findByUsername(username).map(UserEntity::getId).orElse(null);
         recordAudit.execute(
