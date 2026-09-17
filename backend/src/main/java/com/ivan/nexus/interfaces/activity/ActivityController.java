@@ -23,7 +23,7 @@ public class ActivityController {
 
     @GetMapping("/api/activity")
     public List<ActivityResponse> list(@RequestParam(defaultValue = "50") int limit) {
-        return getActivityTimeline.execute(limit);
+        return getActivityTimeline.execute(limit).stream().map(ActivityResponse::from).toList();
     }
 
     @GetMapping(path = "/api/events/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

@@ -1,5 +1,6 @@
 package com.ivan.nexus.infrastructure.persistence.alert;
 
+import com.ivan.nexus.domain.alert.Alert;
 import com.ivan.nexus.domain.alert.AlertStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -118,5 +119,19 @@ public class AlertEventEntity {
 
     public Instant getResolvedAt() {
         return resolvedAt;
+    }
+
+    public Alert toDomain() {
+        return new Alert(
+                id,
+                rule == null ? null : rule.getId(),
+                projectId,
+                serviceId,
+                status,
+                message,
+                openedAt,
+                acknowledgedAt,
+                resolvedAt,
+                rule == null ? null : rule.getType());
     }
 }

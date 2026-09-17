@@ -1,6 +1,7 @@
 package com.ivan.nexus.interfaces.activity;
 
 import com.ivan.nexus.application.activity.GetActivityTimeline;
+import com.ivan.nexus.domain.activity.Activity;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.infrastructure.security.SecurityConfig;
 import com.ivan.nexus.infrastructure.sse.ActivityHub;
@@ -46,7 +47,7 @@ class ActivityControllerTest {
     @WithMockUser(roles = "VIEWER")
     void viewerListsRecentActivity() throws Exception {
         UUID id = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        given(getActivityTimeline.execute(50)).willReturn(List.of(new ActivityResponse(
+        given(getActivityTimeline.execute(50)).willReturn(List.of(new Activity(
                 id,
                 Instant.parse("2026-01-01T00:42:12Z"),
                 ActivityType.DEPLOYMENT_STARTED,

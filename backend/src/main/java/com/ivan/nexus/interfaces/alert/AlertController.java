@@ -26,7 +26,7 @@ public class AlertController {
 
     @GetMapping("/api/alerts")
     public List<AlertResponse> list(@RequestParam(required = false) List<AlertStatus> status) {
-        return getAlerts.execute(status);
+        return getAlerts.execute(status).stream().map(AlertResponse::from).toList();
     }
 
     @PostMapping("/api/alerts/{id}/acknowledge")
@@ -34,7 +34,7 @@ public class AlertController {
             @PathVariable UUID id,
             Authentication authentication,
             HttpServletRequest request) {
-        return acknowledgeAlert.execute(id, authentication.getName(), clientIp(request));
+        return AlertResponse.from(acknowledgeAlert.execute(id, authentication.getName(), clientIp(request)));
     }
 
     private static String clientIp(HttpServletRequest request) {

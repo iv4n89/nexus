@@ -1,7 +1,7 @@
 package com.ivan.nexus.interfaces.activity;
 
+import com.ivan.nexus.domain.activity.Activity;
 import com.ivan.nexus.domain.activity.ActivityType;
-import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventEntity;
 
 import java.time.Instant;
 import java.util.Map;
@@ -16,14 +16,14 @@ public record ActivityResponse(
         String message,
         Map<String, Object> metadata) {
 
-    public static ActivityResponse from(ActivityEventEntity entity) {
+    public static ActivityResponse from(Activity activity) {
         return new ActivityResponse(
-                entity.getId(),
-                entity.getCreatedAt(),
-                entity.getType(),
-                entity.getProjectId(),
-                entity.getServiceId(),
-                entity.getMessage(),
-                entity.getMetadata());
+                activity.id(),
+                activity.createdAt(),
+                activity.type(),
+                activity.projectId(),
+                activity.serviceId(),
+                activity.message(),
+                activity.metadata());
     }
 }

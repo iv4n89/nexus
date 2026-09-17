@@ -1,7 +1,8 @@
 package com.ivan.nexus.application.activity;
 
+import com.ivan.nexus.domain.activity.Activity;
+import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventEntity;
 import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventJpaRepository;
-import com.ivan.nexus.interfaces.activity.ActivityResponse;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,10 +21,10 @@ public class GetActivityTimeline {
     }
 
     @Transactional(readOnly = true)
-    public List<ActivityResponse> execute(int limit) {
+    public List<Activity> execute(int limit) {
         int clamped = clampLimit(limit);
         return events.findAllByOrderByCreatedAtDesc(PageRequest.of(0, clamped)).stream()
-                .map(ActivityResponse::from)
+                .map(ActivityEventEntity::toDomain)
                 .toList();
     }
 

@@ -1,9 +1,9 @@
 package com.ivan.nexus.application.activity;
 
+import com.ivan.nexus.domain.activity.Activity;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventEntity;
 import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventJpaRepository;
-import com.ivan.nexus.interfaces.activity.ActivityResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Pageable;
@@ -32,11 +32,16 @@ class GetActivityTimelineTest {
             return all.subList(0, Math.min(pageable.getPageSize(), all.size()));
         });
 
-        List<ActivityResponse> result = new GetActivityTimeline(events).execute(1);
+        List<Activity> result = new GetActivityTimeline(events).execute(1);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst().message()).isEqualTo("newer");
-        assertThat(result.getFirst().type()).isEqualTo(ActivityType.DEPLOYMENT_STARTED);
+        assertThat(result).containsExactly(new Activity(
+                newer.getId(),
+                Instant.parse("2026-01-01T01:00:00Z"),
+                ActivityType.DEPLOYMENT_STARTED,
+                "lab",
+                "api",
+                "newer",
+                Map.of()));
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         verify(events).findAllByOrderByCreatedAtDesc(captor.capture());
         assertThat(captor.getValue().getPageSize()).isEqualTo(1);
