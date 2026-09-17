@@ -1,7 +1,5 @@
 package com.ivan.nexus.application.log;
 
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintEntity;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -20,7 +18,7 @@ import static org.mockito.BDDMockito.given;
 class GetRecentErrorsTest {
 
     @Mock
-    LogErrorFingerprintJpaRepository fingerprints;
+    FingerprintStore fingerprints;
 
     @Test
     void dropsStoredStackFramesAndInfoNoise() {
@@ -36,8 +34,8 @@ class GetRecentErrorsTest {
         assertThat(errors.getFirst().sampleMessage()).isEqualTo("ERROR boom");
     }
 
-    private static LogErrorFingerprintEntity entity(String service, String sample, Instant seen) {
-        return new LogErrorFingerprintEntity(
+    private static StoredErrorFingerprint entity(String service, String sample, Instant seen) {
+        return new StoredErrorFingerprint(
                 UUID.randomUUID(), "nexus", service, "hash", seen, seen, 3L, sample);
     }
 }

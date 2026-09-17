@@ -1,9 +1,9 @@
 package com.ivan.nexus.application.activity;
 
+import com.ivan.nexus.application.log.FingerprintStore;
 import com.ivan.nexus.infrastructure.config.NexusProperties;
 import com.ivan.nexus.infrastructure.persistence.activity.ActivityEventJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEventJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import java.time.Instant;
 public class RetentionCleanup {
     private final ActivityEventJpaRepository activityEvents;
     private final DeploymentEventJpaRepository deploymentEvents;
-    private final LogErrorFingerprintJpaRepository fingerprints;
+    private final FingerprintStore fingerprints;
     private final NexusProperties properties;
     private final Clock clock;
 
@@ -25,7 +25,7 @@ public class RetentionCleanup {
     public RetentionCleanup(
             ActivityEventJpaRepository activityEvents,
             DeploymentEventJpaRepository deploymentEvents,
-            LogErrorFingerprintJpaRepository fingerprints,
+            FingerprintStore fingerprints,
             NexusProperties properties) {
         this(activityEvents, deploymentEvents, fingerprints, properties, Clock.systemUTC());
     }
@@ -33,7 +33,7 @@ public class RetentionCleanup {
     RetentionCleanup(
             ActivityEventJpaRepository activityEvents,
             DeploymentEventJpaRepository deploymentEvents,
-            LogErrorFingerprintJpaRepository fingerprints,
+            FingerprintStore fingerprints,
             NexusProperties properties,
             Clock clock) {
         this.activityEvents = activityEvents;

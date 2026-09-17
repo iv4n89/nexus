@@ -16,7 +16,7 @@ import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertEventJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
+import com.ivan.nexus.application.log.FingerprintStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,7 +45,7 @@ class EvaluateAlertsTest {
     @Mock
     GetSystemMetrics getSystemMetrics;
     @Mock
-    LogErrorFingerprintJpaRepository fingerprints;
+    FingerprintStore fingerprints;
     @Mock
     HealthChecker healthChecker;
     @Mock

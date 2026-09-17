@@ -2,6 +2,8 @@ package com.ivan.nexus.application.alert;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.deployment.HealthChecker;
+import com.ivan.nexus.application.log.FingerprintStore;
+import com.ivan.nexus.application.log.StoredErrorFingerprint;
 import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetSystemMetrics;
 import com.ivan.nexus.application.project.DiscoverProjects;
@@ -22,8 +24,6 @@ import com.ivan.nexus.domain.project.ProjectGrouping;
 import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintEntity;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,7 +50,7 @@ public class EvaluateAlerts {
     private final DiscoverProjects discoverProjects;
     private final ContainerStatsProvider statsProvider;
     private final GetSystemMetrics getSystemMetrics;
-    private final LogErrorFingerprintJpaRepository fingerprints;
+    private final FingerprintStore fingerprints;
     private final HealthChecker healthChecker;
     private final YamlManifestLoader loader;
     private final AlertRuleJpaRepository rules;
@@ -66,7 +66,7 @@ public class EvaluateAlerts {
             DiscoverProjects discoverProjects,
             ContainerStatsProvider statsProvider,
             GetSystemMetrics getSystemMetrics,
-            LogErrorFingerprintJpaRepository fingerprints,
+            FingerprintStore fingerprints,
             HealthChecker healthChecker,
             YamlManifestLoader loader,
             AlertRuleJpaRepository rules,
@@ -218,13 +218,13 @@ public class EvaluateAlerts {
 
     private List<ErrorRateState> errorRates(List<AlertRuleEntity> enabledRules, Map<String, ProjectManifest> manifests) {
         Map<ServiceKey, Integer> deltas = new HashMap<>();
-        for (LogErrorFingerprintEntity entity : fingerprints.findAll()) {
+        for (StoredErrorFingerprint entity : fingerprints.findAll()) {
             FingerprintCountKey countKey = new FingerprintCountKey(
-                    entity.getProjectId(), entity.getServiceId(), entity.getFingerprint());
+                    entity.projectId(), entity.serviceId(), entity.fingerprint());
             long previous = previousFingerprintCounts.getOrDefault(countKey, 0L);
-            int delta = (int) Math.max(0, entity.getCount() - previous);
-            previousFingerprintCounts.put(countKey, entity.getCount());
-            ServiceKey serviceKey = new ServiceKey(entity.getProjectId(), entity.getServiceId());
+            int delta = (int) Math.max(0, entity.count() - previous);
+            previousFingerprintCounts.put(countKey, entity.count());
+            ServiceKey serviceKey = new ServiceKey(entity.projectId(), entity.serviceId());
             deltas.merge(serviceKey, delta, Integer::sum);
         }
         for (FingerprintCountKey countKey : previousFingerprintCounts.keySet()) {

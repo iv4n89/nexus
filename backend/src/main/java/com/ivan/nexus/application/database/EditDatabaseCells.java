@@ -8,8 +8,6 @@ import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
-import com.ivan.nexus.infrastructure.database.MongoQueryExecutor;
 import com.ivan.nexus.infrastructure.persistence.user.UserEntity;
 import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import com.ivan.nexus.interfaces.database.DatabaseDtos;
@@ -23,15 +21,15 @@ import java.util.UUID;
 @Service
 public class EditDatabaseCells {
     private final DiscoverProjectDatabases discover;
-    private final JdbcQueryExecutor jdbc;
-    private final MongoQueryExecutor mongo;
+    private final SqlExecutor jdbc;
+    private final MongoExecutor mongo;
     private final RecordAudit recordAudit;
     private final UserJpaRepository users;
 
     public EditDatabaseCells(
             DiscoverProjectDatabases discover,
-            JdbcQueryExecutor jdbc,
-            MongoQueryExecutor mongo,
+            SqlExecutor jdbc,
+            MongoExecutor mongo,
             RecordAudit recordAudit,
             UserJpaRepository users) {
         this.discover = discover;

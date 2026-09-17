@@ -1,8 +1,6 @@
 package com.ivan.nexus.application.log;
 
 import com.ivan.nexus.domain.log.ErrorNormalizer;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintEntity;
-import com.ivan.nexus.infrastructure.persistence.log.LogErrorFingerprintJpaRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -12,9 +10,9 @@ import java.util.List;
 @Service
 public class GetRecentErrors {
     static final Duration RECENT_WINDOW = Duration.ofHours(24);
-    private final LogErrorFingerprintJpaRepository fingerprints;
+    private final FingerprintStore fingerprints;
 
-    public GetRecentErrors(LogErrorFingerprintJpaRepository fingerprints) {
+    public GetRecentErrors(FingerprintStore fingerprints) {
         this.fingerprints = fingerprints;
     }
 
@@ -46,21 +44,21 @@ public class GetRecentErrors {
                 .toList();
     }
 
-    private static boolean isActionable(LogErrorFingerprintEntity entity) {
-        return ErrorNormalizer.normalize(entity.getSampleMessage()).isPresent();
+    private static boolean isActionable(StoredErrorFingerprint entity) {
+        return ErrorNormalizer.normalize(entity.sampleMessage()).isPresent();
     }
 
     private static Instant cutoff() {
         return Instant.now().minus(RECENT_WINDOW);
     }
 
-    private static RecentError toRecentError(LogErrorFingerprintEntity entity) {
+    private static RecentError toRecentError(StoredErrorFingerprint entity) {
         return new RecentError(
-                entity.getServiceId(),
-                entity.getSampleMessage(),
-                entity.getCount(),
-                entity.getFirstSeen(),
-                entity.getLastSeen());
+                entity.serviceId(),
+                entity.sampleMessage(),
+                entity.count(),
+                entity.firstSeen(),
+                entity.lastSeen());
     }
 
     public record RecentError(

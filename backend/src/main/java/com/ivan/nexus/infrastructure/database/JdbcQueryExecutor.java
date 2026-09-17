@@ -1,5 +1,9 @@
 package com.ivan.nexus.infrastructure.database;
 
+import com.ivan.nexus.application.database.SqlExecutor;
+import com.ivan.nexus.application.database.SqlExecutor.SqlCatalog;
+import com.ivan.nexus.application.database.SqlExecutor.SqlColumn;
+import com.ivan.nexus.application.database.SqlExecutor.SqlTable;
 import com.ivan.nexus.domain.database.CellPatchGrouper;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
@@ -30,13 +34,14 @@ import java.util.Properties;
 import java.util.Set;
 
 @Component
-public class JdbcQueryExecutor {
+public class JdbcQueryExecutor implements SqlExecutor {
     private static final Logger log = LoggerFactory.getLogger(JdbcQueryExecutor.class);
     private static final int CONNECT_TIMEOUT_SECONDS = 5;
     private static final int SOCKET_TIMEOUT_SECONDS = 15;
     private static final int QUERY_TIMEOUT_SECONDS = 10;
     static final int MAX_CELL_CHARS = 8192;
 
+    @Override
     public QueryResult query(
             DatabaseEngine engine,
             ResolvedTarget target,
@@ -84,6 +89,7 @@ public class JdbcQueryExecutor {
         }
     }
 
+    @Override
     public QueryResult preview(DatabaseEngine engine, ResolvedTarget target, String schema, String table) {
         String sql = "SELECT * FROM "
                 + SqlIdentifierQuoter.quote(engine, schema)
@@ -126,6 +132,7 @@ public class JdbcQueryExecutor {
                 new CellPatchGrouper.SqlWriteBatch(List.of(), grouped, List.of()));
     }
 
+    @Override
     public QueryResult applyCells(
             DatabaseEngine engine,
             ResolvedTarget target,
@@ -287,6 +294,7 @@ public class JdbcQueryExecutor {
         return "INSERT INTO " + tableRef + " (" + columns + ") VALUES (" + placeholders + ")";
     }
 
+    @Override
     public SqlCatalog metadata(DatabaseEngine engine, ResolvedTarget target) {
         String excluded = engine == DatabaseEngine.MYSQL
                 ? "'mysql','sys','performance_schema','information_schema'"
@@ -473,10 +481,4 @@ public class JdbcQueryExecutor {
     private static long elapsedMs(long startNanos) {
         return Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
     }
-
-    public record SqlCatalog(List<SqlTable> tables) {}
-
-    public record SqlTable(String schema, String name, String type, List<String> primaryKey, List<SqlColumn> columns) {}
-
-    public record SqlColumn(String name, String dataType, boolean nullable) {}
 }

@@ -1,10 +1,10 @@
 package com.ivan.nexus.interfaces.database;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.ivan.nexus.application.database.MongoExecutor;
+import com.ivan.nexus.application.database.SqlExecutor;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.DatabaseStatus;
-import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
-import com.ivan.nexus.infrastructure.database.MongoQueryExecutor;
 
 import java.util.List;
 import java.util.Map;
@@ -60,9 +60,9 @@ public final class DatabaseDtos {
 
     public record MongoDatabaseResponse(String name, List<String> collections) {}
 
-    public static MetadataResponse fromSql(DatabaseEngine engine, JdbcQueryExecutor.SqlCatalog catalog) {
+    public static MetadataResponse fromSql(DatabaseEngine engine, SqlExecutor.SqlCatalog catalog) {
         Map<String, List<TableResponse>> bySchema = new java.util.LinkedHashMap<>();
-        for (JdbcQueryExecutor.SqlTable table : catalog.tables()) {
+        for (SqlExecutor.SqlTable table : catalog.tables()) {
             bySchema.computeIfAbsent(table.schema(), key -> new java.util.ArrayList<>())
                     .add(new TableResponse(
                             table.name(),
@@ -78,7 +78,7 @@ public final class DatabaseDtos {
         return new MetadataResponse(engine, schemas, null);
     }
 
-    public static MetadataResponse fromMongo(MongoQueryExecutor.MongoCatalog catalog) {
+    public static MetadataResponse fromMongo(MongoExecutor.MongoCatalog catalog) {
         List<MongoDatabaseResponse> databases = catalog.databases().stream()
                 .map(db -> new MongoDatabaseResponse(db.name(), db.collections()))
                 .toList();

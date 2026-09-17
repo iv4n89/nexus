@@ -8,8 +8,6 @@ import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
-import com.ivan.nexus.infrastructure.database.MongoQueryExecutor;
 import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import com.ivan.nexus.interfaces.database.DatabaseDtos;
 import org.junit.jupiter.api.Test;
@@ -33,8 +31,8 @@ import static org.mockito.Mockito.when;
 class EditDatabaseCellsTest {
 
     @Mock DiscoverProjectDatabases discover;
-    @Mock JdbcQueryExecutor jdbc;
-    @Mock MongoQueryExecutor mongo;
+    @Mock SqlExecutor jdbc;
+    @Mock MongoExecutor mongo;
     @Mock RecordAudit recordAudit;
     @Mock UserJpaRepository users;
     @InjectMocks EditDatabaseCells edit;
