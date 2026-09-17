@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -131,11 +132,9 @@ public class MongoQueryExecutor {
                 } catch (DomainException ex) {
                     abortQuietly(session);
                     throw ex;
-                } catch (RuntimeException ex) {
+                } catch (MongoException ex) {
                     abortQuietly(session);
-                    throw new DomainException(
-                            NexusErrorCode.QUERY_NOT_ALLOWED,
-                            "Multi-document Save needs a replica set");
+                    throw mapMultiDocumentTxnFailure(ex, target.password());
                 }
             }
             return writeResult(grouped.size(), start);
@@ -172,6 +171,37 @@ public class MongoQueryExecutor {
         } catch (RuntimeException ignored) {
             // already aborted or never started
         }
+    }
+
+    static DomainException mapMultiDocumentTxnFailure(MongoException ex, String password) {
+        if (isTransactionsUnsupported(ex)) {
+            return new DomainException(
+                    NexusErrorCode.QUERY_NOT_ALLOWED,
+                    "Multi-document Save needs a replica set");
+        }
+        return new DomainException(
+                NexusErrorCode.QUERY_FAILED,
+                SecretSanitizer.strip(password, ex.getMessage()));
+    }
+
+    private static boolean isTransactionsUnsupported(MongoException ex) {
+        for (Throwable current = ex; current != null; current = current.getCause()) {
+            if (!(current instanceof MongoException mongoEx)) {
+                continue;
+            }
+            if (mongoEx.getCode() == 20) {
+                return true;
+            }
+            String message = mongoEx.getMessage();
+            if (message == null) {
+                continue;
+            }
+            String lower = message.toLowerCase(Locale.ROOT);
+            if (lower.contains("replica set") || lower.contains("mongos")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public MongoCatalog metadata(ResolvedTarget target) {
