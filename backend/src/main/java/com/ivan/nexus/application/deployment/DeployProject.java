@@ -7,7 +7,6 @@ import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
-import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +21,7 @@ public class DeployProject {
             ManifestCatalog manifests,
             ManagedProjectStore projects,
             DeploymentStore deployments,
-            DeploymentStreamHub hub,
+            DeploymentProgress progress,
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
             RecordAudit recordAudit,
@@ -33,7 +32,7 @@ public class DeployProject {
         this.runner = new DeploymentCommandRunner(
                 projects,
                 deployments,
-                hub,
+                progress,
                 processExecutor,
                 healthChecker,
                 recordAudit,

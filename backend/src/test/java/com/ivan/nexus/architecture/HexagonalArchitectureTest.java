@@ -1,36 +1,18 @@
 package com.ivan.nexus.architecture;
 
+import com.ivan.nexus.application.architecturefixture.AdapterDependentApplicationFixture;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 class HexagonalArchitectureTest {
     private static final String APPLICATION_PACKAGES = "com.ivan.nexus.application..";
-    private static final String JACKSON_PACKAGES = "com.fasterxml.jackson..";
-    private static final String MONGO_STATEMENT_PARSER =
-            "com.ivan.nexus.application.database.MongoStatementParser";
-    private static final String[] DEPLOYMENT_PERSISTENCE_BOUNDARY_TYPES = {
-            "com.ivan.nexus.application.deployment.DeploymentStore",
-            "com.ivan.nexus.application.deployment.ManagedProjectStore",
-            "com.ivan.nexus.application.deployment.DeploymentView"
-    };
-
-    private static final String[] CLEAN_APPLICATION_PACKAGES = {
-            "com.ivan.nexus.application.activity..",
-            "com.ivan.nexus.application.alert..",
-            "com.ivan.nexus.application.audit..",
-            "com.ivan.nexus.application.container..",
-            "com.ivan.nexus.application.database..",
-            "com.ivan.nexus.application.log..",
-            "com.ivan.nexus.application.manifest..",
-            "com.ivan.nexus.application.metrics..",
-            "com.ivan.nexus.application.project..",
-            "com.ivan.nexus.application.user.."
-    };
 
     private static final String[] DOMAIN_ALLOWED_DEPENDENCIES = {
             "com.ivan.nexus.domain..",
@@ -40,13 +22,34 @@ class HexagonalArchitectureTest {
     private static final String[] APPLICATION_FORBIDDEN_DEPENDENCIES = {
             "com.ivan.nexus.infrastructure..",
             "com.ivan.nexus.interfaces..",
+            "com.fasterxml.jackson..",
             "com.github.dockerjava..",
+            "com.mongodb..",
+            "com.mysql..",
+            "org.bson..",
+            "org.mongodb..",
+            "org.postgresql..",
+            "java.sql..",
+            "javax.sql..",
             "jakarta.persistence..",
             "javax.persistence..",
+            "jakarta.servlet..",
             "org.hibernate..",
             "org.springframework.data..",
-            "org.springframework.dao.."
+            "org.springframework.dao..",
+            "org.springframework.jdbc..",
+            "org.springframework.web..",
+            "org.flywaydb..",
+            "org.apache.hc.."
     };
+
+    private static final ArchRule APPLICATION_DEPENDENCY_RULE =
+            noClasses()
+                    .that().resideInAPackage(APPLICATION_PACKAGES)
+                    .should().dependOnClassesThat()
+                    .resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
+                    .as("application layer must not depend on interface or infrastructure adapters, "
+                            + "persistence frameworks, serialization libraries, or adapter SDKs");
 
     private static final JavaClasses NEXUS_CLASSES =
             new ClassFileImporter()
@@ -62,67 +65,18 @@ class HexagonalArchitectureTest {
     }
 
     @Test
-    void cleanApplicationPackagesMustNotDependOnAdaptersOrPersistenceFrameworks() {
-        noClasses()
-                .that().resideInAnyPackage(CLEAN_APPLICATION_PACKAGES)
-                .should().dependOnClassesThat().resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
-                .check(NEXUS_CLASSES);
+    void applicationMustNotDependOnAdaptersOrAdapterFrameworks() {
+        APPLICATION_DEPENDENCY_RULE.check(NEXUS_CLASSES);
     }
 
     @Test
-    void applicationMustNotDependOnJackson() {
-        noClasses()
-                .that().resideInAPackage(APPLICATION_PACKAGES)
-                .should().dependOnClassesThat().resideInAPackage(JACKSON_PACKAGES)
-                .check(NEXUS_CLASSES);
-    }
+    void globalApplicationRuleRejectsSyntheticAdapterDependencyInAnyApplicationPackage() {
+        JavaClasses fixture = new ClassFileImporter()
+                .importClasses(AdapterDependentApplicationFixture.class);
 
-    @Test
-    void deploymentMustNotImportInfrastructureManifestAdapters() {
-        noClasses()
-                .that().resideInAPackage("com.ivan.nexus.application.deployment..")
-                .should().dependOnClassesThat()
-                .resideInAPackage("com.ivan.nexus.infrastructure.manifest..")
-                .check(NEXUS_CLASSES);
-    }
-
-    @Test
-    void deploymentPersistenceBoundaryTypesMustRemainFrameworkIndependent() {
-        noClasses()
-                .that().haveFullyQualifiedName(DEPLOYMENT_PERSISTENCE_BOUNDARY_TYPES[0])
-                .or().haveFullyQualifiedName(DEPLOYMENT_PERSISTENCE_BOUNDARY_TYPES[1])
-                .or().haveFullyQualifiedName(DEPLOYMENT_PERSISTENCE_BOUNDARY_TYPES[2])
-                .should().dependOnClassesThat().resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
-                .check(NEXUS_CLASSES);
-    }
-
-    @Test
-    void deploymentApplicationMustNotDependOnJpaPersistenceTypes() {
-        noClasses()
-                .that().resideInAPackage("com.ivan.nexus.application.deployment..")
-                .should().dependOnClassesThat().resideInAnyPackage(
-                        "com.ivan.nexus.infrastructure.persistence..",
-                        "org.springframework.data..",
-                        "org.springframework.dao..",
-                        "jakarta.persistence..")
-                .check(NEXUS_CLASSES);
-    }
-
-    @Test
-    void retentionCleanupMustUseDeploymentEventStoreSeam() {
-        noClasses()
-                .that().haveFullyQualifiedName(
-                        "com.ivan.nexus.application.activity.RetentionCleanup")
-                .should().dependOnClassesThat().haveFullyQualifiedName(
-                        "com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEventJpaRepository")
-                .check(NEXUS_CLASSES);
-    }
-
-    @Test
-    void mongoStatementParserMustRemainAFrameworkIndependentPort() {
-        noClasses()
-                .that().haveFullyQualifiedName(MONGO_STATEMENT_PARSER)
-                .should().dependOnClassesThat().resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
-                .check(NEXUS_CLASSES);
+        assertThatThrownBy(() -> APPLICATION_DEPENDENCY_RULE.check(fixture))
+                .isInstanceOf(AssertionError.class)
+                .hasMessageContaining("application layer must not depend")
+                .hasMessageContaining("JpaRepository");
     }
 }

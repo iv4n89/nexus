@@ -8,7 +8,6 @@ import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
-import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
@@ -37,7 +36,7 @@ class DeploymentCommandRunnerTest {
     void persistsStateAndSideEffectsInExecutionOrder() throws Exception {
         ManagedProjectStore projects = mock(ManagedProjectStore.class);
         DeploymentStore deployments = mock(DeploymentStore.class);
-        DeploymentStreamHub hub = mock(DeploymentStreamHub.class);
+        DeploymentProgress progress = mock(DeploymentProgress.class);
         ProcessExecutor process = mock(ProcessExecutor.class);
         HealthChecker health = mock(HealthChecker.class);
         RecordAudit audit = mock(RecordAudit.class);
@@ -65,7 +64,7 @@ class DeploymentCommandRunnerTest {
         when(users.findIdByUsername("admin")).thenReturn(Optional.of(userId));
 
         DeploymentCommandRunner runner = new DeploymentCommandRunner(
-                projects, deployments, hub, process, health, audit, activity, users, executor);
+                projects, deployments, progress, process, health, audit, activity, users, executor);
 
         Deployment started = runner.start(
                 "lab",
@@ -78,7 +77,7 @@ class DeploymentCommandRunnerTest {
         org.mockito.Mockito.verify(executor).execute(async.capture());
         async.getValue().run();
 
-        var order = inOrder(projects, deployments, hub, process, activity, users, audit, executor);
+        var order = inOrder(projects, deployments, progress, process, activity, users, audit, executor);
         order.verify(deployments).hasActiveDeployment("lab");
         order.verify(projects).upsert(eq(manifest), eq(tempDir.toAbsolutePath().normalize()),
                 eq(tempDir.resolve("nexus.yml").toAbsolutePath().normalize()));
@@ -86,7 +85,7 @@ class DeploymentCommandRunnerTest {
         order.verify(deployments).markRunning(eq(started.id()), any());
         order.verify(executor).execute(any());
         order.verify(deployments).findById(started.id());
-        order.verify(hub).append(started.id(), "deployment started");
+        order.verify(progress).append(started.id(), "deployment started");
         order.verify(activity).execute(
                 eq(ActivityType.DEPLOYMENT_STARTED), eq("lab"), isNull(),
                 eq("deployment started"), any());
@@ -94,13 +93,13 @@ class DeploymentCommandRunnerTest {
                 eq(tempDir.toAbsolutePath().normalize()), any(), any(),
                 eq(DeploymentCommandRunner.SCRIPT_TIMEOUT));
         order.verify(deployments).recordExitCode(started.id(), 0);
-        order.verify(hub).append(started.id(), "DEPLOYMENT SUCCESS");
+        order.verify(progress).append(started.id(), "DEPLOYMENT SUCCESS");
         order.verify(activity).execute(
                 eq(ActivityType.DEPLOYMENT_SUCCESS), eq("lab"), isNull(),
                 eq("deployment successful"), any());
         order.verify(deployments).finish(eq(started.id()), eq(DeploymentStatus.SUCCESS), any(),
                 eq("deployment started\nDEPLOYMENT SUCCESS"));
-        order.verify(hub).complete(started.id());
+        order.verify(progress).complete(started.id());
         order.verify(users).findIdByUsername("admin");
         order.verify(audit).execute(
                 eq(userId), eq(AuditAction.DEPLOY), eq("lab"), isNull(), isNull(), any());

@@ -44,19 +44,17 @@ Local development: `next dev` rewrites `/api/:path*` to `http://localhost:8080`.
 Hexagonal / clean-architecture packages:
 
 ```text
-domain
-    ↓
-application
-    ↓
-interfaces
-    ↓
-infrastructure
+interfaces ────────┐
+                   ├──> application ──> domain
+infrastructure ────┘
 ```
 
-- **domain** — projects, deployments, manifests, alerts, activity, audit. No Spring, Docker, or HTTP types.
-- **application** — use cases (discover, deploy, rollback, evaluate alerts, retain history).
-- **interfaces** — REST and SSE controllers, error envelope.
-- **infrastructure** — docker-java, JPA/Flyway, ProcessBuilder executor, scheduler.
+- **domain** — projects, deployments, manifests, alerts, activity, and audit. It depends only on the JDK.
+- **application** — use cases and outbound ports. It depends on the domain and JDK, with Spring orchestration annotations allowed (`@Service`, scheduling/configuration conditions, injection qualifiers, and transaction boundaries). It does not depend on interface or infrastructure adapters, persistence APIs, serialization libraries, or adapter SDKs.
+- **infrastructure** — implements application ports with docker-java, JPA/Flyway, database drivers, `ProcessBuilder`, and SSE progress delivery.
+- **interfaces** — REST/error-envelope adapters invoke application use cases and domain-facing views. The HTTP adapter owns the `SseEmitter` endpoint and initiates its subscription; the infrastructure stream hub retains replay, live-subscriber callbacks, and completion.
+
+Dependencies point inward: both adapter layers depend on application/domain contracts, and the application layer never reaches outward to an adapter. `HexagonalArchitectureTest` enforces the domain JDK allowlist and applies one global forbidden-dependency rule to every `com.ivan.nexus.application..` package. A synthetic application test fixture verifies that an adapter dependency is rejected.
 
 Schema changes go through Flyway only (`ddl-auto: validate`).
 

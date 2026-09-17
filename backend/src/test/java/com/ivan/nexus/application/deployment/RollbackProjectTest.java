@@ -11,7 +11,6 @@ import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -57,14 +56,14 @@ class RollbackProjectTest {
 
     private FakeManagedProjectStore projects;
     private FakeDeploymentStore deployments;
-    private DeploymentStreamHub hub;
+    private DeploymentProgress progress;
     private RollbackProject useCase;
 
     @BeforeEach
     void setUp() {
         projects = new FakeManagedProjectStore();
         deployments = new FakeDeploymentStore();
-        hub = mockHub();
+        progress = mockProgress();
 
         when(users.findIdByUsername("admin")).thenReturn(Optional.of(adminId));
 
@@ -136,7 +135,7 @@ class RollbackProjectTest {
                 isNull(),
                 isNull(),
                 any());
-        verify(hub).complete(started.id());
+        verify(progress).complete(started.id());
     }
 
     @Test
@@ -158,7 +157,7 @@ class RollbackProjectTest {
                 manifests,
                 projects,
                 deployments,
-                hub,
+                progress,
                 processExecutor,
                 healthChecker,
                 recordAudit,
@@ -167,15 +166,15 @@ class RollbackProjectTest {
                 executor);
     }
 
-    private DeploymentStreamHub mockHub() {
-        DeploymentStreamHub mockHub = mock(DeploymentStreamHub.class);
+    private DeploymentProgress mockProgress() {
+        DeploymentProgress mockProgress = mock(DeploymentProgress.class);
         doAnswer(invocation -> {
             UUID id = invocation.getArgument(0);
             String line = invocation.getArgument(1);
             hubLines.computeIfAbsent(id, key -> new CopyOnWriteArrayList<>()).add(line);
             return null;
-        }).when(mockHub).append(any(), any());
-        return mockHub;
+        }).when(mockProgress).append(any(), any());
+        return mockProgress;
     }
 
     private void writeLabManifest(String rollbackCommand, String healthUrl) throws Exception {

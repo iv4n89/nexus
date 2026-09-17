@@ -10,7 +10,6 @@ import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,7 +28,7 @@ final class DeploymentCommandRunner {
 
     private final ManagedProjectStore projects;
     private final DeploymentStore deployments;
-    private final DeploymentStreamHub hub;
+    private final DeploymentProgress progress;
     private final ProcessExecutor processExecutor;
     private final HealthChecker healthChecker;
     private final RecordAudit recordAudit;
@@ -40,7 +39,7 @@ final class DeploymentCommandRunner {
     DeploymentCommandRunner(
             ManagedProjectStore projects,
             DeploymentStore deployments,
-            DeploymentStreamHub hub,
+            DeploymentProgress progress,
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
             RecordAudit recordAudit,
@@ -49,7 +48,7 @@ final class DeploymentCommandRunner {
             Executor sseExecutor) {
         this.projects = projects;
         this.deployments = deployments;
-        this.hub = hub;
+        this.progress = progress;
         this.processExecutor = processExecutor;
         this.healthChecker = healthChecker;
         this.recordAudit = recordAudit;
@@ -169,7 +168,7 @@ final class DeploymentCommandRunner {
                 status,
                 Instant.now(),
                 DeploymentSummary.summarize(summaryLines));
-        hub.complete(deployment.id());
+        progress.complete(deployment.id());
         UUID userId = users.findIdByUsername(username).orElseThrow();
         recordAudit.execute(
                 userId,
@@ -182,7 +181,7 @@ final class DeploymentCommandRunner {
 
     private void emit(UUID id, List<String> summaryLines, String line) {
         summaryLines.add(line);
-        hub.append(id, line);
+        progress.append(id, line);
     }
 
     private void record(ActivityType type, Deployment deployment, String message, String kind) {

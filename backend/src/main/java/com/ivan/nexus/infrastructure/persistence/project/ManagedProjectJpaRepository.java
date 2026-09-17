@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
-public interface ManagedProjectJpaRepository extends JpaRepository<ManagedProjectEntity, String> {
+interface ManagedProjectJpaRepository extends JpaRepository<ManagedProjectEntity, String> {
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional

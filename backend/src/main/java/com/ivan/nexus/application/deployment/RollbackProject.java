@@ -10,7 +10,6 @@ import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -25,7 +24,7 @@ public class RollbackProject {
             ManifestCatalog manifests,
             ManagedProjectStore projects,
             DeploymentStore deployments,
-            DeploymentStreamHub hub,
+            DeploymentProgress progress,
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
             RecordAudit recordAudit,
@@ -36,7 +35,7 @@ public class RollbackProject {
         this.runner = new DeploymentCommandRunner(
                 projects,
                 deployments,
-                hub,
+                progress,
                 processExecutor,
                 healthChecker,
                 recordAudit,

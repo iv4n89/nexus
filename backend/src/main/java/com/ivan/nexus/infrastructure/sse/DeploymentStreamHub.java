@@ -1,10 +1,10 @@
 package com.ivan.nexus.infrastructure.sse;
 
+import com.ivan.nexus.application.deployment.DeploymentEventStore;
+import com.ivan.nexus.application.deployment.DeploymentProgress;
+import com.ivan.nexus.application.deployment.DeploymentStore;
+import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEventEntity;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEventJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -14,24 +14,24 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Component
-public class DeploymentStreamHub {
+public class DeploymentStreamHub implements DeploymentProgress {
     private final ConcurrentHashMap<UUID, CopyOnWriteArrayList<SseEmitter>> emitters = new ConcurrentHashMap<>();
-    private final DeploymentEventJpaRepository events;
-    private final DeploymentJpaRepository deployments;
+    private final DeploymentEventStore events;
+    private final DeploymentStore deployments;
 
-    public DeploymentStreamHub(DeploymentEventJpaRepository events, DeploymentJpaRepository deployments) {
+    public DeploymentStreamHub(DeploymentEventStore events, DeploymentStore deployments) {
         this.events = events;
         this.deployments = deployments;
     }
 
     public void subscribe(UUID id, SseEmitter emitter) {
-        List<DeploymentEventEntity> history = events.findByDeploymentIdOrderByIdAsc(id);
-        for (DeploymentEventEntity event : history) {
-            send(emitter, event.getLine());
+        List<String> history = events.findLinesOldestFirst(id);
+        for (String line : history) {
+            send(emitter, line);
         }
 
-        DeploymentEntity deployment = deployments.findById(id).orElse(null);
-        if (deployment != null && isTerminal(deployment.getStatus())) {
+        Deployment deployment = deployments.findById(id).orElse(null);
+        if (deployment != null && isTerminal(deployment.status())) {
             completeEmitter(emitter);
             return;
         }
@@ -42,8 +42,9 @@ public class DeploymentStreamHub {
         emitter.onError(error -> remove(id, emitter));
     }
 
+    @Override
     public void append(UUID id, String line) {
-        events.save(new DeploymentEventEntity(id, line));
+        events.append(id, line);
         CopyOnWriteArrayList<SseEmitter> live = emitters.get(id);
         if (live == null) {
             return;
@@ -53,6 +54,7 @@ public class DeploymentStreamHub {
         }
     }
 
+    @Override
     public void complete(UUID id) {
         CopyOnWriteArrayList<SseEmitter> live = emitters.remove(id);
         if (live == null) {

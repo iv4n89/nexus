@@ -23,7 +23,7 @@ public class JpaDeploymentStore implements DeploymentStore {
 
     private final DeploymentJpaRepository repository;
 
-    public JpaDeploymentStore(DeploymentJpaRepository repository) {
+    JpaDeploymentStore(DeploymentJpaRepository repository) {
         this.repository = repository;
     }
 

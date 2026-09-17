@@ -10,7 +10,7 @@ import java.nio.file.Path;
 public class JpaManagedProjectStore implements ManagedProjectStore {
     private final ManagedProjectJpaRepository repository;
 
-    public JpaManagedProjectStore(ManagedProjectJpaRepository repository) {
+    JpaManagedProjectStore(ManagedProjectJpaRepository repository) {
         this.repository = repository;
     }
 

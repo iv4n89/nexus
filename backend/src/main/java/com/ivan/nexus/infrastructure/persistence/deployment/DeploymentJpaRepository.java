@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface DeploymentJpaRepository extends JpaRepository<DeploymentEntity, UUID> {
+interface DeploymentJpaRepository extends JpaRepository<DeploymentEntity, UUID> {
     boolean existsByProjectIdAndStatusIn(String projectId, Collection<DeploymentStatus> statuses);
 
     List<DeploymentEntity> findByProjectIdOrderByCreatedAtDesc(String projectId);

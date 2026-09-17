@@ -6,13 +6,12 @@ import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectEntity;
-import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectJpaRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -38,9 +37,6 @@ class DeploymentPersistenceIT {
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Autowired
-    ManagedProjectJpaRepository projects;
-
-    @Autowired
     DeploymentJpaRepository deployments;
 
     @Autowired
@@ -52,6 +48,9 @@ class DeploymentPersistenceIT {
     @Autowired
     DeploymentEventJpaRepository events;
 
+    @Autowired
+    JdbcTemplate jdbc;
+
     @Test
     void contextLoads() {}
 
@@ -60,12 +59,10 @@ class DeploymentPersistenceIT {
         String projectId = "demo-" + UUID.randomUUID();
         UUID deploymentId = UUID.randomUUID();
 
-        projects.saveAndFlush(new ManagedProjectEntity(
-                projectId,
-                "Demo",
-                "A demo project",
-                "/tmp/demo",
-                "/tmp/demo/nexus.yml"));
+        managedProjectStore.upsert(
+                manifest(projectId, "Demo", "A demo project"),
+                Path.of("/tmp/demo"),
+                Path.of("/tmp/demo/nexus.yml"));
 
         deployments.saveAndFlush(new DeploymentEntity(
                 deploymentId,
@@ -81,13 +78,13 @@ class DeploymentPersistenceIT {
 
         events.saveAndFlush(new DeploymentEventEntity(deploymentId, "starting deploy"));
 
-        ManagedProjectEntity foundProject = projects.findById(projectId).orElseThrow();
-        assertThat(foundProject.getName()).isEqualTo("Demo");
-        assertThat(foundProject.getDescription()).isEqualTo("A demo project");
-        assertThat(foundProject.getWorkingDirectory()).isEqualTo("/tmp/demo");
-        assertThat(foundProject.getManifestPath()).isEqualTo("/tmp/demo/nexus.yml");
-        assertThat(foundProject.getCreatedAt()).isNotNull();
-        assertThat(foundProject.getUpdatedAt()).isNotNull();
+        ProjectRow foundProject = loadProject(projectId);
+        assertThat(foundProject.name()).isEqualTo("Demo");
+        assertThat(foundProject.description()).isEqualTo("A demo project");
+        assertThat(foundProject.workingDirectory()).isEqualTo("/tmp/demo");
+        assertThat(foundProject.manifestPath()).isEqualTo("/tmp/demo/nexus.yml");
+        assertThat(foundProject.createdAt()).isNotNull();
+        assertThat(foundProject.updatedAt()).isNotNull();
 
         List<DeploymentEntity> foundDeployments = deployments.findByProjectIdOrderByCreatedAtDesc(projectId);
         assertThat(foundDeployments).hasSize(1);
@@ -109,12 +106,10 @@ class DeploymentPersistenceIT {
     @Test
     void rejectsSecondRunningDeploymentForSameProject() {
         String projectId = "busy-" + UUID.randomUUID();
-        projects.saveAndFlush(new ManagedProjectEntity(
-                projectId,
-                "Busy",
-                null,
-                "/tmp/busy",
-                "/tmp/busy/nexus.yml"));
+        managedProjectStore.upsert(
+                manifest(projectId, "Busy", null),
+                Path.of("/tmp/busy"),
+                Path.of("/tmp/busy/nexus.yml"));
 
         deployments.saveAndFlush(runningDeployment(projectId, "admin"));
 
@@ -125,12 +120,10 @@ class DeploymentPersistenceIT {
     @Test
     void deploymentStoreTranslatesActiveIndexRace() {
         String projectId = "store-race-" + UUID.randomUUID();
-        projects.saveAndFlush(new ManagedProjectEntity(
-                projectId,
-                "Store race",
-                null,
-                "/tmp/store-race",
-                "/tmp/store-race/nexus.yml"));
+        managedProjectStore.upsert(
+                manifest(projectId, "Store race", null),
+                Path.of("/tmp/store-race"),
+                Path.of("/tmp/store-race/nexus.yml"));
         UUID firstId = UUID.randomUUID();
         deploymentStore.createPending(firstId, projectId, "admin", "deploy");
         deploymentStore.markRunning(firstId, java.time.Instant.now());
@@ -150,13 +143,13 @@ class DeploymentPersistenceIT {
                 manifest(projectId, "  ", "first"),
                 Path.of("/srv/first"),
                 Path.of("/srv/first/nexus.yml"));
-        ManagedProjectEntity created = projects.findById(projectId).orElseThrow();
-        Instant createdAt = created.getCreatedAt();
-        Instant firstUpdatedAt = created.getUpdatedAt();
-        assertThat(created.getName()).isEqualTo(projectId);
-        assertThat(created.getDescription()).isEqualTo("first");
-        assertThat(created.getWorkingDirectory()).isEqualTo("/srv/first");
-        assertThat(created.getManifestPath()).isEqualTo("/srv/first/nexus.yml");
+        ProjectRow created = loadProject(projectId);
+        Instant createdAt = created.createdAt();
+        Instant firstUpdatedAt = created.updatedAt();
+        assertThat(created.name()).isEqualTo(projectId);
+        assertThat(created.description()).isEqualTo("first");
+        assertThat(created.workingDirectory()).isEqualTo("/srv/first");
+        assertThat(created.manifestPath()).isEqualTo("/srv/first/nexus.yml");
         Thread.sleep(20);
 
         managedProjectStore.upsert(
@@ -164,13 +157,13 @@ class DeploymentPersistenceIT {
                 Path.of("/srv/second"),
                 Path.of("/srv/second/custom.yml"));
 
-        ManagedProjectEntity updated = projects.findById(projectId).orElseThrow();
-        assertThat(updated.getName()).isEqualTo("Renamed");
-        assertThat(updated.getDescription()).isEqualTo("second");
-        assertThat(updated.getWorkingDirectory()).isEqualTo("/srv/second");
-        assertThat(updated.getManifestPath()).isEqualTo("/srv/second/custom.yml");
-        assertThat(updated.getCreatedAt()).isEqualTo(createdAt);
-        assertThat(updated.getUpdatedAt()).isAfter(firstUpdatedAt);
+        ProjectRow updated = loadProject(projectId);
+        assertThat(updated.name()).isEqualTo("Renamed");
+        assertThat(updated.description()).isEqualTo("second");
+        assertThat(updated.workingDirectory()).isEqualTo("/srv/second");
+        assertThat(updated.manifestPath()).isEqualTo("/srv/second/custom.yml");
+        assertThat(updated.createdAt()).isEqualTo(createdAt);
+        assertThat(updated.updatedAt()).isAfter(firstUpdatedAt);
     }
 
     @Test
@@ -203,17 +196,37 @@ class DeploymentPersistenceIT {
             second.get(10, TimeUnit.SECONDS);
         }
 
-        List<ManagedProjectEntity> rows = projects.findAllById(List.of(projectId));
-        assertThat(rows).hasSize(1);
-        ManagedProjectEntity row = rows.getFirst();
+        Integer rowCount = jdbc.queryForObject(
+                "SELECT count(*) FROM projects WHERE id = ?",
+                Integer.class,
+                projectId);
+        assertThat(rowCount).isEqualTo(1);
+        ProjectRow row = loadProject(projectId);
         Map<String, List<String>> expectedByName = Map.of(
                 "First", List.of("first description", "/srv/first", "/srv/first/nexus.yml"),
                 "Second", List.of("second description", "/srv/second", "/srv/second/nexus.yml"));
-        assertThat(expectedByName).containsKey(row.getName());
-        assertThat(List.of(row.getDescription(), row.getWorkingDirectory(), row.getManifestPath()))
-                .isEqualTo(expectedByName.get(row.getName()));
-        assertThat(row.getCreatedAt()).isNotNull();
-        assertThat(row.getUpdatedAt()).isNotNull();
+        assertThat(expectedByName).containsKey(row.name());
+        assertThat(List.of(row.description(), row.workingDirectory(), row.manifestPath()))
+                .isEqualTo(expectedByName.get(row.name()));
+        assertThat(row.createdAt()).isNotNull();
+        assertThat(row.updatedAt()).isNotNull();
+    }
+
+    private ProjectRow loadProject(String projectId) {
+        return jdbc.queryForObject(
+                """
+                SELECT name, description, working_directory, manifest_path, created_at, updated_at
+                FROM projects
+                WHERE id = ?
+                """,
+                (resultSet, rowNum) -> new ProjectRow(
+                        resultSet.getString("name"),
+                        resultSet.getString("description"),
+                        resultSet.getString("working_directory"),
+                        resultSet.getString("manifest_path"),
+                        resultSet.getTimestamp("created_at").toInstant(),
+                        resultSet.getTimestamp("updated_at").toInstant()),
+                projectId);
     }
 
     private static DeploymentEntity runningDeployment(String projectId, String triggeredBy) {
@@ -241,5 +254,14 @@ class DeploymentPersistenceIT {
                 null,
                 null,
                 null);
+    }
+
+    private record ProjectRow(
+            String name,
+            String description,
+            String workingDirectory,
+            String manifestPath,
+            Instant createdAt,
+            Instant updatedAt) {
     }
 }
