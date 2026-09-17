@@ -13,8 +13,10 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -36,26 +38,22 @@ public class YamlManifestCatalog implements ManifestCatalog {
         }
         try (var projects = Files.list(allowedRoot)) {
             return projects
-                    .filter(Files::isDirectory)
-                    .filter(project -> Files.isRegularFile(manifestPath(project.getFileName().toString())))
                     .map(project -> project.getFileName().toString())
+                    .filter(projectId -> usableManifestPath(projectId).isPresent())
                     .collect(Collectors.toUnmodifiableSet());
-        } catch (IOException ignored) {
+        } catch (IOException | SecurityException ignored) {
             return Set.of();
         }
     }
 
     @Override
     public boolean exists(String projectId) {
-        return Files.isRegularFile(manifestPath(projectId));
+        return usableManifestPath(projectId).isPresent();
     }
 
     @Override
     public LoadedManifest loadRequired(String projectId) {
-        Path manifestPath = manifestPath(projectId);
-        if (!Files.isRegularFile(manifestPath)) {
-            throw new DomainException(NexusErrorCode.MANIFEST_NOT_FOUND, "Manifest not found");
-        }
+        Path manifestPath = usableManifestPath(projectId).orElseThrow(YamlManifestCatalog::notFound);
         ProjectManifest manifest = parse(manifestPath);
         if (manifest == null || manifest.project() == null || !projectId.equals(manifest.project().id())) {
             throw new DomainException(NexusErrorCode.MANIFEST_INVALID, "project.id does not match");
@@ -66,6 +64,55 @@ public class YamlManifestCatalog implements ManifestCatalog {
 
     private Path manifestPath(String projectId) {
         return allowedRoot.resolve(projectId).resolve(MANIFEST_FILE).toAbsolutePath().normalize();
+    }
+
+    private Optional<Path> usableManifestPath(String projectId) {
+        if (!isSafePathSegment(projectId)) {
+            return Optional.empty();
+        }
+
+        Path projectPath = allowedRoot.resolve(projectId).toAbsolutePath().normalize();
+        Path manifestPath = projectPath.resolve(MANIFEST_FILE).toAbsolutePath().normalize();
+        if (!projectPath.startsWith(allowedRoot) || !manifestPath.startsWith(allowedRoot)) {
+            return Optional.empty();
+        }
+
+        try {
+            Path realRoot = allowedRoot.toRealPath();
+            Path realProject = projectPath.toRealPath();
+            Path realManifest = manifestPath.toRealPath();
+            if (!Files.isDirectory(realRoot)
+                    || !realProject.startsWith(realRoot)
+                    || !Files.isDirectory(realProject)
+                    || !realManifest.startsWith(realRoot)
+                    || !Files.isRegularFile(realManifest)) {
+                return Optional.empty();
+            }
+            return Optional.of(manifestPath);
+        } catch (IOException | SecurityException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static boolean isSafePathSegment(String projectId) {
+        if (projectId == null
+                || projectId.isBlank()
+                || ".".equals(projectId)
+                || "..".equals(projectId)
+                || projectId.contains("/")
+                || projectId.contains("\\")) {
+            return false;
+        }
+        try {
+            Path path = Path.of(projectId);
+            return !path.isAbsolute() && path.getNameCount() == 1;
+        } catch (InvalidPathException ignored) {
+            return false;
+        }
+    }
+
+    private static DomainException notFound() {
+        return new DomainException(NexusErrorCode.MANIFEST_NOT_FOUND, "Manifest not found");
     }
 
     private ProjectManifest parse(Path path) {

@@ -5,6 +5,9 @@ import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -44,6 +47,82 @@ class YamlManifestCatalogTest {
 
         assertThat(catalog().exists("directory")).isFalse();
         assertThat(catalog().exists("valid")).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", ".", "..", "../outside", "nested/project", "nested\\project"})
+    void unsafeProjectIdsAreRejectedAsNotFound(String projectId) {
+        assertThat(catalog().exists(projectId)).isFalse();
+        assertFailure(
+                () -> catalog().loadRequired(projectId),
+                NexusErrorCode.MANIFEST_NOT_FOUND,
+                "Manifest not found");
+    }
+
+    @Test
+    void absoluteProjectIdCannotReadManifestOutsideRoot() throws IOException {
+        Path allowedRoot = root.resolve("allowed");
+        Path outsideProject = root.resolve("outside");
+        Files.createDirectories(allowedRoot);
+        writeManifestAt(outsideProject, outsideProject.toAbsolutePath().toString(), outsideProject);
+        YamlManifestCatalog catalog = new YamlManifestCatalog(allowedRoot);
+        String absoluteId = outsideProject.toAbsolutePath().toString();
+
+        assertThat(catalog.exists(absoluteId)).isFalse();
+        assertFailure(
+                () -> catalog.loadRequired(absoluteId),
+                NexusErrorCode.MANIFEST_NOT_FOUND,
+                "Manifest not found");
+    }
+
+    @Test
+    void parentTraversalCannotReadManifestOutsideRoot() throws IOException {
+        Path allowedRoot = root.resolve("allowed");
+        Path outsideProject = root.resolve("outside");
+        Files.createDirectories(allowedRoot);
+        writeManifestAt(outsideProject, "../outside", outsideProject);
+        YamlManifestCatalog catalog = new YamlManifestCatalog(allowedRoot);
+
+        assertThat(catalog.exists("../outside")).isFalse();
+        assertFailure(
+                () -> catalog.loadRequired("../outside"),
+                NexusErrorCode.MANIFEST_NOT_FOUND,
+                "Manifest not found");
+    }
+
+    @Test
+    void symlinkedProjectEscapingRootIsUnusableAndUndiscoverable() throws IOException {
+        Path allowedRoot = root.resolve("allowed");
+        Path outsideProject = root.resolve("outside-project");
+        Files.createDirectories(allowedRoot);
+        writeManifestAt(outsideProject, "linked", outsideProject);
+        createSymlinkOrSkip(allowedRoot.resolve("linked"), outsideProject);
+        YamlManifestCatalog catalog = new YamlManifestCatalog(allowedRoot);
+
+        assertThat(catalog.discoverProjectIds()).doesNotContain("linked");
+        assertThat(catalog.exists("linked")).isFalse();
+        assertFailure(
+                () -> catalog.loadRequired("linked"),
+                NexusErrorCode.MANIFEST_NOT_FOUND,
+                "Manifest not found");
+    }
+
+    @Test
+    void symlinkedManifestEscapingRootIsUnusableAndUndiscoverable() throws IOException {
+        Path allowedRoot = root.resolve("allowed");
+        Path project = allowedRoot.resolve("linked-file");
+        Path outsideProject = root.resolve("outside-manifest");
+        Files.createDirectories(project);
+        writeManifestAt(outsideProject, "linked-file", project);
+        createSymlinkOrSkip(project.resolve("nexus.yml"), outsideProject.resolve("nexus.yml"));
+        YamlManifestCatalog catalog = new YamlManifestCatalog(allowedRoot);
+
+        assertThat(catalog.discoverProjectIds()).doesNotContain("linked-file");
+        assertThat(catalog.exists("linked-file")).isFalse();
+        assertFailure(
+                () -> catalog.loadRequired("linked-file"),
+                NexusErrorCode.MANIFEST_NOT_FOUND,
+                "Manifest not found");
     }
 
     @Test
@@ -104,6 +183,10 @@ class YamlManifestCatalogTest {
 
     private void writeManifest(String directory, String embeddedId, Path workingDirectory) throws IOException {
         Path project = root.resolve(directory);
+        writeManifestAt(project, embeddedId, workingDirectory);
+    }
+
+    private static void writeManifestAt(Path project, String embeddedId, Path workingDirectory) throws IOException {
         Files.createDirectories(project);
         Files.writeString(project.resolve("nexus.yml"), """
                 project:
@@ -112,6 +195,14 @@ class YamlManifestCatalogTest {
                 deployment:
                   command: ./deploy.sh
                 """.formatted(embeddedId, workingDirectory.toAbsolutePath()));
+    }
+
+    private static void createSymlinkOrSkip(Path link, Path target) {
+        try {
+            Files.createSymbolicLink(link, target.toAbsolutePath());
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            Assumptions.abort("Symbolic links are unavailable: " + exception.getMessage());
+        }
     }
 
     private static void assertFailure(
