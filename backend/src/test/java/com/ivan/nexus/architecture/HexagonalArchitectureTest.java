@@ -16,9 +16,12 @@ class HexagonalArchitectureTest {
 
     // Add application.database.. after its remaining adapter dependencies are migrated.
     private static final String[] CLEAN_APPLICATION_PACKAGES = {
+            "com.ivan.nexus.application.audit..",
+            "com.ivan.nexus.application.container..",
             "com.ivan.nexus.application.log..",
             "com.ivan.nexus.application.metrics..",
-            "com.ivan.nexus.application.project.."
+            "com.ivan.nexus.application.project..",
+            "com.ivan.nexus.application.user.."
     };
 
     private static final String[] DOMAIN_ALLOWED_DEPENDENCIES = {

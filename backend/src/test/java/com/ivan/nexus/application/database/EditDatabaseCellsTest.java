@@ -1,6 +1,7 @@
 package com.ivan.nexus.application.database;
 
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.DatabaseInstance;
 import com.ivan.nexus.domain.database.DatabaseStatus;
@@ -8,7 +9,6 @@ import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import com.ivan.nexus.interfaces.database.DatabaseDtos;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +34,7 @@ class EditDatabaseCellsTest {
     @Mock SqlExecutor jdbc;
     @Mock MongoExecutor mongo;
     @Mock RecordAudit recordAudit;
-    @Mock UserJpaRepository users;
+    @Mock UserDirectory users;
     @InjectMocks EditDatabaseCells edit;
 
     @Test
@@ -89,7 +89,7 @@ class EditDatabaseCellsTest {
         stubReady(DatabaseEngine.POSTGRES);
         when(jdbc.applyCells(any(), any(), any(), any(), any()))
                 .thenReturn(new QueryResult(List.of("updateCount"), List.of(List.of(1)), false, 1, 1));
-        when(users.findByUsername("admin")).thenReturn(java.util.Optional.empty());
+        when(users.findIdByUsername("admin")).thenReturn(java.util.Optional.empty());
         DatabaseDtos.CellsRequest body = new DatabaseDtos.CellsRequest(
                 "public",
                 "users",

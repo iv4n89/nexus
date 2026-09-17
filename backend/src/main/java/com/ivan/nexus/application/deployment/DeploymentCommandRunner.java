@@ -2,6 +2,7 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
@@ -12,7 +13,6 @@ import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -40,7 +40,7 @@ final class DeploymentCommandRunner {
     private final HealthChecker healthChecker;
     private final RecordAudit recordAudit;
     private final RecordActivity recordActivity;
-    private final UserJpaRepository users;
+    private final UserDirectory users;
     private final Executor sseExecutor;
 
     DeploymentCommandRunner(
@@ -51,7 +51,7 @@ final class DeploymentCommandRunner {
             HealthChecker healthChecker,
             RecordAudit recordAudit,
             RecordActivity recordActivity,
-            UserJpaRepository users,
+            UserDirectory users,
             Executor sseExecutor) {
         this.projectUpsert = projectUpsert;
         this.deployments = deployments;
@@ -195,7 +195,7 @@ final class DeploymentCommandRunner {
         entity.setOutputSummary(DeploymentSummary.summarize(summaryLines));
         deployments.save(entity);
         hub.complete(entity.getId());
-        UUID userId = users.findByUsername(username).orElseThrow().getId();
+        UUID userId = users.findIdByUsername(username).orElseThrow();
         recordAudit.execute(
                 userId,
                 auditAction,

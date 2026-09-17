@@ -1,6 +1,7 @@
 package com.ivan.nexus.application.database;
 
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.database.CellPatchGrouper;
 import com.ivan.nexus.domain.database.ControlPlaneDatabase;
@@ -8,8 +9,6 @@ import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.user.UserEntity;
-import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import com.ivan.nexus.interfaces.database.DatabaseDtos;
 import org.springframework.stereotype.Service;
 
@@ -24,14 +23,14 @@ public class EditDatabaseCells {
     private final SqlExecutor jdbc;
     private final MongoExecutor mongo;
     private final RecordAudit recordAudit;
-    private final UserJpaRepository users;
+    private final UserDirectory users;
 
     public EditDatabaseCells(
             DiscoverProjectDatabases discover,
             SqlExecutor jdbc,
             MongoExecutor mongo,
             RecordAudit recordAudit,
-            UserJpaRepository users) {
+            UserDirectory users) {
         this.discover = discover;
         this.jdbc = jdbc;
         this.mongo = mongo;
@@ -97,7 +96,7 @@ public class EditDatabaseCells {
                     body.table(),
                     CellPatchGrouper.planSql(sqlPatches, sqlInserts, deleteMaps));
         }
-        UUID userId = users.findByUsername(username).map(UserEntity::getId).orElse(null);
+        UUID userId = users.findIdByUsername(username).orElse(null);
         recordAudit.execute(
                 userId,
                 AuditAction.DB_CELL_EDIT,

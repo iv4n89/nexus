@@ -2,6 +2,7 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
@@ -10,7 +11,6 @@ import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.infrastructure.manifest.YamlManifestLoader;
 import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -34,7 +34,7 @@ public class RollbackProject {
             HealthChecker healthChecker,
             RecordAudit recordAudit,
             RecordActivity recordActivity,
-            UserJpaRepository users,
+            UserDirectory users,
             @Qualifier("deploymentExecutor") Executor sseExecutor) {
         this.loader = loader;
         this.allowedRoot = allowedRoot;

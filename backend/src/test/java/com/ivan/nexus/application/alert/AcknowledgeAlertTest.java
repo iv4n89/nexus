@@ -1,6 +1,7 @@
 package com.ivan.nexus.application.alert;
 
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.alert.Alert;
 import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
@@ -10,7 +11,6 @@ import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertEventJpaRepository;
 import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
-import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -33,7 +33,7 @@ class AcknowledgeAlertTest {
     @Mock
     AlertEventJpaRepository events;
     @Mock
-    UserJpaRepository users;
+    UserDirectory users;
     @Mock
     RecordAudit recordAudit;
 
@@ -63,7 +63,7 @@ class AcknowledgeAlertTest {
                 null,
                 null);
         given(events.findById(id)).willReturn(Optional.of(event));
-        given(users.findByUsername("admin")).willReturn(Optional.empty());
+        given(users.findIdByUsername("admin")).willReturn(Optional.empty());
         given(events.save(event)).willReturn(event);
 
         Alert result = new AcknowledgeAlert(events, users, recordAudit).execute(id, "admin", "10.0.0.1");
