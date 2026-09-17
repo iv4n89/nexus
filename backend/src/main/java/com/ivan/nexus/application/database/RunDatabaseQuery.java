@@ -1,12 +1,10 @@
 package com.ivan.nexus.application.database;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.database.ControlPlaneDatabase;
 import com.ivan.nexus.domain.database.DatabaseStatus;
 import com.ivan.nexus.domain.database.MongoStatement;
-import com.ivan.nexus.domain.database.MongoStatementClassifier;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.SqlStatementClassifier;
 import com.ivan.nexus.domain.database.StatementClass;
@@ -28,7 +26,7 @@ public class RunDatabaseQuery {
     private final MongoExecutor mongo;
     private final RecordAudit recordAudit;
     private final UserJpaRepository users;
-    private final ObjectMapper objectMapper;
+    private final MongoStatementParser mongoStatementParser;
 
     public RunDatabaseQuery(
             DiscoverProjectDatabases discover,
@@ -36,13 +34,13 @@ public class RunDatabaseQuery {
             MongoExecutor mongo,
             RecordAudit recordAudit,
             UserJpaRepository users,
-            ObjectMapper objectMapper) {
+            MongoStatementParser mongoStatementParser) {
         this.discover = discover;
         this.jdbc = jdbc;
         this.mongo = mongo;
         this.recordAudit = recordAudit;
         this.users = users;
-        this.objectMapper = objectMapper;
+        this.mongoStatementParser = mongoStatementParser;
     }
 
     public QueryResult execute(
@@ -62,7 +60,7 @@ public class RunDatabaseQuery {
         boolean requiresConfirmation;
         MongoStatement mongoStatement = null;
         if (resolution.instance().engine() == com.ivan.nexus.domain.database.DatabaseEngine.MONGO) {
-            mongoStatement = MongoStatementClassifier.parse(objectMapper, statement);
+            mongoStatement = mongoStatementParser.parse(statement);
             statementClass = mongoStatement.statementClass();
             requiresConfirmation = mongoStatement.requiresConfirmation();
         } else {

@@ -1,19 +1,29 @@
-package com.ivan.nexus.domain.database;
+package com.ivan.nexus.infrastructure.database;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ivan.nexus.application.database.MongoStatementParser;
+import com.ivan.nexus.domain.database.MongoStatement;
+import com.ivan.nexus.domain.database.StatementClass;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
+import org.springframework.stereotype.Component;
 
 import java.util.Locale;
 
-public final class MongoStatementClassifier {
-    private MongoStatementClassifier() {}
+@Component
+public class JacksonMongoStatementParser implements MongoStatementParser {
+    private final ObjectMapper objectMapper;
 
-    public static MongoStatement parse(ObjectMapper mapper, String json) {
+    public JacksonMongoStatementParser(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public MongoStatement parse(String json) {
         JsonNode root;
         try {
-            root = mapper.readTree(json);
+            root = objectMapper.readTree(json);
         } catch (Exception ex) {
             throw notAllowed();
         }
@@ -28,7 +38,9 @@ public final class MongoStatementClassifier {
         }
         op = op.toLowerCase(Locale.ROOT);
         JsonNode filterNode = root.get("filter");
-        boolean emptyFilter = filterNode == null || filterNode.isNull() || (filterNode.isObject() && filterNode.isEmpty());
+        boolean emptyFilter = filterNode == null
+                || filterNode.isNull()
+                || (filterNode.isObject() && filterNode.isEmpty());
         String filterJson = emptyFilter ? "{}" : filterNode.toString();
         String projectionJson = jsonOrNull(root.get("projection"));
         String pipelineJson = jsonOrNull(root.get("pipeline"));

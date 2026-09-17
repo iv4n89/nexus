@@ -1,11 +1,11 @@
 package com.ivan.nexus.application.database;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.DatabaseInstance;
 import com.ivan.nexus.domain.database.DatabaseStatus;
+import com.ivan.nexus.domain.database.MongoStatement;
 import com.ivan.nexus.domain.database.QueryResult;
 import com.ivan.nexus.domain.database.ResolvedTarget;
 import com.ivan.nexus.domain.database.StatementClass;
@@ -44,6 +44,8 @@ class RunDatabaseQueryTest {
     RecordAudit recordAudit;
     @Mock
     UserJpaRepository users;
+    @Mock
+    MongoStatementParser mongoStatementParser;
 
     RunDatabaseQuery useCase;
 
@@ -59,7 +61,7 @@ class RunDatabaseQueryTest {
 
     @BeforeEach
     void setUp() {
-        useCase = new RunDatabaseQuery(discover, jdbc, mongo, recordAudit, users, new ObjectMapper());
+        useCase = new RunDatabaseQuery(discover, jdbc, mongo, recordAudit, users, mongoStatementParser);
         lenient().when(discover.resolve("lab", "lab:aaaaaaaaaaaa")).thenReturn(new InstanceResolution(instance, target));
     }
 
@@ -131,5 +133,33 @@ class RunDatabaseQueryTest {
                 "nexus", "nexus:cccccccccccc", "SELECT 1", false, "ADMIN", "admin", "127.0.0.1");
 
         assertEquals(1, result.rowCount());
+    }
+
+    @Test
+    void mongoStatementsAreParsedThroughTheApplicationPort() {
+        String statement = "{\"op\":\"find\",\"database\":\"lab\",\"collection\":\"users\"}";
+        DatabaseInstance mongoInstance = new DatabaseInstance(
+                "lab:bbbbbbbbbbbb",
+                "lab",
+                "bbbbbbbbbbbb0000",
+                "mongo",
+                DatabaseEngine.MONGO,
+                DatabaseStatus.READY,
+                "lab");
+        MongoStatement parsed = new MongoStatement(
+                "find", "lab", "users", "{}", null, null, null, null,
+                100, false, StatementClass.READ, false);
+        given(discover.resolve("lab", "lab:bbbbbbbbbbbb")).willReturn(new InstanceResolution(mongoInstance, target));
+        given(mongoStatementParser.parse(statement)).willReturn(parsed);
+        given(mongo.execute(target, parsed))
+                .willReturn(new QueryResult(List.of("name"), List.of(List.of("Ada")), false, 2, 1));
+        given(users.findByUsername("admin")).willReturn(Optional.empty());
+
+        QueryResult result = useCase.execute(
+                "lab", "lab:bbbbbbbbbbbb", statement, false, "ADMIN", "admin", "127.0.0.1");
+
+        assertEquals(1, result.rowCount());
+        verify(mongoStatementParser).parse(statement);
+        verify(mongo).execute(target, parsed);
     }
 }
