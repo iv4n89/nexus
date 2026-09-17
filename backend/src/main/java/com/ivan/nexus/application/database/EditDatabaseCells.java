@@ -1,0 +1,115 @@
+package com.ivan.nexus.application.database;
+
+import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.domain.audit.AuditAction;
+import com.ivan.nexus.domain.database.CellPatchGrouper;
+import com.ivan.nexus.domain.database.ControlPlaneDatabase;
+import com.ivan.nexus.domain.database.DatabaseEngine;
+import com.ivan.nexus.domain.database.QueryResult;
+import com.ivan.nexus.domain.shared.DomainException;
+import com.ivan.nexus.domain.shared.NexusErrorCode;
+import com.ivan.nexus.infrastructure.database.JdbcQueryExecutor;
+import com.ivan.nexus.infrastructure.database.MongoQueryExecutor;
+import com.ivan.nexus.infrastructure.persistence.user.UserEntity;
+import com.ivan.nexus.infrastructure.persistence.user.UserJpaRepository;
+import com.ivan.nexus.interfaces.database.DatabaseDtos;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@Service
+public class EditDatabaseCells {
+    private final DiscoverProjectDatabases discover;
+    private final JdbcQueryExecutor jdbc;
+    private final MongoQueryExecutor mongo;
+    private final RecordAudit recordAudit;
+    private final UserJpaRepository users;
+
+    public EditDatabaseCells(
+            DiscoverProjectDatabases discover,
+            JdbcQueryExecutor jdbc,
+            MongoQueryExecutor mongo,
+            RecordAudit recordAudit,
+            UserJpaRepository users) {
+        this.discover = discover;
+        this.jdbc = jdbc;
+        this.mongo = mongo;
+        this.recordAudit = recordAudit;
+        this.users = users;
+    }
+
+    public QueryResult execute(
+            String projectId,
+            String databaseId,
+            DatabaseDtos.CellsRequest body,
+            String role,
+            String username,
+            String ip) {
+        ControlPlaneDatabase.requireAdminForDataAccess(projectId, role);
+        InstanceResolution resolution = GetDatabaseMetadata.requireReady(discover.resolve(projectId, databaseId));
+        DatabaseEngine engine = resolution.instance().engine();
+        boolean sqlBody = hasText(body.schema()) && hasText(body.table());
+        boolean mongoBody = hasText(body.mongoDatabase()) && hasText(body.collection());
+        QueryResult result;
+        if (engine == DatabaseEngine.MONGO) {
+            if (!mongoBody || sqlBody) {
+                throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Statement is not allowed");
+            }
+            List<CellPatchGrouper.MongoPatch> mongoPatches = new ArrayList<>();
+            for (DatabaseDtos.CellPatch patch : patches(body)) {
+                if ("_id".equals(patch.field())) {
+                    throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Cannot edit primary key");
+                }
+                mongoPatches.add(new CellPatchGrouper.MongoPatch(patch.id(), patch.field(), patch.value()));
+            }
+            result = mongo.updateDocuments(
+                    resolution.target(),
+                    body.mongoDatabase(),
+                    body.collection(),
+                    CellPatchGrouper.groupMongo(mongoPatches));
+        } else {
+            if (!sqlBody || mongoBody) {
+                throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Statement is not allowed");
+            }
+            List<CellPatchGrouper.SqlPatch> sqlPatches = new ArrayList<>();
+            for (DatabaseDtos.CellPatch patch : patches(body)) {
+                if (patch.primaryKey() != null && patch.primaryKey().containsKey(patch.column())) {
+                    throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Cannot edit primary key");
+                }
+                sqlPatches.add(new CellPatchGrouper.SqlPatch(patch.primaryKey(), patch.column(), patch.value()));
+            }
+            result = jdbc.updateCells(
+                    engine,
+                    resolution.target(),
+                    body.schema(),
+                    body.table(),
+                    CellPatchGrouper.groupSql(sqlPatches));
+        }
+        UUID userId = users.findByUsername(username).map(UserEntity::getId).orElse(null);
+        recordAudit.execute(
+                userId,
+                AuditAction.DB_CELL_EDIT,
+                projectId,
+                resolution.instance().service(),
+                ip,
+                Map.of(
+                        "engine", engine.name(),
+                        "service", resolution.instance().service(),
+                        "databaseId", databaseId,
+                        "class", "WRITE",
+                        "rowCount", result.rowCount(),
+                        "durationMs", result.durationMs()));
+        return result;
+    }
+
+    private static List<DatabaseDtos.CellPatch> patches(DatabaseDtos.CellsRequest body) {
+        return body.patches() == null ? List.of() : body.patches();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+}

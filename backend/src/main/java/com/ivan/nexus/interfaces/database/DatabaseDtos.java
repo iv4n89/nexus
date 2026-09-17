@@ -39,6 +39,20 @@ public final class DatabaseDtos {
             String id,
             String field) {}
 
+    public record CellsRequest(
+            String schema,
+            String table,
+            String mongoDatabase,
+            String collection,
+            List<CellPatch> patches) {}
+
+    public record CellPatch(
+            Map<String, Object> primaryKey,
+            String column,
+            Object value,
+            String id,
+            String field) {}
+
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record MetadataResponse(
             DatabaseEngine engine,
