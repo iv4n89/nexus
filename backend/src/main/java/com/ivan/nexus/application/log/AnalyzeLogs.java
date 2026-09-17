@@ -61,7 +61,15 @@ public class AnalyzeLogs {
                 }
                 String serviceId = serviceId(container);
                 int since = sinceFor(container.id(), nowEpoch);
-                for (String line : fetchLines(container.id(), since)) {
+                List<String> lines;
+                try {
+                    lines = logProvider.fetch(container.id(), GetContainerLogs.MAX_TAIL, since, null, false);
+                } catch (RuntimeException ex) {
+                    log.warn("Failed to fetch logs for container {}", container.id(), ex);
+                    continue;
+                }
+                watermarks.put(container.id(), nowEpoch);
+                for (String line : lines) {
                     ErrorNormalizer.normalize(line).ifPresent(error -> upsert(pending, projectId, serviceId, error, now));
                 }
             }
@@ -72,17 +80,7 @@ public class AnalyzeLogs {
         int windowStart = nowEpoch - logWindowSeconds;
         Integer lastWatermark = watermarks.get(containerId);
         int since = lastWatermark == null ? windowStart : Math.max(windowStart, lastWatermark);
-        watermarks.put(containerId, nowEpoch);
         return since;
-    }
-
-    private List<String> fetchLines(String containerId, int since) {
-        try {
-            return logProvider.fetch(containerId, GetContainerLogs.MAX_TAIL, since, null, false);
-        } catch (RuntimeException ex) {
-            log.warn("Failed to fetch logs for container {}", containerId, ex);
-            return List.of();
-        }
     }
 
     private void upsert(

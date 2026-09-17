@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { shouldAbandonEventSource } from '@/hooks/event-source'
 
 export function useEventSource(
   url: string | null,
@@ -15,10 +16,17 @@ export function useEventSource(
       return
     }
     const source = new EventSource(url)
+    let errorCount = 0
     const handler = (event: MessageEvent<string>) => {
       onMessageRef.current(event.data)
     }
     source.addEventListener(eventName, handler)
+    source.onerror = () => {
+      errorCount += 1
+      if (shouldAbandonEventSource(source.readyState, errorCount)) {
+        source.close()
+      }
+    }
     return () => {
       source.removeEventListener(eventName, handler)
       source.close()

@@ -154,6 +154,32 @@ class AnalyzeLogsTest {
     }
 
     @Test
+    void failedFetchDoesNotAdvanceWatermark() {
+        given(logProvider.fetch(eq("web-id"), eq(2000), anyInt(), isNull(), eq(false)))
+                .willThrow(new RuntimeException("docker timeout"))
+                .willReturn(List.of("ERROR boom"));
+        given(fingerprints.findByProjectIdAndServiceIdAndFingerprint(eq("lab"), eq("web"), any()))
+                .willReturn(Optional.empty());
+        given(fingerprints.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        AnalyzeLogs analyzeLogs = analyze("web");
+        analyzeLogs.execute();
+
+        ArgumentCaptor<Integer> firstSince = ArgumentCaptor.forClass(Integer.class);
+        verify(logProvider).fetch(eq("web-id"), eq(2000), firstSince.capture(), isNull(), eq(false));
+        int windowStart = firstSince.getValue();
+        verify(fingerprints, never()).save(any());
+
+        analyzeLogs.execute();
+
+        ArgumentCaptor<Integer> secondSince = ArgumentCaptor.forClass(Integer.class);
+        verify(logProvider, times(2))
+                .fetch(eq("web-id"), eq(2000), secondSince.capture(), isNull(), eq(false));
+        assertThat(secondSince.getAllValues().get(1)).isEqualTo(windowStart);
+        verify(fingerprints).save(any());
+    }
+
+    @Test
     void usesEmptyServiceIdWhenGroupingHasNone() {
         given(logProvider.fetch(eq("solo-id"), eq(2000), anyInt(), isNull(), eq(false)))
                 .willReturn(List.of("FATAL crash"));
