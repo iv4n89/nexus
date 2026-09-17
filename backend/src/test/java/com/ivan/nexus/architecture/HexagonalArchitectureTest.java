@@ -13,6 +13,11 @@ class HexagonalArchitectureTest {
     private static final String JACKSON_PACKAGES = "com.fasterxml.jackson..";
     private static final String MONGO_STATEMENT_PARSER =
             "com.ivan.nexus.application.database.MongoStatementParser";
+    private static final String[] DEPLOYMENT_PERSISTENCE_BOUNDARY_TYPES = {
+            "com.ivan.nexus.application.deployment.DeploymentStore",
+            "com.ivan.nexus.application.deployment.ManagedProjectStore",
+            "com.ivan.nexus.application.deployment.DeploymentView"
+    };
 
     private static final String[] CLEAN_APPLICATION_PACKAGES = {
             "com.ivan.nexus.application.activity..",
@@ -78,6 +83,28 @@ class HexagonalArchitectureTest {
                 .that().resideInAPackage("com.ivan.nexus.application.deployment..")
                 .should().dependOnClassesThat()
                 .resideInAPackage("com.ivan.nexus.infrastructure.manifest..")
+                .check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void deploymentPersistenceBoundaryTypesMustRemainFrameworkIndependent() {
+        noClasses()
+                .that().haveFullyQualifiedName(DEPLOYMENT_PERSISTENCE_BOUNDARY_TYPES[0])
+                .or().haveFullyQualifiedName(DEPLOYMENT_PERSISTENCE_BOUNDARY_TYPES[1])
+                .or().haveFullyQualifiedName(DEPLOYMENT_PERSISTENCE_BOUNDARY_TYPES[2])
+                .should().dependOnClassesThat().resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
+                .check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void deploymentApplicationMustNotDependOnJpaPersistenceTypes() {
+        noClasses()
+                .that().resideInAPackage("com.ivan.nexus.application.deployment..")
+                .should().dependOnClassesThat().resideInAnyPackage(
+                        "com.ivan.nexus.infrastructure.persistence..",
+                        "org.springframework.data..",
+                        "org.springframework.dao..",
+                        "jakarta.persistence..")
                 .check(NEXUS_CLASSES);
     }
 

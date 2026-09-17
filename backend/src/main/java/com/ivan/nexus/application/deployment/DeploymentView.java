@@ -1,7 +1,7 @@
 package com.ivan.nexus.application.deployment;
 
+import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -19,18 +19,18 @@ public record DeploymentView(
         Boolean healthOk,
         String kind) {
 
-    static DeploymentView from(DeploymentEntity entity) {
+    static DeploymentView from(Deployment deployment) {
         return new DeploymentView(
-                entity.getId(),
-                entity.getProjectId(),
-                entity.getStatus(),
-                entity.getStartedAt(),
-                entity.getFinishedAt(),
-                entity.getTriggeredBy(),
-                entity.getCommitSha(),
-                entity.getExitCode(),
-                entity.getOutputSummary(),
-                entity.getHealthOk(),
-                entity.getKind());
+                deployment.id(),
+                deployment.projectId(),
+                deployment.status(),
+                deployment.startedAt(),
+                deployment.finishedAt(),
+                deployment.triggeredBy(),
+                deployment.commitSha(),
+                deployment.exitCode(),
+                deployment.outputSummary(),
+                deployment.healthOk(),
+                deployment.kind());
     }
 }

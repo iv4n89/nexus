@@ -1,6 +1,9 @@
 package com.ivan.nexus.infrastructure.persistence.deployment;
 
+import com.ivan.nexus.application.deployment.DeploymentStore;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
+import com.ivan.nexus.domain.shared.DomainException;
+import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectEntity;
 import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectJpaRepository;
 import org.junit.jupiter.api.Test;
@@ -31,6 +34,9 @@ class DeploymentPersistenceIT {
 
     @Autowired
     DeploymentJpaRepository deployments;
+
+    @Autowired
+    DeploymentStore deploymentStore;
 
     @Autowired
     DeploymentEventJpaRepository events;
@@ -103,6 +109,27 @@ class DeploymentPersistenceIT {
 
         assertThatThrownBy(() -> deployments.saveAndFlush(runningDeployment(projectId, "admin")))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void deploymentStoreTranslatesActiveIndexRace() {
+        String projectId = "store-race-" + UUID.randomUUID();
+        projects.saveAndFlush(new ManagedProjectEntity(
+                projectId,
+                "Store race",
+                null,
+                "/tmp/store-race",
+                "/tmp/store-race/nexus.yml"));
+        UUID firstId = UUID.randomUUID();
+        deploymentStore.createPending(firstId, projectId, "admin", "deploy");
+        deploymentStore.markRunning(firstId, java.time.Instant.now());
+
+        assertThatThrownBy(() ->
+                deploymentStore.createPending(UUID.randomUUID(), projectId, "admin", "rollback"))
+                .isInstanceOf(DomainException.class)
+                .hasMessage("Deployment already in progress")
+                .extracting(ex -> ((DomainException) ex).getCode())
+                .isEqualTo(NexusErrorCode.DEPLOYMENT_IN_PROGRESS);
     }
 
     private static DeploymentEntity runningDeployment(String projectId, String triggeredBy) {
