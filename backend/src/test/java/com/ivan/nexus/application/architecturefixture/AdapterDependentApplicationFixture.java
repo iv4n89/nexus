@@ -1,7 +1,7 @@
 package com.ivan.nexus.application.architecturefixture;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import example.unknownsdk.UnknownSdkType;
 
 public final class AdapterDependentApplicationFixture {
-    private JpaRepository<?, ?> repository;
+    private UnknownSdkType client;
 }

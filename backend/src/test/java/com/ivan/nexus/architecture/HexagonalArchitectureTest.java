@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 class HexagonalArchitectureTest {
     private static final String APPLICATION_PACKAGES = "com.ivan.nexus.application..";
@@ -19,37 +18,25 @@ class HexagonalArchitectureTest {
             "java.."
     };
 
-    private static final String[] APPLICATION_FORBIDDEN_DEPENDENCIES = {
-            "com.ivan.nexus.infrastructure..",
-            "com.ivan.nexus.interfaces..",
-            "com.fasterxml.jackson..",
-            "com.github.dockerjava..",
-            "com.mongodb..",
-            "com.mysql..",
-            "org.bson..",
-            "org.mongodb..",
-            "org.postgresql..",
-            "java.sql..",
-            "javax.sql..",
-            "jakarta.persistence..",
-            "javax.persistence..",
-            "jakarta.servlet..",
-            "org.hibernate..",
-            "org.springframework.data..",
-            "org.springframework.dao..",
-            "org.springframework.jdbc..",
-            "org.springframework.web..",
-            "org.flywaydb..",
-            "org.apache.hc.."
+    private static final String[] APPLICATION_ALLOWED_DEPENDENCIES = {
+            "com.ivan.nexus.application..",
+            "com.ivan.nexus.domain..",
+            "java..",
+            "org.slf4j..",
+            "org.springframework.stereotype..",
+            "org.springframework.transaction.annotation..",
+            "org.springframework.scheduling.annotation..",
+            "org.springframework.beans.factory.annotation..",
+            "org.springframework.boot.autoconfigure.condition.."
     };
 
     private static final ArchRule APPLICATION_DEPENDENCY_RULE =
-            noClasses()
+            classes()
                     .that().resideInAPackage(APPLICATION_PACKAGES)
-                    .should().dependOnClassesThat()
-                    .resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
-                    .as("application layer must not depend on interface or infrastructure adapters, "
-                            + "persistence frameworks, serialization libraries, or adapter SDKs");
+                    .should().onlyDependOnClassesThat()
+                    .resideInAnyPackage(APPLICATION_ALLOWED_DEPENDENCIES)
+                    .as("application layer may depend only on application/domain code, the JDK, "
+                            + "SLF4J, and narrowly approved Spring orchestration annotations");
 
     private static final JavaClasses NEXUS_CLASSES =
             new ClassFileImporter()
@@ -65,18 +52,18 @@ class HexagonalArchitectureTest {
     }
 
     @Test
-    void applicationMustNotDependOnAdaptersOrAdapterFrameworks() {
+    void applicationMayDependOnlyOnExplicitlyAllowedPackages() {
         APPLICATION_DEPENDENCY_RULE.check(NEXUS_CLASSES);
     }
 
     @Test
-    void globalApplicationRuleRejectsSyntheticAdapterDependencyInAnyApplicationPackage() {
+    void globalApplicationAllowlistRejectsUnknownThirdPartyDependencyInAnyApplicationPackage() {
         JavaClasses fixture = new ClassFileImporter()
                 .importClasses(AdapterDependentApplicationFixture.class);
 
         assertThatThrownBy(() -> APPLICATION_DEPENDENCY_RULE.check(fixture))
                 .isInstanceOf(AssertionError.class)
-                .hasMessageContaining("application layer must not depend")
-                .hasMessageContaining("JpaRepository");
+                .hasMessageContaining("application layer may depend only")
+                .hasMessageContaining("UnknownSdkType");
     }
 }
