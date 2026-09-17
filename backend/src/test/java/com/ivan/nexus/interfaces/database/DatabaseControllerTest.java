@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -83,5 +84,18 @@ class DatabaseControllerTest {
                         .content("{\"statement\":\"DELETE FROM t\"}"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error.code").value("QUERY_NOT_ALLOWED"));
+    }
+
+    @Test
+    @WithMockUser(username = "viewer", roles = "VIEWER")
+    void viewerPreviewOfControlPlaneDatabaseReturns403() throws Exception {
+        given(previewTable.execute(eq("nexus"), eq("nexus:cccccccccccc"), any(), any(), any(), any(), eq("VIEWER")))
+                .willThrow(new DomainException(NexusErrorCode.FORBIDDEN, "Control-plane database is admin-only"));
+
+        mockMvc.perform(get("/api/projects/nexus/database/instances/nexus:cccccccccccc/preview")
+                        .queryParam("schema", "public")
+                        .queryParam("table", "users"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
     }
 }

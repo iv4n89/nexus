@@ -9,10 +9,15 @@
 # Backend uses host networking so the API can reach published project
 # database ports on 127.0.0.1. Public HTTP/TLS is Ava's Caddy
 # (ava-assistant.duckdns.org vs 0nexus.duckdns.org). Caddy runs in Docker
-# and proxies to host.docker.internal:3000/:8080. Next publishes :3000 via
-# docker-proxy (UFW does not apply). Host-networked Spring on :8080 does
-# hit INPUT, so remote-deploy opens Docker bridges → 8080. Bind 0.0.0.0
-# so host.docker.internal can connect; keep 80/443 as the only public entry.
+# and proxies to host.docker.internal:3000/:8080.
+#
+# Frontend is also host-networked. Publishing `3000:3000` via docker-proxy
+# bypasses UFW and would expose Next on the public internet. Publishing
+# `127.0.0.1:3000:3000` would close that hole but black-hole Caddy, which
+# connects to the host gateway rather than loopback. Host network + UFW
+# (Caddy IPs only, see remote-deploy.sh) matches the backend :8080 pattern.
+# Bind 0.0.0.0 so host.docker.internal can connect; keep 80/443 as the only
+# public entry.
 #
 # VPS deploys pull GHCR images and must use `docker compose up --no-build`.
 # Local: `docker compose --env-file .env up -d --build`.
@@ -71,6 +76,7 @@ services:
     image: ${NEXUS_FRONTEND_IMAGE:-nexus-frontend:local}
     build:
       context: ../frontend
+    network_mode: host
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
@@ -89,8 +95,6 @@ services:
       retries: 10
       start_period: 20s
     restart: unless-stopped
-    ports:
-      - "3000:3000"
 
 volumes:
   nexus_pg:

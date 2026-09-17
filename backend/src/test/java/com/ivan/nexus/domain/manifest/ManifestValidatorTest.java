@@ -118,6 +118,19 @@ class ManifestValidatorTest {
     }
 
     @Test
+    void rejectsMetadataHealthUrl() {
+        ProjectManifest manifest = new ProjectManifest(
+                project("lab", WORKING_DIR.toString()),
+                List.of("api"),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
+                null,
+                new ProjectManifest.HealthBlock("http://169.254.169.254/", 5),
+                null);
+
+        assertInvalid(() -> validator.validate(manifest));
+    }
+
+    @Test
     void allowsMissingHealthRollbackAndAlerts() {
         ProjectManifest manifest = new ProjectManifest(
                 project("lab", WORKING_DIR.toString()),

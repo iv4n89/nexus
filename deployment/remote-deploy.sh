@@ -93,35 +93,97 @@ docker ps -aq \
   --filter label=com.docker.compose.service=nginx \
   | xargs -r docker rm -f || true
 
-# Caddy (Docker) reaches Next via docker-proxy :3000, which bypasses UFW.
-# Host-networked Spring on :8080 does not — allow Docker bridges only.
-allow_docker_to_host_api() {
-  local port=8080
-  local cidr=172.16.0.0/12
-  echo "Allowing ${cidr} → host :${port} so Caddy can reach the API"
+# Caddy (Docker) reaches host-networked Next :3000 and Spring :8080 via
+# host.docker.internal. Both hit INPUT, so allow only the Caddy container
+# IPv4 (plus docker0 gateway). Probe from Caddy's network, not a random bridge.
+caddy_container_id() {
+  docker ps -q --filter label=com.docker.compose.service=caddy | head -n1
+}
 
-  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
-    ufw allow from "${cidr}" to any port "${port}" proto tcp comment 'nexus-api-from-caddy' || true
+caddy_ipv4s() {
+  local cid="${1:-}"
+  if [[ -z "${cid}" ]]; then
+    return 0
   fi
+  docker inspect -f '{{range .NetworkSettings.Networks}}{{if .IPAddress}}{{.IPAddress}} {{end}}{{end}}' "${cid}"
+}
 
+caddy_first_network() {
+  local cid="${1:-}"
+  if [[ -z "${cid}" ]]; then
+    return 0
+  fi
+  docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{println $name}}{{end}}' "${cid}" \
+    | awk 'NF { print; exit }'
+}
+
+delete_host_api_source() {
+  local src="$1"
+  local port="$2"
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    ufw delete allow from "${src}" to any port "${port}" proto tcp >/dev/null 2>&1 || true
+  fi
   if command -v iptables >/dev/null 2>&1; then
-    iptables -C INPUT -p tcp -s "${cidr}" --dport "${port}" -j ACCEPT 2>/dev/null \
-      || iptables -I INPUT 1 -p tcp -s "${cidr}" --dport "${port}" -j ACCEPT
+    while iptables -C INPUT -p tcp -s "${src}" --dport "${port}" -j ACCEPT 2>/dev/null; do
+      iptables -D INPUT -p tcp -s "${src}" --dport "${port}" -j ACCEPT || break
+    done
   fi
 }
 
+allow_host_api_source() {
+  local src="$1"
+  local port="$2"
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
+    ufw allow from "${src}" to any port "${port}" proto tcp comment "nexus-from-caddy-${port}" || true
+  fi
+  if command -v iptables >/dev/null 2>&1; then
+    iptables -C INPUT -p tcp -s "${src}" --dport "${port}" -j ACCEPT 2>/dev/null \
+      || iptables -I INPUT 1 -p tcp -s "${src}" --dport "${port}" -j ACCEPT
+  fi
+}
+
+allow_docker_to_host_api() {
+  local cid
+  cid=$(caddy_container_id)
+  local -a sources=()
+  if [[ -n "${cid}" ]]; then
+    # shellcheck disable=SC2207
+    sources=($(caddy_ipv4s "${cid}"))
+    sources+=("172.17.0.1")
+    echo "Allowing Caddy sources ${sources[*]} → host :8080 and :3000"
+    delete_host_api_source "172.16.0.0/12" 8080
+    delete_host_api_source "172.16.0.0/12" 3000
+  else
+    echo "WARN: Caddy container not found; falling back to 172.16.0.0/12 for :8080 and :3000" >&2
+    sources=("172.16.0.0/12")
+  fi
+  local src port
+  for src in "${sources[@]}"; do
+    [[ -n "${src}" ]] || continue
+    for port in 8080 3000; do
+      allow_host_api_source "${src}" "${port}"
+    done
+  done
+}
+
 probe_caddy_to_api() {
-  echo "Probing host.docker.internal:8080 from a bridge container (Caddy's path)"
-  if docker run --rm --network bridge --add-host=host.docker.internal:host-gateway \
+  local cid network
+  cid=$(caddy_container_id)
+  network=$(caddy_first_network "${cid}")
+  if [[ -z "${network}" ]]; then
+    network=bridge
+    echo "WARN: probing from default bridge; Caddy network was not detected" >&2
+  else
+    echo "Probing host.docker.internal:8080 from Caddy network ${network}"
+  fi
+  if docker run --rm --network "${network}" --add-host=host.docker.internal:host-gateway \
     --entrypoint curl "${NEXUS_BACKEND_IMAGE}" \
     -fsS --max-time 8 http://host.docker.internal:8080/actuator/health; then
     echo
     echo "Caddy→API path is open"
     return 0
   fi
-  echo "Caddy cannot reach host :8080. On the VPS run:" >&2
-  echo "  ufw allow from 172.16.0.0/12 to any port 8080 proto tcp" >&2
-  echo "  iptables -I INPUT 1 -p tcp -s 172.16.0.0/12 --dport 8080 -j ACCEPT" >&2
+  echo "Caddy cannot reach host :8080. Check ufw/iptables for the Caddy container IP." >&2
   return 1
 }
 
