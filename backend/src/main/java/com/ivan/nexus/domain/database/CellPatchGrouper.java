@@ -18,6 +18,13 @@ public final class CellPatchGrouper {
 
     public record GroupedSqlUpdate(Map<String, Object> primaryKey, Map<String, Object> columns) {}
 
+    public record SqlInsert(Map<String, Object> values) {}
+
+    public record SqlDelete(Map<String, Object> primaryKey) {}
+
+    public record SqlWriteBatch(
+            List<SqlDelete> deletes, List<GroupedSqlUpdate> updates, List<SqlInsert> inserts) {}
+
     public record MongoPatch(String id, String field, Object value) {}
 
     public record GroupedMongoUpdate(String id, Map<String, Object> fields) {}
@@ -53,6 +60,52 @@ public final class CellPatchGrouper {
                     java.util.Collections.unmodifiableMap(new LinkedHashMap<>(row.columns()))));
         }
         return List.copyOf(result);
+    }
+
+    public static SqlWriteBatch planSql(
+            List<SqlPatch> patches, List<SqlInsert> inserts, List<Map<String, Object>> deletes) {
+        List<SqlPatch> patchList = patches == null ? List.of() : patches;
+        List<SqlInsert> insertList = inserts == null ? List.of() : inserts;
+        List<Map<String, Object>> deleteList = deletes == null ? List.of() : deletes;
+        LinkedHashMap<String, SqlDelete> uniqueDeletes = new LinkedHashMap<>();
+        for (Map<String, Object> primaryKey : deleteList) {
+            if (primaryKey == null || primaryKey.isEmpty()) {
+                throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Primary key is required");
+            }
+            uniqueDeletes.put(canonicalPk(primaryKey), new SqlDelete(new LinkedHashMap<>(primaryKey)));
+        }
+        List<SqlPatch> remaining = new ArrayList<>();
+        for (SqlPatch patch : patchList) {
+            if (patch.primaryKey() != null && uniqueDeletes.containsKey(canonicalPk(patch.primaryKey()))) {
+                continue;
+            }
+            remaining.add(patch);
+        }
+        List<GroupedSqlUpdate> updates =
+                remaining.isEmpty() ? List.of() : groupSql(remaining);
+        List<SqlInsert> normalizedInserts = new ArrayList<>();
+        for (SqlInsert insert : insertList) {
+            Map<String, Object> values = insert.values() == null ? Map.of() : insert.values();
+            for (String column : values.keySet()) {
+                if (column == null || column.isBlank()) {
+                    throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Column is required");
+                }
+            }
+            normalizedInserts.add(new SqlInsert(new LinkedHashMap<>(values)));
+        }
+        if (uniqueDeletes.isEmpty() && updates.isEmpty() && normalizedInserts.isEmpty()) {
+            throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Patches are required");
+        }
+        int affected = uniqueDeletes.size() + updates.size() + normalizedInserts.size();
+        if (affected > MAX_ROWS) {
+            throw new DomainException(NexusErrorCode.QUERY_NOT_ALLOWED, "Too many rows");
+        }
+        List<SqlDelete> plannedDeletes = new ArrayList<>();
+        for (SqlDelete delete : uniqueDeletes.values()) {
+            plannedDeletes.add(new SqlDelete(
+                    java.util.Collections.unmodifiableMap(new LinkedHashMap<>(delete.primaryKey()))));
+        }
+        return new SqlWriteBatch(List.copyOf(plannedDeletes), updates, List.copyOf(normalizedInserts));
     }
 
     public static List<GroupedMongoUpdate> groupMongo(List<MongoPatch> patches) {

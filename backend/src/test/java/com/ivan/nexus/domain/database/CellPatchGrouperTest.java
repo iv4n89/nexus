@@ -48,4 +48,56 @@ class CellPatchGrouperTest {
         DomainException ex = assertThrows(DomainException.class, () -> CellPatchGrouper.groupSql(patches));
         assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
     }
+
+    @Test
+    void planSqlOrdersDeletesThenUpdatesThenInsertsAndSkipsPatchedDeletes() {
+        CellPatchGrouper.SqlWriteBatch batch = CellPatchGrouper.planSql(
+                List.of(
+                        new CellPatchGrouper.SqlPatch(Map.of("id", 2), "role", "ADMIN"),
+                        new CellPatchGrouper.SqlPatch(Map.of("id", 3), "role", "VIEWER")),
+                List.of(new CellPatchGrouper.SqlInsert(Map.of("email", "nuevo@x"))),
+                List.of(Map.of("id", 3)));
+        assertEquals(1, batch.deletes().size());
+        assertEquals(Map.of("id", 3), batch.deletes().getFirst().primaryKey());
+        assertEquals(1, batch.updates().size());
+        assertEquals(Map.of("id", 2), batch.updates().getFirst().primaryKey());
+        assertEquals(1, batch.inserts().size());
+        assertEquals("nuevo@x", batch.inserts().getFirst().values().get("email"));
+    }
+
+    @Test
+    void planSqlAllowsEmptyPatchesWhenInsertsExist() {
+        CellPatchGrouper.SqlWriteBatch batch = CellPatchGrouper.planSql(
+                List.of(),
+                List.of(new CellPatchGrouper.SqlInsert(Map.of())),
+                List.of());
+        assertEquals(1, batch.inserts().size());
+        assertEquals(Map.of(), batch.inserts().getFirst().values());
+    }
+
+    @Test
+    void planSqlRejectsEmptyBatch() {
+        DomainException ex = assertThrows(
+                DomainException.class, () -> CellPatchGrouper.planSql(List.of(), List.of(), List.of()));
+        assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
+    }
+
+    @Test
+    void planSqlRejectsMoreThanOneHundredAffectedRows() {
+        java.util.ArrayList<CellPatchGrouper.SqlInsert> inserts = new java.util.ArrayList<>();
+        for (int i = 0; i < 101; i++) {
+            inserts.add(new CellPatchGrouper.SqlInsert(Map.of("n", i)));
+        }
+        DomainException ex = assertThrows(
+                DomainException.class, () -> CellPatchGrouper.planSql(List.of(), inserts, List.of()));
+        assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
+    }
+
+    @Test
+    void planSqlRejectsEmptyDeleteMap() {
+        DomainException ex = assertThrows(
+                DomainException.class,
+                () -> CellPatchGrouper.planSql(List.of(), List.of(), List.of(Map.of())));
+        assertEquals(NexusErrorCode.QUERY_NOT_ALLOWED, ex.getCode());
+    }
 }
