@@ -5,14 +5,13 @@ import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.domain.alert.AlertEvaluator;
 import com.ivan.nexus.domain.alert.AlertEvaluation;
 import com.ivan.nexus.domain.alert.AlertFacts;
+import com.ivan.nexus.domain.alert.AlertRule;
 import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.alert.ContainerAlertState;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.project.Project;
 import com.ivan.nexus.domain.project.ProjectGrouping;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleJpaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -33,7 +32,7 @@ public class EvaluateAlerts {
 
     private final DiscoverProjects discoverProjects;
     private final ManifestCatalog manifests;
-    private final AlertRuleJpaRepository rules;
+    private final AlertRuleStore rules;
     private final PersistAlertEvaluation persistAlertEvaluation;
     private final AlertFactCollector factCollector;
     private final ContainerLifecycleNotifier lifecycleNotifier;
@@ -44,7 +43,7 @@ public class EvaluateAlerts {
     public EvaluateAlerts(
             DiscoverProjects discoverProjects,
             ManifestCatalog manifests,
-            AlertRuleJpaRepository rules,
+            AlertRuleStore rules,
             PersistAlertEvaluation persistAlertEvaluation,
             AlertFactCollector factCollector,
             ContainerLifecycleNotifier lifecycleNotifier) {
@@ -59,7 +58,7 @@ public class EvaluateAlerts {
     @Scheduled(fixedDelayString = "${nexus.alerts.interval-ms:30000}")
     public void execute() {
         Instant now = Instant.now();
-        List<AlertRuleEntity> enabledRules = rules.findByEnabledTrue();
+        List<AlertRule> enabledRules = rules.findEnabled();
         Map<String, List<ContainerSnapshot>> grouped = discoverProjects.groupByProject();
         Map<String, ProjectManifest> manifests = loadManifests();
 
@@ -115,16 +114,16 @@ public class EvaluateAlerts {
         return manifests;
     }
 
-    static AlertRuleEntity ruleFor(List<AlertRuleEntity> enabledRules, AlertType type, String projectId) {
-        AlertRuleEntity global = null;
-        for (AlertRuleEntity rule : enabledRules) {
-            if (rule.getType() != type) {
+    static AlertRule ruleFor(List<AlertRule> enabledRules, AlertType type, String projectId) {
+        AlertRule global = null;
+        for (AlertRule rule : enabledRules) {
+            if (rule.type() != type) {
                 continue;
             }
-            if (projectId != null && projectId.equals(rule.getProjectId())) {
+            if (projectId != null && projectId.equals(rule.projectId())) {
                 return rule;
             }
-            if (rule.getProjectId() == null) {
+            if (rule.projectId() == null) {
                 global = rule;
             }
         }

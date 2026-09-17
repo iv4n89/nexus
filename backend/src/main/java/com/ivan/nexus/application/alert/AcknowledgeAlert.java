@@ -6,8 +6,6 @@ import com.ivan.nexus.domain.alert.Alert;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertEventJpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,33 +15,31 @@ import java.util.UUID;
 
 @Service
 public class AcknowledgeAlert {
-    private final AlertEventJpaRepository events;
+    private final AlertStore alerts;
     private final UserDirectory users;
     private final RecordAudit recordAudit;
 
     public AcknowledgeAlert(
-            AlertEventJpaRepository events,
+            AlertStore alerts,
             UserDirectory users,
             RecordAudit recordAudit) {
-        this.events = events;
+        this.alerts = alerts;
         this.users = users;
         this.recordAudit = recordAudit;
     }
 
     @Transactional
     public Alert execute(UUID id, String username, String ip) {
-        AlertEventEntity event = events.findById(id)
+        Alert alert = alerts.acknowledge(id, Instant.now())
                 .orElseThrow(() -> new DomainException(NexusErrorCode.ALERT_NOT_FOUND, "Alert not found"));
-        event.acknowledge(Instant.now());
-        events.save(event);
         UUID userId = users.findIdByUsername(username).orElse(null);
         recordAudit.execute(
                 userId,
                 AuditAction.ALERT_ACKNOWLEDGE,
-                event.getProjectId(),
-                event.getServiceId(),
+                alert.projectId(),
+                alert.serviceId(),
                 ip,
                 Map.of("alertId", id.toString()));
-        return event.toDomain();
+        return alert;
     }
 }

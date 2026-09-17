@@ -16,6 +16,7 @@ class HexagonalArchitectureTest {
 
     private static final String[] CLEAN_APPLICATION_PACKAGES = {
             "com.ivan.nexus.application.activity..",
+            "com.ivan.nexus.application.alert..",
             "com.ivan.nexus.application.audit..",
             "com.ivan.nexus.application.container..",
             "com.ivan.nexus.application.database..",
@@ -72,11 +73,9 @@ class HexagonalArchitectureTest {
     }
 
     @Test
-    void deploymentAndAlertsMustNotImportInfrastructureManifestAdapters() {
+    void deploymentMustNotImportInfrastructureManifestAdapters() {
         noClasses()
-                .that().resideInAnyPackage(
-                        "com.ivan.nexus.application.deployment..",
-                        "com.ivan.nexus.application.alert..")
+                .that().resideInAPackage("com.ivan.nexus.application.deployment..")
                 .should().dependOnClassesThat()
                 .resideInAPackage("com.ivan.nexus.infrastructure.manifest..")
                 .check(NEXUS_CLASSES);

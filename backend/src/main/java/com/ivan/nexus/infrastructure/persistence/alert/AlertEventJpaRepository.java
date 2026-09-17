@@ -2,6 +2,7 @@ package com.ivan.nexus.infrastructure.persistence.alert;
 
 import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,7 +16,9 @@ import java.util.UUID;
 public interface AlertEventJpaRepository extends JpaRepository<AlertEventEntity, UUID> {
 
     @EntityGraph(attributePaths = "rule")
-    List<AlertEventEntity> findByStatusInOrderByOpenedAtDesc(Collection<AlertStatus> statuses);
+    List<AlertEventEntity> findByStatusInOrderByOpenedAtDesc(
+            Collection<AlertStatus> statuses,
+            Pageable pageable);
 
     @EntityGraph(attributePaths = "rule")
     @Query("""

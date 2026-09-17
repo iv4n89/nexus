@@ -14,4 +14,32 @@ public record Alert(
         Instant acknowledgedAt,
         Instant resolvedAt,
         AlertType type) {
+
+    public Alert acknowledge(Instant at) {
+        return new Alert(
+                id,
+                ruleId,
+                projectId,
+                serviceId,
+                AlertStatus.ACKNOWLEDGED,
+                message,
+                openedAt,
+                at,
+                resolvedAt,
+                type);
+    }
+
+    public Alert resolve(Instant at) {
+        return new Alert(
+                id,
+                ruleId,
+                projectId,
+                serviceId,
+                AlertStatus.RESOLVED,
+                message,
+                openedAt,
+                acknowledgedAt,
+                at,
+                type);
+    }
 }

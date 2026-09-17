@@ -7,6 +7,7 @@ import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetSystemMetrics;
 import com.ivan.nexus.application.project.DiscoverProjects;
 import com.ivan.nexus.domain.alert.AlertEvaluator;
+import com.ivan.nexus.domain.alert.AlertRule;
 import com.ivan.nexus.domain.alert.AlertType;
 import com.ivan.nexus.domain.alert.ContainerAlertState;
 import com.ivan.nexus.domain.alert.ErrorRateState;
@@ -16,7 +17,6 @@ import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.metrics.ContainerMetrics;
 import com.ivan.nexus.domain.metrics.SystemMetrics;
 import com.ivan.nexus.domain.project.Project;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -96,7 +96,7 @@ public class AlertFactCollector {
         }
     }
 
-    List<ErrorRateState> errorRates(List<AlertRuleEntity> enabledRules, Map<String, ProjectManifest> manifests) {
+    List<ErrorRateState> errorRates(List<AlertRule> enabledRules, Map<String, ProjectManifest> manifests) {
         Map<ServiceKey, Integer> deltas = new HashMap<>();
         for (StoredErrorFingerprint entity : fingerprints.findAll()) {
             FingerprintCountKey countKey = new FingerprintCountKey(
@@ -122,7 +122,7 @@ public class AlertFactCollector {
     }
 
     List<HttpHealthState> httpHealthChecks(
-            List<AlertRuleEntity> enabledRules,
+            List<AlertRule> enabledRules,
             Map<String, ProjectManifest> manifests) {
         if (EvaluateAlerts.ruleFor(enabledRules, AlertType.HTTP_HEALTH, null) == null) {
             return List.of();
@@ -149,10 +149,10 @@ public class AlertFactCollector {
     }
 
     static int memoryThreshold(
-            List<AlertRuleEntity> enabledRules,
+            List<AlertRule> enabledRules,
             String projectId,
             ProjectManifest manifest) {
-        AlertRuleEntity rule = EvaluateAlerts.ruleFor(enabledRules, AlertType.HIGH_MEMORY, projectId);
+        AlertRule rule = EvaluateAlerts.ruleFor(enabledRules, AlertType.HIGH_MEMORY, projectId);
         if (rule != null) {
             OptionalInt fromRule = rule.threshold("memoryPercent");
             if (fromRule.isPresent()) {
@@ -165,8 +165,8 @@ public class AlertFactCollector {
         return AlertEvaluator.DEFAULT_MEMORY_PERCENT;
     }
 
-    static int diskThreshold(List<AlertRuleEntity> enabledRules) {
-        AlertRuleEntity rule = EvaluateAlerts.ruleFor(enabledRules, AlertType.DISK, null);
+    static int diskThreshold(List<AlertRule> enabledRules) {
+        AlertRule rule = EvaluateAlerts.ruleFor(enabledRules, AlertType.DISK, null);
         if (rule != null) {
             OptionalInt fromRule = rule.threshold("diskPercent");
             if (fromRule.isPresent()) {
@@ -177,10 +177,10 @@ public class AlertFactCollector {
     }
 
     static int errorRateThreshold(
-            List<AlertRuleEntity> enabledRules,
+            List<AlertRule> enabledRules,
             String projectId,
             ProjectManifest manifest) {
-        AlertRuleEntity rule = EvaluateAlerts.ruleFor(enabledRules, AlertType.ERROR_RATE, projectId);
+        AlertRule rule = EvaluateAlerts.ruleFor(enabledRules, AlertType.ERROR_RATE, projectId);
         if (rule != null) {
             OptionalInt fromRule = rule.threshold("errorRatePerMinute");
             if (fromRule.isPresent()) {

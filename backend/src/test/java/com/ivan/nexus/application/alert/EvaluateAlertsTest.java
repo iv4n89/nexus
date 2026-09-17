@@ -7,6 +7,9 @@ import com.ivan.nexus.application.metrics.ContainerStatsProvider;
 import com.ivan.nexus.application.metrics.GetSystemMetrics;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.application.project.DiscoverProjects;
+import com.ivan.nexus.domain.alert.Alert;
+import com.ivan.nexus.domain.alert.AlertKey;
+import com.ivan.nexus.domain.alert.AlertRule;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.alert.AlertStatus;
 import com.ivan.nexus.domain.alert.AlertType;
@@ -15,10 +18,6 @@ import com.ivan.nexus.domain.metrics.ContainerMetrics;
 import com.ivan.nexus.domain.metrics.SystemMetrics;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertEventEntity;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertEventJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleEntity;
-import com.ivan.nexus.infrastructure.persistence.alert.AlertRuleJpaRepository;
 import com.ivan.nexus.application.log.FingerprintStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,9 +53,9 @@ class EvaluateAlertsTest {
     @Mock
     HealthChecker healthChecker;
     @Mock
-    AlertRuleJpaRepository rules;
+    AlertRuleStore rules;
     @Mock
-    AlertEventJpaRepository events;
+    AlertStore alerts;
     @Mock
     RecordActivity recordActivity;
 
@@ -67,14 +67,14 @@ class EvaluateAlertsTest {
     void setUp() {
         given(getSystemMetrics.execute()).willReturn(new SystemMetrics(0, 0, 1, 10, 100, 0, 0));
         given(fingerprints.findAll()).willReturn(List.of());
-        given(rules.findByEnabledTrue()).willReturn(List.of(rule(AlertType.CONTAINER_STOPPED)));
+        given(rules.findEnabled()).willReturn(List.of(rule(AlertType.CONTAINER_STOPPED)));
         manifests = new FakeManifestCatalog();
         DiscoverProjects discoverProjects = new DiscoverProjects(inventory(), manifests);
         evaluateAlerts = new EvaluateAlerts(
                 discoverProjects,
                 manifests,
                 rules,
-                new PersistAlertEvaluation(events, recordActivity),
+                new PersistAlertEvaluation(alerts, recordActivity),
                 new AlertFactCollector(
                         discoverProjects, statsProvider, getSystemMetrics, fingerprints, healthChecker),
                 new ContainerLifecycleNotifier(recordActivity));
@@ -82,8 +82,7 @@ class EvaluateAlertsTest {
 
     @Test
     void persistsActiveAlertWhenContainerStops() {
-        given(events.findOpenByTypeAndProjectAndService(any(), any(), any())).willReturn(Optional.empty());
-        given(events.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        given(alerts.findOpen(any())).willReturn(Optional.empty());
 
         inventory.add(snapshot("running"));
         evaluateAlerts.execute();
@@ -92,14 +91,14 @@ class EvaluateAlertsTest {
         inventory.add(snapshot("exited"));
         evaluateAlerts.execute();
 
-        ArgumentCaptor<AlertEventEntity> captor = ArgumentCaptor.forClass(AlertEventEntity.class);
-        verify(events).save(captor.capture());
-        AlertEventEntity saved = captor.getValue();
-        assertThat(saved.getStatus()).isEqualTo(AlertStatus.ACTIVE);
-        assertThat(saved.getProjectId()).isEqualTo("lab");
-        assertThat(saved.getServiceId()).isEqualTo("web");
-        assertThat(saved.getRule().getType()).isEqualTo(AlertType.CONTAINER_STOPPED);
-        assertThat(saved.getResolvedAt()).isNull();
+        ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
+        verify(alerts).open(captor.capture());
+        Alert saved = captor.getValue();
+        assertThat(saved.status()).isEqualTo(AlertStatus.ACTIVE);
+        assertThat(saved.projectId()).isEqualTo("lab");
+        assertThat(saved.serviceId()).isEqualTo("web");
+        assertThat(saved.type()).isEqualTo(AlertType.CONTAINER_STOPPED);
+        assertThat(saved.resolvedAt()).isNull();
         verify(recordActivity).execute(
                 eq(ActivityType.ALERT_CREATED), eq("lab"), eq("web"), eq("alert created"), any());
         verify(recordActivity).execute(
@@ -108,15 +107,8 @@ class EvaluateAlertsTest {
 
     @Test
     void doesNotDuplicateOpenAlertWhenConditionStillHolds() {
-        List<AlertEventEntity> saved = new ArrayList<>();
-        given(events.findOpenByTypeAndProjectAndService(any(), any(), any()))
-                .willAnswer(invocation -> openOfType(saved, invocation.getArgument(0)));
-        given(events.save(any())).willAnswer(invocation -> {
-            AlertEventEntity entity = invocation.getArgument(0);
-            saved.removeIf(existing -> existing.getId().equals(entity.getId()));
-            saved.add(entity);
-            return entity;
-        });
+        List<Alert> saved = new ArrayList<>();
+        stubAlertStore(saved);
 
         inventory.add(snapshot("running"));
         evaluateAlerts.execute();
@@ -126,21 +118,14 @@ class EvaluateAlertsTest {
         evaluateAlerts.execute();
 
         assertThat(saved).hasSize(1);
-        assertThat(saved.getFirst().getStatus()).isEqualTo(AlertStatus.ACTIVE);
-        assertThat(saved.getFirst().getResolvedAt()).isNull();
+        assertThat(saved.getFirst().status()).isEqualTo(AlertStatus.ACTIVE);
+        assertThat(saved.getFirst().resolvedAt()).isNull();
     }
 
     @Test
     void resolvesOpenAlertWhenConditionClears() {
-        List<AlertEventEntity> saved = new ArrayList<>();
-        given(events.findOpenByTypeAndProjectAndService(any(), any(), any()))
-                .willAnswer(invocation -> openOfType(saved, invocation.getArgument(0)));
-        given(events.save(any())).willAnswer(invocation -> {
-            AlertEventEntity entity = invocation.getArgument(0);
-            saved.removeIf(existing -> existing.getId().equals(entity.getId()));
-            saved.add(entity);
-            return entity;
-        });
+        List<Alert> saved = new ArrayList<>();
+        stubAlertStore(saved);
 
         inventory.add(snapshot("running"));
         evaluateAlerts.execute();
@@ -152,8 +137,8 @@ class EvaluateAlertsTest {
         evaluateAlerts.execute();
 
         assertThat(saved).hasSize(1);
-        assertThat(saved.getFirst().getStatus()).isEqualTo(AlertStatus.RESOLVED);
-        assertThat(saved.getFirst().getResolvedAt()).isNotNull();
+        assertThat(saved.getFirst().status()).isEqualTo(AlertStatus.RESOLVED);
+        assertThat(saved.getFirst().resolvedAt()).isNotNull();
         verify(recordActivity).execute(
                 eq(ActivityType.ALERT_RESOLVED), eq("lab"), eq("web"), eq("alert resolved"), any());
         verify(recordActivity).execute(
@@ -174,33 +159,31 @@ class EvaluateAlertsTest {
 
     @Test
     void persistsHighMemoryWhenUsageExceedsDefaultThreshold() {
-        given(rules.findByEnabledTrue()).willReturn(List.of(rule(AlertType.HIGH_MEMORY)));
+        given(rules.findEnabled()).willReturn(List.of(rule(AlertType.HIGH_MEMORY)));
         given(statsProvider.stats("web-id")).willReturn(new ContainerMetrics("web-id", 0, 95, 100, 0, 0));
-        given(events.findOpenByTypeAndProjectAndService(any(), any(), any())).willReturn(Optional.empty());
-        given(events.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        given(alerts.findOpen(any())).willReturn(Optional.empty());
 
         inventory.add(snapshot("running"));
         evaluateAlerts.execute();
 
-        ArgumentCaptor<AlertEventEntity> captor = ArgumentCaptor.forClass(AlertEventEntity.class);
-        verify(events).save(captor.capture());
-        assertThat(captor.getValue().getRule().getType()).isEqualTo(AlertType.HIGH_MEMORY);
-        assertThat(captor.getValue().getStatus()).isEqualTo(AlertStatus.ACTIVE);
+        ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
+        verify(alerts).open(captor.capture());
+        assertThat(captor.getValue().type()).isEqualTo(AlertType.HIGH_MEMORY);
+        assertThat(captor.getValue().status()).isEqualTo(AlertStatus.ACTIVE);
     }
 
     @Test
     void persistsDiskAlertWhenUsageExceedsDefaultThreshold() {
-        given(rules.findByEnabledTrue()).willReturn(List.of(rule(AlertType.DISK)));
+        given(rules.findEnabled()).willReturn(List.of(rule(AlertType.DISK)));
         given(getSystemMetrics.execute()).willReturn(new SystemMetrics(0, 0, 1, 90, 100, 0, 0));
-        given(events.findOpenByTypeAndProjectAndService(any(), any(), any())).willReturn(Optional.empty());
-        given(events.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+        given(alerts.findOpen(any())).willReturn(Optional.empty());
 
         evaluateAlerts.execute();
 
-        ArgumentCaptor<AlertEventEntity> captor = ArgumentCaptor.forClass(AlertEventEntity.class);
-        verify(events).save(captor.capture());
-        assertThat(captor.getValue().getRule().getType()).isEqualTo(AlertType.DISK);
-        assertThat(captor.getValue().getStatus()).isEqualTo(AlertStatus.ACTIVE);
+        ArgumentCaptor<Alert> captor = ArgumentCaptor.forClass(Alert.class);
+        verify(alerts).open(captor.capture());
+        assertThat(captor.getValue().type()).isEqualTo(AlertType.DISK);
+        assertThat(captor.getValue().status()).isEqualTo(AlertStatus.ACTIVE);
     }
 
     @Test
@@ -211,16 +194,33 @@ class EvaluateAlertsTest {
         assertThatCode(evaluateAlerts::execute).doesNotThrowAnyException();
     }
 
-    private static Optional<AlertEventEntity> openOfType(List<AlertEventEntity> saved, AlertType type) {
+    private static Optional<Alert> openOfType(List<Alert> saved, AlertKey key) {
         return saved.stream()
-                .filter(event -> event.getStatus() == AlertStatus.ACTIVE
-                        || event.getStatus() == AlertStatus.ACKNOWLEDGED)
-                .filter(event -> event.getRule().getType() == type)
+                .filter(event -> event.status() == AlertStatus.ACTIVE
+                        || event.status() == AlertStatus.ACKNOWLEDGED)
+                .filter(event -> event.type() == key.type())
                 .findFirst();
     }
 
-    private static AlertRuleEntity rule(AlertType type) {
-        return new AlertRuleEntity(UUID.randomUUID(), null, type, Map.of(), true);
+    private void stubAlertStore(List<Alert> saved) {
+        given(alerts.findOpen(any())).willAnswer(invocation -> openOfType(saved, invocation.getArgument(0)));
+        doAnswer(invocation -> {
+            saved.add(invocation.getArgument(0));
+            return null;
+        }).when(alerts).open(any());
+        given(alerts.resolve(any(), any())).willAnswer(invocation -> {
+            AlertKey key = invocation.getArgument(0);
+            Optional<Alert> open = openOfType(saved, key);
+            open.ifPresent(alert -> {
+                saved.remove(alert);
+                saved.add(alert.resolve(invocation.getArgument(1)));
+            });
+            return open.map(alert -> alert.resolve(invocation.getArgument(1)));
+        });
+    }
+
+    private static AlertRule rule(AlertType type) {
+        return new AlertRule(UUID.randomUUID(), null, type, Map.of(), true);
     }
 
     private ContainerInventory inventory() {
