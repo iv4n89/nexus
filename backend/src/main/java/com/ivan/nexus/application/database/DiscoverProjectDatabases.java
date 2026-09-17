@@ -17,14 +17,20 @@ import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class DiscoverProjectDatabases {
+    private static final Duration CACHE_TTL = Duration.ofSeconds(15);
+
     private final ContainerInventory inventory;
+    private final ConcurrentHashMap<String, CachedResolutions> cache = new ConcurrentHashMap<>();
 
     public DiscoverProjectDatabases(ContainerInventory inventory) {
         this.inventory = inventory;
@@ -42,10 +48,20 @@ public class DiscoverProjectDatabases {
     }
 
     private List<InstanceResolution> resolutions(String projectId) {
+        CachedResolutions cached = cache.get(projectId);
+        if (cached != null && cached.fresh()) {
+            return cached.items();
+        }
         List<InstanceResolution> found = new ArrayList<>();
         for (ContainerSnapshot snapshot : inventory.listAll()) {
             String grouped = ProjectGrouping.projectId(snapshot.name(), snapshot.labels());
             if (!projectId.equals(grouped)) {
+                continue;
+            }
+            if (NexusDatabaseExclusions.skip(snapshot.image(), snapshot.labels())) {
+                continue;
+            }
+            if (EngineDetector.fromImage(snapshot.image()).isEmpty()) {
                 continue;
             }
             Optional<ContainerInspect> inspect = inventory.inspect(snapshot.id());
@@ -54,7 +70,9 @@ public class DiscoverProjectDatabases {
             }
             toResolution(projectId, inspect.get()).ifPresent(found::add);
         }
-        return List.copyOf(found);
+        List<InstanceResolution> frozen = List.copyOf(found);
+        cache.put(projectId, new CachedResolutions(Instant.now().plus(CACHE_TTL), frozen));
+        return frozen;
     }
 
     private static Optional<InstanceResolution> toResolution(String projectId, ContainerInspect inspect) {
@@ -118,4 +136,10 @@ public class DiscoverProjectDatabases {
     }
 
     private record HostPort(String host, int port) {}
+
+    private record CachedResolutions(Instant expiresAt, List<InstanceResolution> items) {
+        boolean fresh() {
+            return Instant.now().isBefore(expiresAt);
+        }
+    }
 }

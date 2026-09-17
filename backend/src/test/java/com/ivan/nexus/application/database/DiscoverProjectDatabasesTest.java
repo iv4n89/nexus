@@ -12,9 +12,11 @@ import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,6 +117,54 @@ class DiscoverProjectDatabasesTest {
     }
 
     @Test
+    void inspectsOnlyDatabaseCandidatesNotEveryProjectContainer() {
+        CountingInventory inventory = countingInventory(
+                inspect(
+                        "aaaaaaaaaaaa0000",
+                        "lab-db-1",
+                        "postgres:16-alpine",
+                        Map.of("nexus.project", "lab", "nexus.service", "db"),
+                        Map.of("POSTGRES_PASSWORD", "p", "POSTGRES_DB", "lab"),
+                        List.of(new PublishedPort(5432, 15432, "0.0.0.0")),
+                        List.of()),
+                inspect(
+                        "bbbbbbbbbbbb0000",
+                        "lab-web-1",
+                        "nginx:alpine",
+                        Map.of("nexus.project", "lab", "nexus.service", "web"),
+                        Map.of(),
+                        List.of(new PublishedPort(80, 18081, "0.0.0.0")),
+                        List.of()));
+
+        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory);
+        List<DatabaseInstance> instances = discover.execute("lab");
+
+        assertEquals(1, instances.size());
+        assertEquals(List.of("aaaaaaaaaaaa0000"), inventory.inspectedIds);
+        assertEquals(1, inventory.listAllCalls.get());
+    }
+
+    @Test
+    void resolveReusesRecentDiscoveryInsteadOfInspectingAgain() {
+        CountingInventory inventory = countingInventory(
+                inspect(
+                        "aaaaaaaaaaaa0000",
+                        "lab-db-1",
+                        "postgres:16-alpine",
+                        Map.of("nexus.project", "lab", "nexus.service", "db"),
+                        Map.of("POSTGRES_PASSWORD", "p", "POSTGRES_DB", "lab"),
+                        List.of(new PublishedPort(5432, 15432, "0.0.0.0")),
+                        List.of()));
+        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory);
+
+        discover.resolve("lab", "lab:aaaaaaaaaaaa");
+        discover.resolve("lab", "lab:aaaaaaaaaaaa");
+
+        assertEquals(1, inventory.listAllCalls.get());
+        assertEquals(1, inventory.inspectedIds.size());
+    }
+
+    @Test
     void usesContainerIpWhenNoPublishedPort() {
         DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory(
                 inspect(
@@ -130,6 +180,39 @@ class DiscoverProjectDatabasesTest {
         assertEquals("172.18.0.2", resolution.target().host());
         assertEquals(5432, resolution.target().port());
         assertEquals(DatabaseStatus.READY, resolution.instance().status());
+    }
+
+    private static CountingInventory countingInventory(ContainerInspect... inspects) {
+        return new CountingInventory(inspects);
+    }
+
+    private static final class CountingInventory implements ContainerInventory {
+        private final List<ContainerInspect> all;
+        private final List<ContainerSnapshot> snapshots;
+        private final AtomicInteger listAllCalls = new AtomicInteger();
+        private final List<String> inspectedIds = new ArrayList<>();
+
+        private CountingInventory(ContainerInspect... inspects) {
+            this.all = List.of(inspects);
+            this.snapshots = Stream.of(inspects).map(DiscoverProjectDatabasesTest::snapshot).toList();
+        }
+
+        @Override
+        public List<ContainerSnapshot> listAll() {
+            listAllCalls.incrementAndGet();
+            return snapshots;
+        }
+
+        @Override
+        public Optional<ContainerSnapshot> findById(String containerId) {
+            return snapshots.stream().filter(s -> s.id().equals(containerId)).findFirst();
+        }
+
+        @Override
+        public Optional<ContainerInspect> inspect(String containerId) {
+            inspectedIds.add(containerId);
+            return all.stream().filter(item -> item.id().equals(containerId)).findFirst();
+        }
     }
 
     private static ContainerInventory inventory(ContainerInspect... inspects) {

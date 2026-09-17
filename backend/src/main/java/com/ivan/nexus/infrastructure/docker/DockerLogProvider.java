@@ -11,6 +11,7 @@ import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -27,9 +28,13 @@ public class DockerLogProvider implements LogProvider {
     private static final long LOGS_TIMEOUT_SECONDS = 10;
 
     private final DockerClient dockerClient;
+    private final DockerClient followClient;
 
-    public DockerLogProvider(DockerClient dockerClient) {
+    public DockerLogProvider(
+            DockerClient dockerClient,
+            @Qualifier("dockerFollowClient") DockerClient followClient) {
         this.dockerClient = dockerClient;
+        this.followClient = followClient;
     }
 
     @Override
@@ -96,7 +101,7 @@ public class DockerLogProvider implements LogProvider {
             }
         };
         try {
-            LogContainerCmd command = dockerClient.logContainerCmd(containerId)
+            LogContainerCmd command = followClient.logContainerCmd(containerId)
                     .withStdOut(true)
                     .withStdErr(true)
                     .withFollowStream(true)

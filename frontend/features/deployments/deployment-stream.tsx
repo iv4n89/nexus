@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useEventSource } from '@/hooks/use-event-source'
+import { deploymentStreamUrl } from '@/hooks/event-source'
 import { api } from '@/lib/api'
 import { formatClock, healthOkLabel } from '@/lib/format'
 import type { Deployment } from '@/types/api'
@@ -29,7 +30,7 @@ export function DeploymentStream({
     },
   })
 
-  const streamUrl = `/api/deployments/${encodeURIComponent(deploymentId)}/stream`
+  const streamUrl = deploymentStreamUrl(deploymentId, deployment.data?.status)
 
   useEffect(() => {
     setLines([])

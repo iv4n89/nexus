@@ -14,7 +14,19 @@ public class SseExecutorConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(16);
         executor.setThreadNamePrefix("sse-");
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean(name = "deploymentExecutor")
+    public ThreadPoolTaskExecutor deploymentExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(8);
+        executor.setThreadNamePrefix("deploy-");
         executor.initialize();
         return executor;
     }

@@ -1,7 +1,6 @@
 package com.ivan.nexus.infrastructure.docker;
 
 import com.github.dockerjava.api.DockerClient;
-import com.github.dockerjava.api.command.HealthState;
 import com.github.dockerjava.api.command.InspectContainerCmd;
 import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.command.ListContainersCmd;
@@ -31,7 +30,10 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -56,18 +58,16 @@ class DockerContainerInventoryTest {
     }
 
     @Test
-    void listAllMapsContainerAndInspectToSnapshotWithoutEnv() {
+    void listAllMapsListApiFieldsWithoutInspect() {
         Container listed = listedContainer();
-        InspectContainerResponse inspect = inspectResponse(3, "healthy", "2024-01-15T10:30:00Z");
 
         when(dockerClient.listContainersCmd()).thenReturn(listContainersCmd);
         when(listContainersCmd.withShowAll(true)).thenReturn(listContainersCmd);
         when(listContainersCmd.exec()).thenReturn(List.of(listed));
-        when(dockerClient.inspectContainerCmd(CONTAINER_ID)).thenReturn(inspectContainerCmd);
-        when(inspectContainerCmd.exec()).thenReturn(inspect);
 
         List<ContainerSnapshot> snapshots = inventory.listAll();
 
+        verify(dockerClient, never()).inspectContainerCmd(any());
         assertThat(snapshots).hasSize(1);
         ContainerSnapshot snapshot = snapshots.getFirst();
         assertThat(snapshot.id()).isEqualTo(CONTAINER_ID);
@@ -75,38 +75,16 @@ class DockerContainerInventoryTest {
         assertThat(snapshot.image()).isEqualTo("lab-api:latest");
         assertThat(snapshot.status()).isEqualTo("Up 2 hours");
         assertThat(snapshot.state()).isEqualTo("running");
-        assertThat(snapshot.health()).isEqualTo("healthy");
+        assertThat(snapshot.health()).isNull();
         assertThat(snapshot.created()).isEqualTo(Instant.ofEpochSecond(1_700_000_000L));
         assertThat(snapshot.labels()).containsEntry("nexus.project", "lab");
         assertThat(snapshot.ports()).containsExactly(
                 new ContainerSnapshot.PortMapping(8080, 80),
                 new ContainerSnapshot.PortMapping(null, 5432));
-        assertThat(snapshot.restartCount()).isEqualTo(3);
-        assertThat(snapshot.startedAt()).isEqualTo(Instant.parse("2024-01-15T10:30:00Z"));
+        assertThat(snapshot.restartCount()).isZero();
+        assertThat(snapshot.startedAt()).isNull();
         assertThat(Arrays.stream(ContainerSnapshot.class.getRecordComponents()).map(RecordComponent::getName))
                 .doesNotContain("env");
-    }
-
-    @Test
-    void listAllStillMapsListDataWhenInspectFails() {
-        Container listed = listedContainer();
-
-        when(dockerClient.listContainersCmd()).thenReturn(listContainersCmd);
-        when(listContainersCmd.withShowAll(true)).thenReturn(listContainersCmd);
-        when(listContainersCmd.exec()).thenReturn(List.of(listed));
-        when(dockerClient.inspectContainerCmd(CONTAINER_ID)).thenReturn(inspectContainerCmd);
-        when(inspectContainerCmd.exec()).thenThrow(new RuntimeException("inspect failed"));
-
-        List<ContainerSnapshot> snapshots = inventory.listAll();
-
-        assertThat(snapshots).hasSize(1);
-        ContainerSnapshot snapshot = snapshots.getFirst();
-        assertThat(snapshot.id()).isEqualTo(CONTAINER_ID);
-        assertThat(snapshot.name()).isEqualTo("lab-api-1");
-        assertThat(snapshot.labels()).containsEntry("nexus.project", "lab");
-        assertThat(snapshot.restartCount()).isZero();
-        assertThat(snapshot.health()).isNull();
-        assertThat(snapshot.startedAt()).isNull();
     }
 
     @Test
@@ -174,17 +152,5 @@ class DockerContainerInventoryTest {
                 new ContainerPort().withPrivatePort(5432)
         });
         return container;
-    }
-
-    private InspectContainerResponse inspectResponse(int restartCount, String healthStatus, String startedAt) {
-        InspectContainerResponse inspect = mock(InspectContainerResponse.class);
-        InspectContainerResponse.ContainerState state = mock(InspectContainerResponse.ContainerState.class);
-        HealthState health = mock(HealthState.class);
-        when(inspect.getRestartCount()).thenReturn(restartCount);
-        when(inspect.getState()).thenReturn(state);
-        when(state.getStartedAt()).thenReturn(startedAt);
-        when(state.getHealth()).thenReturn(health);
-        when(health.getStatus()).thenReturn(healthStatus);
-        return inspect;
     }
 }

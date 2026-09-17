@@ -36,7 +36,7 @@ public class DeployProject {
             RecordAudit recordAudit,
             RecordActivity recordActivity,
             UserJpaRepository users,
-            @Qualifier("sseExecutor") Executor sseExecutor) {
+            @Qualifier("deploymentExecutor") Executor sseExecutor) {
         this.loader = loader;
         this.validator = validator;
         this.allowedRoot = Path.of(properties.getManifest().getAllowedRoot()).toAbsolutePath().normalize();

@@ -55,7 +55,7 @@ public class DockerContainerInventory implements ContainerInventory {
         }
         List<ContainerSnapshot> snapshots = new ArrayList<>(containers.size());
         for (Container container : containers) {
-            snapshots.add(toSnapshot(container));
+            snapshots.add(mapListed(container));
         }
         return List.copyOf(snapshots);
     }
@@ -82,34 +82,22 @@ public class DockerContainerInventory implements ContainerInventory {
         }
     }
 
-    private ContainerSnapshot toSnapshot(Container listed) {
-        InspectContainerResponse inspect = null;
-        try {
-            inspect = dockerClient.inspectContainerCmd(listed.getId()).exec();
-        } catch (Exception ex) {
-            log.warn("Failed to inspect container {}; using list data only", listed.getId(), ex);
-        }
-        return mapListed(listed, inspect);
-    }
-
-    private static ContainerSnapshot mapListed(Container listed, InspectContainerResponse inspect) {
-        InspectContainerResponse.ContainerState state = inspect != null ? inspect.getState() : null;
+    private static ContainerSnapshot mapListed(Container listed) {
         Instant created = listed.getCreated() != null
                 ? Instant.ofEpochSecond(listed.getCreated())
-                : parseInstant(inspect != null ? inspect.getCreated() : null);
-        int restartCount = inspect != null && inspect.getRestartCount() != null ? inspect.getRestartCount() : 0;
+                : null;
         return new ContainerSnapshot(
                 listed.getId(),
                 firstName(listed.getNames()),
                 listed.getImage(),
                 listed.getStatus(),
                 listed.getState(),
-                healthStatus(state),
+                null,
                 created,
                 listed.getLabels(),
                 mapPorts(listed.getPorts()),
-                restartCount,
-                state != null ? parseInstant(state.getStartedAt()) : null);
+                0,
+                null);
     }
 
     private static ContainerSnapshot toSnapshot(InspectContainerResponse inspect) {
