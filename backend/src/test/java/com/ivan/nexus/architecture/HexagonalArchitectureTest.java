@@ -9,6 +9,8 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 class HexagonalArchitectureTest {
+    private static final String APPLICATION_PACKAGES = "com.ivan.nexus.application..";
+    private static final String JACKSON_PACKAGES = "com.fasterxml.jackson..";
     private static final String MONGO_STATEMENT_PARSER =
             "com.ivan.nexus.application.database.MongoStatementParser";
 
@@ -32,8 +34,7 @@ class HexagonalArchitectureTest {
             "javax.persistence..",
             "org.hibernate..",
             "org.springframework.data..",
-            "org.springframework.dao..",
-            "com.fasterxml.jackson.."
+            "org.springframework.dao.."
     };
 
     private static final JavaClasses NEXUS_CLASSES =
@@ -54,6 +55,14 @@ class HexagonalArchitectureTest {
         noClasses()
                 .that().resideInAnyPackage(CLEAN_APPLICATION_PACKAGES)
                 .should().dependOnClassesThat().resideInAnyPackage(APPLICATION_FORBIDDEN_DEPENDENCIES)
+                .check(NEXUS_CLASSES);
+    }
+
+    @Test
+    void applicationMustNotDependOnJackson() {
+        noClasses()
+                .that().resideInAPackage(APPLICATION_PACKAGES)
+                .should().dependOnClassesThat().resideInAPackage(JACKSON_PACKAGES)
                 .check(NEXUS_CLASSES);
     }
 
