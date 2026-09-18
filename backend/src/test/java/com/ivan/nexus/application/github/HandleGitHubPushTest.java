@@ -119,6 +119,10 @@ class HandleGitHubPushTest {
         }
 
         @Override
+        public void ensureRegistered(String projectId, String workingDirectory, String manifestPath) {
+        }
+
+        @Override
         public void linkGitHub(String projectId, String owner, String repo, String branch) {
             throw new UnsupportedOperationException();
         }

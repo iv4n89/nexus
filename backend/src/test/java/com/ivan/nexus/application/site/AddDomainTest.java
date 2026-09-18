@@ -2,6 +2,7 @@ package com.ivan.nexus.application.site;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.project.EnsureManagedProject;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -39,10 +40,16 @@ class AddDomainTest {
     RecordAudit recordAudit;
     @Mock
     RecordActivity recordActivity;
+    @Mock
+    EnsureManagedProject ensureManagedProject;
+
+    private AddDomain useCase() {
+        return new AddDomain(domains, users, recordAudit, recordActivity, ensureManagedProject, Optional.empty());
+    }
 
     @Test
     void rejectsInvalidHostname() {
-        AddDomain addDomain = new AddDomain(domains, users, recordAudit, recordActivity, Optional.empty());
+        AddDomain addDomain = useCase();
 
         assertThatThrownBy(() -> addDomain.execute("lab", "bad_host", "api", 8080, "admin", "10.0.0.1"))
                 .isInstanceOf(DomainException.class)
@@ -55,7 +62,7 @@ class AddDomainTest {
     void rejectsDuplicateHostname() {
         given(domains.findByHostname("app.example.com")).willReturn(Optional.of(existing()));
 
-        AddDomain addDomain = new AddDomain(domains, users, recordAudit, recordActivity, Optional.empty());
+        AddDomain addDomain = useCase();
 
         assertThatThrownBy(() -> addDomain.execute("lab", "App.Example.COM", "api", 8080, "admin", "10.0.0.1"))
                 .isInstanceOf(DomainException.class)
@@ -70,7 +77,7 @@ class AddDomainTest {
         given(domains.save(any())).willAnswer(invocation -> invocation.getArgument(0));
         given(users.findIdByUsername("admin")).willReturn(Optional.of(UUID.fromString("11111111-1111-1111-1111-111111111111")));
 
-        SiteDomain result = new AddDomain(domains, users, recordAudit, recordActivity, Optional.empty())
+        SiteDomain result = useCase()
                 .execute("lab", "App.Example.COM.", "api", 8080, "admin", "10.0.0.1");
 
         assertThat(result.hostname()).isEqualTo("app.example.com");
@@ -80,7 +87,8 @@ class AddDomainTest {
         assertThat(result.certStatus()).isEqualTo(CertStatus.PENDING);
 
         ArgumentCaptor<SiteDomain> saved = ArgumentCaptor.forClass(SiteDomain.class);
-        var order = inOrder(domains, users, recordAudit, recordActivity);
+        var order = inOrder(ensureManagedProject, domains, users, recordAudit, recordActivity);
+        order.verify(ensureManagedProject).execute("lab");
         order.verify(domains).findByHostname("app.example.com");
         order.verify(domains).save(saved.capture());
         order.verify(users).findIdByUsername("admin");

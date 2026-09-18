@@ -61,6 +61,17 @@ class JpaManagedProjectStoreTest {
         verify(repository).linkGitHub("lab", "octo", "lab-repo", "main");
     }
 
+    @Test
+    void insertsMissingProjectWithoutOverwriting() {
+        store.ensureRegistered("nexus", "/host-opt/nexus", "/host-opt/nexus/nexus.yml");
+
+        verify(repository).ensureProject(
+                "nexus",
+                "nexus",
+                "/host-opt/nexus",
+                "/host-opt/nexus/nexus.yml");
+    }
+
     private static ProjectManifest manifest(String name, String description) {
         return new ProjectManifest(
                 new ProjectManifest.ProjectBlock("lab", name, description, "/ignored"),

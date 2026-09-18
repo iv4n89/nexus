@@ -4,7 +4,9 @@ import com.ivan.nexus.application.env.ProjectDotEnvStore;
 import com.ivan.nexus.application.manifest.FakeManifestCatalog;
 import com.ivan.nexus.application.project.ContainerInspect;
 import com.ivan.nexus.application.project.ContainerInventory;
+import com.ivan.nexus.application.project.EnsureManagedProject;
 import com.ivan.nexus.application.project.PublishedPort;
+import com.ivan.nexus.application.deployment.ManagedProjectStore;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.site.SiteDomain;
@@ -19,6 +21,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class SyncProjectDomainsFromEnvTest {
 
@@ -45,17 +49,37 @@ class SyncProjectDomainsFromEnvTest {
                 List.of(new PublishedPort(80, 8080, "0.0.0.0")),
                 List.of()));
 
+        ManagedProjectStore projects = mock(ManagedProjectStore.class);
+        EnsureManagedProject ensure = new EnsureManagedProject(projects, manifests, env);
         SyncProjectDomainsFromEnv sync = new SyncProjectDomainsFromEnv(
-                env, domains, inventory, manifests, Optional.empty());
+                env, domains, inventory, manifests, ensure, Optional.empty());
 
         List<SiteDomain> first = sync.execute("lab");
         assertThat(first).extracting(SiteDomain::hostname)
                 .containsExactlyInAnyOrder("from-env.example.com", "from-label.example.com");
         assertThat(first).allMatch(d -> d.serviceName().equals("web"));
         assertThat(first).allMatch(d -> d.targetPort() == 80);
+        verify(projects).ensureRegistered("lab", dir.toAbsolutePath().toString(), dir.resolve("nexus.yml").toString());
 
         List<SiteDomain> second = sync.execute("lab");
         assertThat(second).hasSize(2);
+    }
+
+    @Test
+    void syncsHostnameFromCaddySnippetWhenEnvHasNoDomain() {
+        FakeManifestCatalog manifests = new FakeManifestCatalog();
+        FakeProjectDotEnvStore env = new FakeProjectDotEnvStore();
+        env.putCaddy("nexus", "0nexus.duckdns.org {\n\treverse_proxy host.docker.internal:3000\n}\n");
+        FakeDomainStore domains = new FakeDomainStore();
+        ManagedProjectStore projects = mock(ManagedProjectStore.class);
+        EnsureManagedProject ensure = new EnsureManagedProject(projects, manifests, env);
+
+        List<SiteDomain> result = new SyncProjectDomainsFromEnv(
+                env, domains, emptyInventory(), manifests, ensure, Optional.empty())
+                .execute("nexus");
+
+        assertThat(result).extracting(SiteDomain::hostname).containsExactly("0nexus.duckdns.org");
+        verify(projects).ensureRegistered("nexus", "nexus", "nexus/nexus.yml");
     }
 
     private static ProjectManifest manifest(Path workingDirectory) {
@@ -67,6 +91,10 @@ class SyncProjectDomainsFromEnvTest {
                 null,
                 null,
                 null);
+    }
+
+    private static ContainerInventory emptyInventory() {
+        return inventory();
     }
 
     private static ContainerInventory inventory(ContainerInspect... inspects) {
@@ -120,6 +148,7 @@ class SyncProjectDomainsFromEnvTest {
 
     static final class FakeProjectDotEnvStore implements ProjectDotEnvStore {
         private final Map<String, Map<String, String>> byProject = new LinkedHashMap<>();
+        private final Map<String, List<String>> caddyByProject = new LinkedHashMap<>();
 
         @Override
         public Map<String, String> read(String projectId) {
@@ -129,6 +158,15 @@ class SyncProjectDomainsFromEnvTest {
         @Override
         public void write(String projectId, Map<String, String> values) {
             byProject.put(projectId, Map.copyOf(values));
+        }
+
+        void putCaddy(String projectId, String snippet) {
+            caddyByProject.computeIfAbsent(projectId, key -> new java.util.ArrayList<>()).add(snippet);
+        }
+
+        @Override
+        public List<String> caddySnippets(String projectId) {
+            return List.copyOf(caddyByProject.getOrDefault(projectId, List.of()));
         }
     }
 }

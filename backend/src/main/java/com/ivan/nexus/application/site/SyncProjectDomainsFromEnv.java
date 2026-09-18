@@ -6,12 +6,15 @@ import com.ivan.nexus.application.manifest.LoadedManifest;
 import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.application.project.ContainerInspect;
 import com.ivan.nexus.application.project.ContainerInventory;
+import com.ivan.nexus.application.project.EnsureManagedProject;
 import com.ivan.nexus.application.project.PublishedPort;
 import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.project.ProjectGrouping;
 import com.ivan.nexus.domain.site.CertStatus;
 import com.ivan.nexus.domain.site.DomainHostExtractor;
 import com.ivan.nexus.domain.site.SiteDomain;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,10 +31,13 @@ import java.util.UUID;
 
 @Service
 public class SyncProjectDomainsFromEnv {
+    private static final Logger log = LoggerFactory.getLogger(SyncProjectDomainsFromEnv.class);
+
     private final ProjectDotEnvStore dotEnvStore;
     private final DomainStore domains;
     private final ContainerInventory inventory;
     private final ManifestCatalog manifests;
+    private final EnsureManagedProject ensureManagedProject;
     private final Optional<ReloadProjectDomains> reloadProjectDomains;
 
     public SyncProjectDomainsFromEnv(
@@ -39,16 +45,19 @@ public class SyncProjectDomainsFromEnv {
             DomainStore domains,
             ContainerInventory inventory,
             ManifestCatalog manifests,
+            EnsureManagedProject ensureManagedProject,
             Optional<ReloadProjectDomains> reloadProjectDomains) {
         this.dotEnvStore = dotEnvStore;
         this.domains = domains;
         this.inventory = inventory;
         this.manifests = manifests;
+        this.ensureManagedProject = ensureManagedProject;
         this.reloadProjectDomains = reloadProjectDomains;
     }
 
     @Transactional
     public List<SiteDomain> execute(String projectId) {
+        ensureManagedProject.execute(projectId);
         String directoryName = directoryName(projectId);
         Map<String, String> env = dotEnvStore.read(projectId);
         Set<String> fromEnv = DomainHostExtractor.fromEnv(env);
@@ -65,7 +74,13 @@ public class SyncProjectDomainsFromEnv {
                 continue;
             }
             fromLabels.addAll(DomainHostExtractor.fromLabels(snapshot.labels()));
-            Optional<ContainerInspect> inspect = inventory.inspect(snapshot.id());
+            Optional<ContainerInspect> inspect;
+            try {
+                inspect = inventory.inspect(snapshot.id());
+            } catch (RuntimeException ex) {
+                log.debug("inspect failed for {}: {}", snapshot.id(), ex.toString());
+                continue;
+            }
             if (inspect.isEmpty()) {
                 continue;
             }

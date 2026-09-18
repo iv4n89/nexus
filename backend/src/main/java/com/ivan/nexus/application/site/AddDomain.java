@@ -3,6 +3,7 @@ package com.ivan.nexus.application.site;
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
 import com.ivan.nexus.application.caddy.ReloadProjectDomains;
+import com.ivan.nexus.application.project.EnsureManagedProject;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -25,6 +26,7 @@ public class AddDomain {
     private final UserDirectory users;
     private final RecordAudit recordAudit;
     private final RecordActivity recordActivity;
+    private final EnsureManagedProject ensureManagedProject;
     private final Optional<ReloadProjectDomains> reloadProjectDomains;
 
     public AddDomain(
@@ -32,11 +34,13 @@ public class AddDomain {
             UserDirectory users,
             RecordAudit recordAudit,
             RecordActivity recordActivity,
+            EnsureManagedProject ensureManagedProject,
             Optional<ReloadProjectDomains> reloadProjectDomains) {
         this.domains = domains;
         this.users = users;
         this.recordAudit = recordAudit;
         this.recordActivity = recordActivity;
+        this.ensureManagedProject = ensureManagedProject;
         this.reloadProjectDomains = reloadProjectDomains;
     }
 
@@ -59,6 +63,7 @@ public class AddDomain {
         }
 
         String normalized = SiteHostname.normalizeAndValidate(hostname);
+        ensureManagedProject.execute(projectId);
         domains.findByHostname(normalized).ifPresent(existing -> {
             throw new DomainException(
                     NexusErrorCode.DOMAIN_HOSTNAME_DUPLICATE,
