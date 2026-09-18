@@ -1,5 +1,7 @@
 package com.ivan.nexus.application.traffic;
 
+import com.ivan.nexus.domain.shared.DomainException;
+import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.domain.traffic.TrafficMinuteBucket;
 import com.ivan.nexus.domain.traffic.TrafficReport;
 import com.ivan.nexus.domain.traffic.TrafficSnapshot;
@@ -15,54 +17,89 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class MinuteTrafficIngestorTest {
+class GetProjectTrafficTest {
 
     private FakeTrafficStore store;
-    private MinuteTrafficIngestor ingestor;
+    private Clock clock;
 
     @BeforeEach
     void setUp() {
         store = new FakeTrafficStore();
-        Clock clock = Clock.fixed(Instant.parse("2026-09-18T10:31:40Z"), ZoneOffset.UTC);
-        ingestor = new MinuteTrafficIngestor(store, clock);
+        clock = Clock.fixed(Instant.parse("2026-09-18T12:30:00Z"), ZoneOffset.UTC);
     }
 
     @Test
-    void aggregatesRawEventsIntoCurrentUtcMinute() {
-        ingestor.ingestRaw("lab", "web", "app.example.com", 200, 100, 25);
-        ingestor.ingestRaw("lab", "web", "app.example.com", 500, 50, 75);
-
-        TrafficMinuteBucket bucket = store.findBucket(
-                        "lab", "web", "app.example.com", Instant.parse("2026-09-18T10:31:00Z"))
-                .orElseThrow();
-
-        assertThat(bucket.bucketStart()).isEqualTo(Instant.parse("2026-09-18T10:31:00Z"));
-        assertThat(bucket.requests()).isEqualTo(2);
-        assertThat(bucket.bytesOut()).isEqualTo(150);
-        assertThat(bucket.status2xx()).isEqualTo(1);
-        assertThat(bucket.status5xx()).isEqualTo(1);
-        assertThat(bucket.latencyAvgMs()).isEqualTo(50.0);
-        assertThat(bucket.latencyMaxMs()).isEqualTo(75.0);
+    void rejectsHoursBelowOne() {
+        assertThatThrownBy(() -> new GetProjectTraffic(store, clock).execute("lab", 0))
+                .isInstanceOf(DomainException.class)
+                .extracting(ex -> ((DomainException) ex).getCode())
+                .isEqualTo(NexusErrorCode.OPERATION_NOT_ALLOWED);
     }
 
     @Test
-    void getProjectTrafficReturnsAggregatedSnapshot() {
-        Clock clock = Clock.fixed(Instant.parse("2026-09-18T12:00:00Z"), ZoneOffset.UTC);
-        store.save(TrafficMinuteBucket.empty(
-                        UUID.randomUUID(), "lab", "app", "", Instant.parse("2026-09-18T10:00:00Z"))
-                .ingest(200, 10, 10));
-        store.save(TrafficMinuteBucket.empty(
-                        UUID.randomUUID(), "lab", "app", "", Instant.parse("2026-09-18T11:00:00Z"))
-                .ingest(200, 20, 30));
+    void rejectsHoursAbove168() {
+        assertThatThrownBy(() -> new GetProjectTraffic(store, clock).execute("lab", 169))
+                .isInstanceOf(DomainException.class)
+                .extracting(ex -> ((DomainException) ex).getCode())
+                .isEqualTo(NexusErrorCode.OPERATION_NOT_ALLOWED);
+    }
+
+    @Test
+    void doesNotTruncateWindowToHour() {
+        store.save(minute("lab", "web", "2026-09-18T11:00:00Z", 10, 0));
+        store.save(minute("lab", "web", "2026-09-18T11:35:00Z", 5, 0));
+
+        TrafficReport report = new GetProjectTraffic(store, clock).execute("lab", 1);
+
+        assertThat(report.from()).isEqualTo(Instant.parse("2026-09-18T11:30:00Z"));
+        assertThat(report.to()).isEqualTo(Instant.parse("2026-09-18T12:30:00Z"));
+        assertThat(report.totals().requests()).isEqualTo(5);
+    }
+
+    @Test
+    void binsOneMinuteWhenHoursAre24() {
+        store.save(minute("lab", "web", "2026-09-18T10:00:00Z", 10, 0));
+        store.save(minute("lab", "web", "2026-09-18T10:14:00Z", 5, 1));
 
         TrafficReport report = new GetProjectTraffic(store, clock).execute("lab", 24);
 
-        assertThat(report.totals().requests()).isEqualTo(2);
-        assertThat(report.totals().bytesOut()).isEqualTo(30);
-        assertThat(report.totals().latencyAvgMs()).isEqualTo(20.0);
-        assertThat(report.totals().latencyP95Ms()).isEqualTo(30.0);
-        assertThat(report.totals().topEndpoints()).isEmpty();
+        assertThat(report.series()).hasSize(2);
+        assertThat(report.series().getFirst().t()).isEqualTo(Instant.parse("2026-09-18T10:00:00Z"));
+        assertThat(report.series().get(1).t()).isEqualTo(Instant.parse("2026-09-18T10:14:00Z"));
+    }
+
+    @Test
+    void binsFifteenMinutesWhenHoursAre168() {
+        store.save(minute("lab", "web", "2026-09-18T10:00:00Z", 10, 0));
+        store.save(minute("lab", "web", "2026-09-18T10:14:00Z", 5, 1));
+
+        TrafficReport report = new GetProjectTraffic(store, clock).execute("lab", 168);
+
+        assertThat(report.series()).hasSize(1);
+        assertThat(report.series().getFirst().t()).isEqualTo(Instant.parse("2026-09-18T10:00:00Z"));
+        assertThat(report.series().getFirst().requests()).isEqualTo(15);
+    }
+
+    private static TrafficMinuteBucket minute(
+            String projectId, String serviceId, String bucketStart, long requests, long status5xx) {
+        long status2xx = requests - status5xx;
+        return new TrafficMinuteBucket(
+                UUID.randomUUID(),
+                projectId,
+                serviceId,
+                "",
+                Instant.parse(bucketStart),
+                requests,
+                0,
+                0,
+                status2xx,
+                0,
+                0,
+                status5xx,
+                0.0,
+                null);
     }
 
     private static final class FakeTrafficStore implements TrafficStore {
