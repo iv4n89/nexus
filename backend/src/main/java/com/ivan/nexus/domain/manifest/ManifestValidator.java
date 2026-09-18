@@ -4,11 +4,16 @@ import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 public final class ManifestValidator {
     private static final Pattern COMMAND_PATTERN =
             Pattern.compile("^[./a-zA-Z0-9._-]+(?:\\s+[./a-zA-Z0-9._-]+)*$");
+    private static final Pattern VOLUME_NAME_PATTERN =
+            Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$");
 
     private ManifestValidator() {
     }
@@ -42,6 +47,28 @@ public final class ManifestValidator {
         if (manifest.health() != null && !isBlank(manifest.health().url())
                 && !HealthUrlPolicy.allowed(manifest.health().url())) {
             fail("health.url is not an allowed http(s) endpoint");
+        }
+
+        validateBackupVolumes(manifest.backup());
+    }
+
+    private static void validateBackupVolumes(ProjectManifest.BackupBlock backup) {
+        if (backup == null || backup.volumes() == null) {
+            return;
+        }
+        List<String> volumes = backup.volumes();
+        Set<String> seen = new HashSet<>();
+        for (String volume : volumes) {
+            if (isBlank(volume)) {
+                fail("backup.volumes entries must be non-blank");
+            }
+            String trimmed = volume.trim();
+            if (!VOLUME_NAME_PATTERN.matcher(trimmed).matches()) {
+                fail("backup.volumes entry is not a valid Docker volume name: " + trimmed);
+            }
+            if (!seen.add(trimmed)) {
+                fail("backup.volumes contains duplicate entry: " + trimmed);
+            }
         }
     }
 
