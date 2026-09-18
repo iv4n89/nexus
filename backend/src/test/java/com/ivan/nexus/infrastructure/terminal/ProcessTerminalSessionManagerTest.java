@@ -153,6 +153,8 @@ class ProcessTerminalSessionManagerTest {
             Duration timeout) {
         return new ProcessTerminalSessionManager(
                 factory,
+                containerId -> factory.start(),
+                mock(com.ivan.nexus.application.project.ContainerInventory.class),
                 recordAudit,
                 users,
                 Clock.fixed(fixedNow, ZoneOffset.UTC),
