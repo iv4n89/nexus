@@ -168,14 +168,51 @@ Label Compose services with `nexus.project` and `nexus.service`. Local stand-in:
 - Sensitive actions are audited
 - Docker socket access is privileged; prefer `group_add` with the host docker gid over running as root
 
+## V1 readiness (operations baseline)
+
+Product direction: [Nexus_Product_Roadmapnew.md](Nexus_Product_Roadmapnew.md) (Personal VPS Control Plane). **V1 Operations is the current shipped baseline.** Answers to the roadmap’s daily questions *today*:
+
+| Question | V1 answer |
+|----------|-----------|
+| What is deployed? | Project discovery + services from Docker labels / manifests |
+| Is it working? | Container status, health URL after deploy, operational alerts |
+| Are there updates? | Not yet — needs GitHub integration (V1.5) |
+| Any vulnerabilities? | Not yet — needs security scanners (V1.8) |
+| How much traffic? | Not yet — needs Caddy traffic analytics (V1.7) |
+| Does the domain work? | External Caddy only for Nexus itself; per-project domains are V1.6 |
+| Last backup? | Not yet — backups & restore are V2 |
+| Can I recover? | Rollback of allowlisted scripts only; full restore is V2 |
+| What happened recently? | Activity timeline + audit + alerts + deployment history |
+| Do I need a terminal? | No in-app terminal yet (V1.9); SSH/Docker CLI still required for deep ops |
+
+Deferred from this baseline (see roadmap phases B–H): GitHub, secrets vault UI, managed domains, traffic, scanners, backups, web terminal, multi-host.
+
+`VIEWER` exists in Spring Security as read-only; there is no user-provisioning UI yet (admin bootstrap only).
+
+### Post-deploy smoke checklist
+
+After a `main` Deploy workflow succeeds:
+
+1. `GET https://0nexus.duckdns.org/actuator/health` → `UP`
+2. `GET /login` → 200; unauthenticated `/api/projects` → 401
+3. Sign in as `admin`; dashboard loads projects, alerts, activity
+4. Open a project → services list; optional deploy/rollback only on a lab project
+5. Deployment history + SSE stream (`event: log`) for an existing deployment
+6. Activity SSE `/api/events/stream` receives heartbeats / events
+
 ## Roadmap
 
-V0–V7 in this tree: foundation, discovery, logs, deployments, error fingerprints, alerts, activity, rollback.
+Shipped in tree (V1): foundation, discovery, logs, deployments, fingerprints, alerts, activity, audit, rollback, database manager, hexagonal application boundary.
 
-Later (not in MVP):
+Next (execution order in the product roadmap):
 
-- **V8** GitHub webhooks (repo, branch, commit on each deploy)
-- **V9** Notifications (Telegram, Discord, email)
-- **V10** Multi-server agents
+- **V1.5** GitHub (OAuth, checkout, commit status, webhook, optional auto-deploy)
+- **Environment & secrets** (encrypted store, inject at deploy)
+- **V1.6** Domains + HTTPS via Caddy
+- **V1.7** Traffic analytics
+- **V1.8** Security scanners (+ optional LLM context)
+- **V2** Backups & restore
+- **V1.9** Web terminal
+- **Automation** — end-to-end pipeline + unified project health
 
-Out of scope for now: Kubernetes, Terraform, Elasticsearch, Kafka, Prometheus/Grafana, Redis, secret vault, marketplace, plugins, arbitrary terminal, remote file editor.
+Out of scope for now: Kubernetes, Terraform, Elasticsearch, Kafka, Prometheus/Grafana, Redis, marketplace, plugins, multi-server agents, disaster-recovery export across VPS hosts.
