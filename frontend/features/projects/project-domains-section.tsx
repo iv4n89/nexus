@@ -50,6 +50,15 @@ export function ProjectDomainsSection({ projectId, canEdit }: Props) {
     },
   })
 
+  const sync = useMutation({
+    mutationFn: () =>
+      api<SiteDomain[]>(`/api/projects/${projectId}/domains/sync`, { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'domains'] })
+      void queryClient.invalidateQueries({ queryKey: ['projects', projectId, 'health'] })
+    },
+  })
+
   function onAdd(event: React.FormEvent) {
     event.preventDefault()
     if (!canEdit || add.isPending) {
@@ -79,7 +88,19 @@ export function ProjectDomainsSection({ projectId, canEdit }: Props) {
 
   return (
     <section>
-      <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Domains</h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="text-xs tracking-[0.25em] text-[#888]">Domains</h2>
+        {canEdit ? (
+          <button
+            type="button"
+            disabled={sync.isPending}
+            onClick={() => sync.mutate()}
+            className="border border-[#2a2a2a] px-3 py-1 text-sm text-[#f5f5f5] disabled:cursor-not-allowed disabled:text-[#888]"
+          >
+            SYNC
+          </button>
+        ) : null}
+      </div>
       {domains.isPending ? (
         <p className="text-sm text-[#888]">Loading…</p>
       ) : domains.isError ? (
@@ -117,6 +138,9 @@ export function ProjectDomainsSection({ projectId, canEdit }: Props) {
       )}
       {remove.isError ? (
         <p className="mt-2 text-sm text-[#ff4d4f]">{remove.error.message}</p>
+      ) : null}
+      {sync.isError ? (
+        <p className="mt-2 text-sm text-[#ff4d4f]">{sync.error.message}</p>
       ) : null}
 
       {canEdit ? (

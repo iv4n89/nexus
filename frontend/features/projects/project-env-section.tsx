@@ -96,7 +96,20 @@ export function ProjectEnvSection({ projectId, canEdit }: Props) {
 
   return (
     <section>
-      <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Environment</h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xs tracking-[0.25em] text-[#888]">Environment</h2>
+          <p className="mt-1 text-xs text-[#666]">Synced from `.env`</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void env.refetch()}
+          disabled={env.isFetching}
+          className="border border-[#2a2a2a] px-3 py-1 text-sm text-[#f5f5f5] disabled:cursor-not-allowed disabled:text-[#888]"
+        >
+          RELOAD
+        </button>
+      </div>
       {env.isPending ? (
         <p className="text-sm text-[#888]">Loading…</p>
       ) : env.isError ? (

@@ -3,6 +3,7 @@ package com.ivan.nexus.domain.project;
 import org.junit.jupiter.api.Test;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProjectGroupingTest {
     @Test
@@ -29,5 +30,21 @@ class ProjectGroupingTest {
         assertEquals("api", ProjectGrouping.serviceId("/x", Map.of("nexus.service", "api", "com.docker.compose.service", "other")));
         assertEquals("web", ProjectGrouping.serviceId("/x", Map.of("com.docker.compose.service", "web")));
         assertEquals("nginx", ProjectGrouping.serviceId("/nginx", Map.of()));
+    }
+
+    @Test
+    void matchesNormalizedHyphenUnderscoreAndCase() {
+        assertTrue(ProjectGrouping.matches("foo-bar", "foo_bar"));
+        assertTrue(ProjectGrouping.matches("Foo-Bar", "foo_bar"));
+        assertTrue(ProjectGrouping.belongsTo(
+                "x",
+                Map.of("com.docker.compose.project", "foo_bar"),
+                "foo-bar",
+                null));
+        assertTrue(ProjectGrouping.belongsTo(
+                "x",
+                Map.of("com.docker.compose.project", "lab_dir"),
+                "other-id",
+                "lab-dir"));
     }
 }

@@ -2,7 +2,6 @@ package com.ivan.nexus.application.env;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
-import com.ivan.nexus.application.secrets.SecretStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -14,12 +13,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Instant;
+import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,15 +33,13 @@ import static org.mockito.Mockito.when;
 class ProjectEnvUseCasesTest {
 
     @Mock
-    SecretStore secretStore;
-    @Mock
     RecordAudit recordAudit;
     @Mock
     RecordActivity recordActivity;
     @Mock
     UserDirectory users;
 
-    private final FakeProjectEnvStore store = new FakeProjectEnvStore();
+    private final FakeProjectDotEnvStore store = new FakeProjectDotEnvStore();
     private final UUID adminId = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private UpsertProjectEnv upsert;
     private ListProjectEnv list;
@@ -50,25 +48,21 @@ class ProjectEnvUseCasesTest {
 
     @BeforeEach
     void setUp() {
-        upsert = new UpsertProjectEnv(store, secretStore, recordAudit, recordActivity, users);
-        list = new ListProjectEnv(store, secretStore);
+        upsert = new UpsertProjectEnv(store, recordAudit, recordActivity, users);
+        list = new ListProjectEnv(store);
         delete = new DeleteProjectEnv(store, recordAudit, recordActivity, users);
-        rotate = new RotateProjectEnv(store, secretStore, recordAudit, recordActivity, users);
+        rotate = new RotateProjectEnv(store, recordAudit, recordActivity, users);
     }
 
     @Test
-    void upsertEncryptsAndNeverReturnsSecretPlaintext() {
-        when(secretStore.encrypt("s3cret")).thenReturn("cipher");
+    void upsertWritesDotEnvAndNeverReturnsSecretPlaintext() {
         when(users.findIdByUsername("admin")).thenReturn(Optional.of(adminId));
 
         ProjectEnvVarView view = upsert.execute("lab", "API_KEY", "s3cret", true, "admin", "10.0.0.1");
 
         assertThat(view.secret()).isTrue();
         assertThat(view.value()).isNull();
-        assertThat(store.findByProjectAndName("lab", "API_KEY").orElseThrow().encryptedValue())
-                .isEqualTo("cipher");
-        assertThat(store.findByProjectAndName("lab", "API_KEY").orElseThrow().encryptedValue())
-                .doesNotContain("s3cret");
+        assertThat(store.read("lab").get("API_KEY")).isEqualTo("s3cret");
 
         verify(recordAudit).execute(
                 eq(adminId),
@@ -86,13 +80,8 @@ class ProjectEnvUseCasesTest {
     }
 
     @Test
-    void listMasksSecretsAndDecryptsNonSecrets() {
-        Instant now = Instant.parse("2026-09-18T10:00:00Z");
-        store.upsert(new StoredProjectEnvVar(
-                UUID.randomUUID(), "lab", "API_KEY", "cipher-secret", true, now, now));
-        store.upsert(new StoredProjectEnvVar(
-                UUID.randomUUID(), "lab", "NODE_ENV", "cipher-prod", false, now, now));
-        when(secretStore.decrypt("cipher-prod")).thenReturn("production");
+    void listMasksSecretsAndReturnsNonSecrets() {
+        store.write("lab", Map.of("API_KEY", "s3cret", "NODE_ENV", "production"));
 
         List<ProjectEnvVarView> views = list.execute("lab");
 
@@ -104,21 +93,16 @@ class ProjectEnvUseCasesTest {
     }
 
     @Test
-    void rotateEncryptsNewValueAndRecordsAudit() {
-        Instant created = Instant.parse("2026-09-18T09:00:00Z");
-        UUID id = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        store.upsert(new StoredProjectEnvVar(id, "lab", "API_KEY", "old-cipher", true, created, created));
-        when(secretStore.encrypt("new-secret")).thenReturn("new-cipher");
+    void rotateRewritesDotEnvAndRecordsAudit() {
+        store.write("lab", Map.of("API_KEY", "old-secret"));
         when(users.findIdByUsername("admin")).thenReturn(Optional.of(adminId));
 
         ProjectEnvVarView view = rotate.execute("lab", "API_KEY", "new-secret", "admin", "10.0.0.2");
 
         assertThat(view.secret()).isTrue();
         assertThat(view.value()).isNull();
-        assertThat(view.id()).isEqualTo(id);
-        assertThat(view.createdAt()).isEqualTo(created);
-        assertThat(store.findByProjectAndName("lab", "API_KEY").orElseThrow().encryptedValue())
-                .isEqualTo("new-cipher");
+        assertThat(view.id()).isEqualTo(UUID.nameUUIDFromBytes("lab:API_KEY".getBytes(StandardCharsets.UTF_8)));
+        assertThat(store.read("lab").get("API_KEY")).isEqualTo("new-secret");
 
         verify(recordAudit).execute(
                 eq(adminId),
@@ -145,14 +129,12 @@ class ProjectEnvUseCasesTest {
 
     @Test
     void deleteRecordsAuditAndActivity() {
-        Instant now = Instant.parse("2026-09-18T10:00:00Z");
-        store.upsert(new StoredProjectEnvVar(
-                UUID.randomUUID(), "lab", "API_KEY", "cipher", true, now, now));
+        store.write("lab", Map.of("API_KEY", "cipher"));
         when(users.findIdByUsername("admin")).thenReturn(Optional.of(adminId));
 
         delete.execute("lab", "API_KEY", "admin", "127.0.0.1");
 
-        assertThat(store.findByProjectAndName("lab", "API_KEY")).isEmpty();
+        assertThat(store.read("lab")).doesNotContainKey("API_KEY");
         verify(recordAudit).execute(
                 eq(adminId),
                 eq(AuditAction.CONFIG_CHANGE),
@@ -184,40 +166,18 @@ class ProjectEnvUseCasesTest {
                         .isEqualTo(NexusErrorCode.OPERATION_NOT_ALLOWED));
     }
 
-    static final class FakeProjectEnvStore implements ProjectEnvStore {
-        private final ConcurrentHashMap<String, CopyOnWriteArrayList<StoredProjectEnvVar>> byProject =
+    static final class FakeProjectDotEnvStore implements ProjectDotEnvStore {
+        private final ConcurrentHashMap<String, LinkedHashMap<String, String>> byProject =
                 new ConcurrentHashMap<>();
 
         @Override
-        public List<StoredProjectEnvVar> listByProject(String projectId) {
-            return List.copyOf(byProject.getOrDefault(projectId, new CopyOnWriteArrayList<>()));
+        public Map<String, String> read(String projectId) {
+            return new LinkedHashMap<>(byProject.getOrDefault(projectId, new LinkedHashMap<>()));
         }
 
         @Override
-        public Optional<StoredProjectEnvVar> findByProjectAndName(String projectId, String name) {
-            return listByProject(projectId).stream().filter(v -> v.name().equals(name)).findFirst();
-        }
-
-        @Override
-        public Optional<StoredProjectEnvVar> findById(UUID id) {
-            return byProject.values().stream().flatMap(List::stream).filter(v -> v.id().equals(id)).findFirst();
-        }
-
-        @Override
-        public StoredProjectEnvVar upsert(StoredProjectEnvVar envVar) {
-            CopyOnWriteArrayList<StoredProjectEnvVar> list =
-                    byProject.computeIfAbsent(envVar.projectId(), key -> new CopyOnWriteArrayList<>());
-            list.removeIf(v -> v.name().equals(envVar.name()));
-            list.add(envVar);
-            return envVar;
-        }
-
-        @Override
-        public void delete(String projectId, String name) {
-            byProject.computeIfPresent(projectId, (key, list) -> {
-                list.removeIf(v -> v.name().equals(name));
-                return list;
-            });
+        public void write(String projectId, Map<String, String> values) {
+            byProject.put(projectId, new LinkedHashMap<>(values));
         }
     }
 }

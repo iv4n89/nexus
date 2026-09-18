@@ -8,14 +8,14 @@ import java.util.List;
 
 @Service
 public class ListProjectDomains {
-    private final DomainStore domains;
+    private final SyncProjectDomainsFromEnv syncProjectDomainsFromEnv;
 
-    public ListProjectDomains(DomainStore domains) {
-        this.domains = domains;
+    public ListProjectDomains(SyncProjectDomainsFromEnv syncProjectDomainsFromEnv) {
+        this.syncProjectDomainsFromEnv = syncProjectDomainsFromEnv;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<SiteDomain> execute(String projectId) {
-        return domains.findByProjectId(projectId);
+        return syncProjectDomainsFromEnv.execute(projectId);
     }
 }
