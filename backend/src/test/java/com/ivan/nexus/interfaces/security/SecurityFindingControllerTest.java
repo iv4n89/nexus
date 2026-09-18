@@ -1,6 +1,7 @@
 package com.ivan.nexus.interfaces.security;
 
 import com.ivan.nexus.application.security.AcknowledgeSecurityFinding;
+import com.ivan.nexus.application.security.ContextualizeSecurityFinding;
 import com.ivan.nexus.application.security.ListSecurityFindings;
 import com.ivan.nexus.application.security.RunSecurityScan;
 import com.ivan.nexus.domain.security.SecurityFinding;
@@ -47,6 +48,9 @@ class SecurityFindingControllerTest {
 
     @MockitoBean
     AcknowledgeSecurityFinding acknowledgeSecurityFinding;
+
+    @MockitoBean
+    ContextualizeSecurityFinding contextualizeSecurityFinding;
 
     @Test
     @WithMockUser(roles = "VIEWER")
@@ -122,6 +126,22 @@ class SecurityFindingControllerTest {
                         .with(csrf()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("SECURITY_FINDING_NOT_FOUND"));
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminContextualizesFinding() throws Exception {
+        UUID id = UUID.fromString("ffffffff-ffff-ffff-ffff-ffffffffffff");
+        given(contextualizeSecurityFinding.execute("lab", id)).willReturn(
+                new ContextualizeSecurityFinding.Result(id, "lab", "Summary text"));
+
+        mockMvc.perform(post("/api/projects/{id}/security/findings/{findingId}/contextualize", "lab", id)
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary").value("Summary text"))
+                .andExpect(jsonPath("$.findingId").value(id.toString()));
+
+        verify(contextualizeSecurityFinding).execute("lab", id);
     }
 
     private static SecurityFinding finding(UUID id, SecurityFindingStatus status) {

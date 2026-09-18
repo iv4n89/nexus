@@ -22,11 +22,18 @@ public class HourlyTrafficIngestor implements TrafficIngestor {
     @Override
     @Transactional
     public void ingestRaw(String projectId, String domainId, int status, long bytes, long latencyMs) {
+        ingestRaw(projectId, domainId, status, bytes, latencyMs, null);
+    }
+
+    @Override
+    @Transactional
+    public void ingestRaw(
+            String projectId, String domainId, int status, long bytes, long latencyMs, String endpoint) {
         Instant bucketStart = clock.instant().truncatedTo(ChronoUnit.HOURS);
         String normalizedDomain = TrafficHourlyBucket.normalizeDomainId(domainId);
         TrafficHourlyBucket bucket = store.findBucket(projectId, normalizedDomain, bucketStart)
                 .orElseGet(() -> TrafficHourlyBucket.empty(
                         UUID.randomUUID(), projectId, normalizedDomain, bucketStart));
-        store.save(bucket.ingest(status, bytes, latencyMs));
+        store.save(bucket.ingest(status, bytes, latencyMs, endpoint));
     }
 }

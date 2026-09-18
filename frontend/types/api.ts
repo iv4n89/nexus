@@ -34,6 +34,17 @@ export type ProjectHealth = {
   domainsCount: number | null
 }
 
+export type SiteDomain = {
+  id: string
+  projectId: string
+  hostname: string
+  serviceName: string
+  targetPort: number
+  createdAt: string
+  updatedAt: string
+  certStatus: 'PENDING' | 'ACTIVE' | 'ERROR' | 'UNKNOWN'
+}
+
 export type ProjectEnvVar = {
   id: string
   projectId: string

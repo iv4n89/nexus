@@ -9,5 +9,6 @@ public enum AlertType {
     DOCKER_HEALTH,
     HTTP_HEALTH,
     BACKUP_FAILED,
-    BACKUP_STALE
+    BACKUP_STALE,
+    SECURITY_FINDING
 }

@@ -30,16 +30,16 @@ public class AlertRuleSeeder implements ApplicationRunner {
                 existing.add(rule.getType());
             }
         }
-        int added = 0;
+        int created = 0;
         for (AlertType type : AlertType.values()) {
             if (existing.contains(type)) {
                 continue;
             }
             rules.save(new AlertRuleEntity(UUID.randomUUID(), null, type, new HashMap<>(), true));
-            added++;
+            created++;
         }
-        if (added > 0) {
-            log.info("Seeded {} global alert rules", added);
+        if (created > 0) {
+            log.info("Seeded {} missing global alert rules", created);
         }
     }
 }

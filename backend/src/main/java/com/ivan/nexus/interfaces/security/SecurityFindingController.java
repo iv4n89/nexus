@@ -1,6 +1,7 @@
 package com.ivan.nexus.interfaces.security;
 
 import com.ivan.nexus.application.security.AcknowledgeSecurityFinding;
+import com.ivan.nexus.application.security.ContextualizeSecurityFinding;
 import com.ivan.nexus.application.security.ListSecurityFindings;
 import com.ivan.nexus.application.security.RunSecurityScan;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,14 +19,17 @@ public class SecurityFindingController {
     private final ListSecurityFindings listSecurityFindings;
     private final RunSecurityScan runSecurityScan;
     private final AcknowledgeSecurityFinding acknowledgeSecurityFinding;
+    private final ContextualizeSecurityFinding contextualizeSecurityFinding;
 
     public SecurityFindingController(
             ListSecurityFindings listSecurityFindings,
             RunSecurityScan runSecurityScan,
-            AcknowledgeSecurityFinding acknowledgeSecurityFinding) {
+            AcknowledgeSecurityFinding acknowledgeSecurityFinding,
+            ContextualizeSecurityFinding contextualizeSecurityFinding) {
         this.listSecurityFindings = listSecurityFindings;
         this.runSecurityScan = runSecurityScan;
         this.acknowledgeSecurityFinding = acknowledgeSecurityFinding;
+        this.contextualizeSecurityFinding = contextualizeSecurityFinding;
     }
 
     @GetMapping("/api/projects/{id}/security/findings")
@@ -53,6 +57,14 @@ public class SecurityFindingController {
                         projectId, findingId, authentication.getName(), clientIp(request)));
     }
 
+    @PostMapping("/api/projects/{id}/security/findings/{findingId}/contextualize")
+    public ContextualizeResponse contextualize(
+            @PathVariable("id") String projectId, @PathVariable UUID findingId) {
+        ContextualizeSecurityFinding.Result result =
+                contextualizeSecurityFinding.execute(projectId, findingId);
+        return new ContextualizeResponse(result.findingId(), result.projectId(), result.summary());
+    }
+
     private static String clientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {
@@ -60,4 +72,6 @@ public class SecurityFindingController {
         }
         return request.getRemoteAddr();
     }
+
+    public record ContextualizeResponse(UUID findingId, String projectId, String summary) {}
 }
