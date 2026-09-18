@@ -11,6 +11,7 @@ import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -45,6 +46,7 @@ public class FileProjectDotEnvStore implements ProjectDotEnvStore {
     private final ContainerInventory inventory;
     private final List<Path> allowedRoots;
 
+    @Autowired
     public FileProjectDotEnvStore(
             ManifestCatalog manifests,
             ContainerInventory inventory,
@@ -53,10 +55,6 @@ public class FileProjectDotEnvStore implements ProjectDotEnvStore {
         this.manifests = manifests;
         this.inventory = inventory;
         this.allowedRoots = buildAllowedRoots(allowedRoot, extraRoots);
-    }
-
-    FileProjectDotEnvStore(ManifestCatalog manifests, ContainerInventory inventory, Path allowedRoot) {
-        this(manifests, inventory, allowedRoot, List.of("/opt"));
     }
 
     @Override
