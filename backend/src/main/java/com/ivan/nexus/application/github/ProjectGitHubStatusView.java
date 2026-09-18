@@ -7,5 +7,6 @@ public record ProjectGitHubStatusView(
         String branch,
         String remoteHeadSha,
         String deployedCommitSha,
-        boolean upToDate) {
+        boolean upToDate,
+        boolean autodeployEnabled) {
 }

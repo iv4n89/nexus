@@ -5,6 +5,7 @@ import com.ivan.nexus.domain.manifest.ProjectManifest;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -29,12 +30,51 @@ final class FakeManagedProjectStore implements ManagedProjectStore {
         if (!projects.containsKey(projectId)) {
             throw new IllegalStateException("Project not found: " + projectId);
         }
-        githubLinks.put(projectId, new ProjectGitHubLink(projectId, owner, repo, branch));
+        githubLinks.put(projectId, ProjectGitHubLink.of(projectId, owner, repo, branch));
     }
 
     @Override
     public Optional<ProjectGitHubLink> findGitHubLink(String projectId) {
         return Optional.ofNullable(githubLinks.get(projectId));
+    }
+
+    @Override
+    public List<ProjectGitHubLink> findByGitHubRepository(String owner, String repo, String branch) {
+        return githubLinks.values().stream()
+                .filter(link -> link.owner().equals(owner)
+                        && link.repo().equals(repo)
+                        && link.branch().equals(branch))
+                .toList();
+    }
+
+    @Override
+    public void updateLastRemoteSha(String projectId, String sha) {
+        ProjectGitHubLink link = githubLinks.get(projectId);
+        if (link == null) {
+            throw new IllegalStateException("Project not found: " + projectId);
+        }
+        githubLinks.put(projectId, new ProjectGitHubLink(
+                link.projectId(),
+                link.owner(),
+                link.repo(),
+                link.branch(),
+                link.autodeployEnabled(),
+                sha));
+    }
+
+    @Override
+    public void setAutodeployEnabled(String projectId, boolean enabled) {
+        ProjectGitHubLink link = githubLinks.get(projectId);
+        if (link == null) {
+            throw new IllegalStateException("Project not found: " + projectId);
+        }
+        githubLinks.put(projectId, new ProjectGitHubLink(
+                link.projectId(),
+                link.owner(),
+                link.repo(),
+                link.branch(),
+                enabled,
+                link.lastRemoteSha()));
     }
 
     record SavedProject(
