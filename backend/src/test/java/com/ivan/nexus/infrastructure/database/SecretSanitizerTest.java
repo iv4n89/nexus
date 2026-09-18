@@ -2,6 +2,9 @@ package com.ivan.nexus.infrastructure.database;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class SecretSanitizerTest {
@@ -12,5 +15,15 @@ class SecretSanitizerTest {
         String clean = SecretSanitizer.strip("s3cret", raw);
         assertFalse(clean.contains("s3cret"));
         assertFalse(clean.contains("jdbc:postgresql"));
+    }
+
+    @Test
+    void stripAllRedactsMultipleSecrets() {
+        String clean = SecretSanitizer.stripAll(
+                List.of("alpha-secret", "beta-secret"),
+                "failed with alpha-secret and beta-secret");
+        assertEquals("failed with *** and ***", clean);
+        assertFalse(clean.contains("alpha-secret"));
+        assertFalse(clean.contains("beta-secret"));
     }
 }

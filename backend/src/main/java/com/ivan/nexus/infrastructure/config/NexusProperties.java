@@ -9,7 +9,9 @@ public class NexusProperties {
     private final Retention retention = new Retention();
     private final GitHub github = new GitHub();
     private final Secrets secrets = new Secrets();
+    private final Backup backup = new Backup();
     private final Security security = new Security();
+    private final Terminal terminal = new Terminal();
     private final Caddy caddy = new Caddy();
 
     public Docker getDocker() {
@@ -32,8 +34,16 @@ public class NexusProperties {
         return secrets;
     }
 
+    public Backup getBackup() {
+        return backup;
+    }
+
     public Security getSecurity() {
         return security;
+    }
+
+    public Terminal getTerminal() {
+        return terminal;
     }
 
     public Caddy getCaddy() {
@@ -145,6 +155,54 @@ public class NexusProperties {
         }
     }
 
+    public static class Backup {
+        private boolean enabled;
+        private boolean schedulerEnabled;
+        private String localPath = "/var/lib/nexus/backups";
+        private String pgDumpExecutable = "pg_dump";
+        private String cron = "0 0 2 * * *";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isSchedulerEnabled() {
+            return schedulerEnabled;
+        }
+
+        public void setSchedulerEnabled(boolean schedulerEnabled) {
+            this.schedulerEnabled = schedulerEnabled;
+        }
+
+        public String getLocalPath() {
+            return localPath;
+        }
+
+        public void setLocalPath(String localPath) {
+            this.localPath = localPath;
+        }
+
+        public String getPgDumpExecutable() {
+            return pgDumpExecutable;
+        }
+
+        public void setPgDumpExecutable(String pgDumpExecutable) {
+            this.pgDumpExecutable = pgDumpExecutable;
+        }
+
+        public String getCron() {
+            return cron;
+        }
+
+        public void setCron(String cron) {
+            this.cron = cron;
+        }
+    }
+
     public static class Security {
         private final Trivy trivy = new Trivy();
 
@@ -209,6 +267,27 @@ public class NexusProperties {
             public void setCron(String cron) {
                 this.cron = cron;
             }
+        }
+    }
+
+    public static class Terminal {
+        private boolean enabled = false;
+        private int sessionTimeoutMinutes = 15;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getSessionTimeoutMinutes() {
+            return sessionTimeoutMinutes;
+        }
+
+        public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) {
+            this.sessionTimeoutMinutes = sessionTimeoutMinutes;
         }
     }
 

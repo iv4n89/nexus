@@ -57,6 +57,12 @@ nexus:
     redirect-uri: ${NEXUS_GITHUB_REDIRECT_URI:}
   secrets:
     key: ${NEXUS_SECRETS_KEY:}
+  backup:
+    enabled: ${NEXUS_BACKUP_ENABLED:false}
+    scheduler-enabled: ${NEXUS_BACKUP_SCHEDULER_ENABLED:false}
+    local-path: ${NEXUS_BACKUP_LOCAL_PATH:/var/lib/nexus/backups}
+    pg-dump-executable: ${NEXUS_PG_DUMP_EXECUTABLE:pg_dump}
+    cron: ${NEXUS_BACKUP_CRON:0 0 2 * * *}
   security:
     trivy:
       enabled: ${NEXUS_TRIVY_ENABLED:false}
@@ -65,6 +71,9 @@ nexus:
       mode: ${NEXUS_TRIVY_MODE:fs}
       image-ref: ${NEXUS_TRIVY_IMAGE_REF:}
       cron: ${NEXUS_TRIVY_CRON:0 0 4 * * *}
+  terminal:
+    enabled: ${NEXUS_TERMINAL_ENABLED:false}
+    session-timeout-minutes: ${NEXUS_TERMINAL_TIMEOUT_MINUTES:15}
   caddy:
     enabled: ${NEXUS_CADDY_ENABLED:false}
     sites-path: ${NEXUS_CADDY_SITES_PATH:/opt/nexus/caddy/sites}

@@ -2,6 +2,9 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.env.ProjectEnvStore;
+import com.ivan.nexus.application.env.StoredProjectEnvVar;
+import com.ivan.nexus.application.secrets.SecretStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -17,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,6 +35,8 @@ final class DeploymentCommandRunner {
     private final DeploymentProgress progress;
     private final ProcessExecutor processExecutor;
     private final HealthChecker healthChecker;
+    private final ProjectEnvStore projectEnvStore;
+    private final SecretStore secretStore;
     private final RecordAudit recordAudit;
     private final RecordActivity recordActivity;
     private final UserDirectory users;
@@ -42,6 +48,8 @@ final class DeploymentCommandRunner {
             DeploymentProgress progress,
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
+            ProjectEnvStore projectEnvStore,
+            SecretStore secretStore,
             RecordAudit recordAudit,
             RecordActivity recordActivity,
             UserDirectory users,
@@ -51,6 +59,8 @@ final class DeploymentCommandRunner {
         this.progress = progress;
         this.processExecutor = processExecutor;
         this.healthChecker = healthChecker;
+        this.projectEnvStore = projectEnvStore;
+        this.secretStore = secretStore;
         this.recordAudit = recordAudit;
         this.recordActivity = recordActivity;
         this.users = users;
@@ -92,8 +102,10 @@ final class DeploymentCommandRunner {
         Deployment deployment = deployments.findById(id).orElseThrow();
         List<String> summaryLines = new ArrayList<>();
         Copy copy = Copy.forKind(kind);
+        Map<String, String> environment = loadEnvironment(deployment.projectId());
+        List<String> redactValues = List.copyOf(environment.values());
         try {
-            emit(id, summaryLines, copy.started);
+            emit(id, summaryLines, copy.started, redactValues);
             record(ActivityType.DEPLOYMENT_STARTED, deployment, copy.started, kind);
 
             List<String> tokens = List.of(command.trim().split("\\s+"));
@@ -101,8 +113,11 @@ final class DeploymentCommandRunner {
             if (!executable.startsWith(workingDirectory)
                     || !Files.isRegularFile(executable)
                     || !Files.isExecutable(executable)) {
-                emit(id, summaryLines, "Command is not an executable file under the project directory: " + executable);
-                finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
+                emit(id, summaryLines,
+                        "Command is not an executable file under the project directory: " + executable,
+                        redactValues);
+                finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy,
+                        redactValues);
                 return;
             }
 
@@ -113,17 +128,19 @@ final class DeploymentCommandRunner {
             int exit = processExecutor.run(
                     workingDirectory,
                     argv,
-                    line -> emit(id, summaryLines, line),
+                    environment,
+                    line -> emit(id, summaryLines, line, redactValues),
                     SCRIPT_TIMEOUT);
             deployments.recordExitCode(id, exit);
             if (exit != 0) {
-                finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
+                finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy,
+                        redactValues);
                 return;
             }
 
             String healthUrl = manifest.health() == null ? null : manifest.health().url();
             if (healthUrl != null && !healthUrl.isBlank()) {
-                emit(id, summaryLines, "health check");
+                emit(id, summaryLines, "health check", redactValues);
                 Integer seconds = manifest.health().timeoutSeconds();
                 Duration timeout = seconds == null || seconds <= 0
                         ? DEFAULT_HEALTH_TIMEOUT
@@ -131,21 +148,34 @@ final class DeploymentCommandRunner {
                 boolean ok = healthChecker.check(healthUrl, timeout);
                 deployments.recordHealthResult(id, ok);
                 if (ok) {
-                    emit(id, summaryLines, "health check OK");
-                    finish(deployment, summaryLines, DeploymentStatus.SUCCESS, username, kind, auditAction, copy);
+                    emit(id, summaryLines, "health check OK", redactValues);
+                    finish(deployment, summaryLines, DeploymentStatus.SUCCESS, username, kind, auditAction, copy,
+                            redactValues);
                 } else {
-                    emit(id, summaryLines, "health check FAILED");
+                    emit(id, summaryLines, "health check FAILED", redactValues);
                     record(ActivityType.HEALTH_CHECK_FAILED, deployment, "health check failed", kind);
-                    finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
+                    finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy,
+                            redactValues);
                 }
                 return;
             }
 
-            finish(deployment, summaryLines, DeploymentStatus.SUCCESS, username, kind, auditAction, copy);
+            finish(deployment, summaryLines, DeploymentStatus.SUCCESS, username, kind, auditAction, copy,
+                    redactValues);
         } catch (RuntimeException ex) {
-            emit(id, summaryLines, copy.kindLabel + " error: " + ex.getMessage());
-            finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
+            emit(id, summaryLines, copy.kindLabel + " error: " + redact(ex.getMessage(), redactValues),
+                    redactValues);
+            finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy,
+                    redactValues);
         }
+    }
+
+    private Map<String, String> loadEnvironment(String projectId) {
+        Map<String, String> environment = new LinkedHashMap<>();
+        for (StoredProjectEnvVar envVar : projectEnvStore.listByProject(projectId)) {
+            environment.put(envVar.name(), secretStore.decrypt(envVar.encryptedValue()));
+        }
+        return environment;
     }
 
     private void finish(
@@ -155,12 +185,13 @@ final class DeploymentCommandRunner {
             String username,
             String kind,
             AuditAction auditAction,
-            Copy copy) {
+            Copy copy,
+            List<String> redactValues) {
         if (status == DeploymentStatus.SUCCESS) {
-            emit(deployment.id(), summaryLines, "DEPLOYMENT SUCCESS");
+            emit(deployment.id(), summaryLines, "DEPLOYMENT SUCCESS", redactValues);
             record(ActivityType.DEPLOYMENT_SUCCESS, deployment, copy.successful, kind);
         } else {
-            emit(deployment.id(), summaryLines, "DEPLOYMENT FAILED");
+            emit(deployment.id(), summaryLines, "DEPLOYMENT FAILED", redactValues);
             record(ActivityType.DEPLOYMENT_FAILED, deployment, copy.failed, kind);
         }
         deployments.finish(
@@ -179,9 +210,23 @@ final class DeploymentCommandRunner {
                 Map.of("deploymentId", deployment.id().toString(), "status", status.name()));
     }
 
-    private void emit(UUID id, List<String> summaryLines, String line) {
-        summaryLines.add(line);
-        progress.append(id, line);
+    private void emit(UUID id, List<String> summaryLines, String line, List<String> redactValues) {
+        String safe = redact(line, redactValues);
+        summaryLines.add(safe);
+        progress.append(id, safe);
+    }
+
+    private static String redact(String line, List<String> redactValues) {
+        if (line == null) {
+            return "";
+        }
+        String out = line;
+        for (String value : redactValues) {
+            if (value != null && !value.isBlank()) {
+                out = out.replace(value, "***");
+            }
+        }
+        return out;
     }
 
     private void record(ActivityType type, Deployment deployment, String message, String kind) {

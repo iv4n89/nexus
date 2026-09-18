@@ -156,6 +156,13 @@ export type ActivityType =
   | 'ALERT_CREATED'
   | 'ALERT_RESOLVED'
   | 'HEALTH_CHECK_FAILED'
+  | 'GITHUB_CONNECTED'
+  | 'GITHUB_DISCONNECTED'
+  | 'SECURITY_SCAN_COMPLETED'
+  | 'DOMAIN_ADDED'
+  | 'DOMAIN_REMOVED'
+  | 'BACKUP_COMPLETED'
+  | 'BACKUP_FAILED'
 
 export type ActivityEvent = {
   id: string
@@ -165,6 +172,15 @@ export type ActivityEvent = {
   serviceId: string | null
   message: string
   metadata: Record<string, unknown>
+}
+
+export type IncidentTimelineItem = {
+  at: string
+  kind: string
+  source: 'ACTIVITY' | 'ALERT' | string
+  message: string
+  serviceId: string | null
+  refId: string
 }
 
 export type DatabaseInstance = {

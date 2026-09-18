@@ -2,8 +2,10 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.env.ProjectEnvStore;
 import com.ivan.nexus.application.manifest.LoadedManifest;
 import com.ivan.nexus.application.manifest.ManifestCatalog;
+import com.ivan.nexus.application.secrets.SecretStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
@@ -24,6 +26,8 @@ public class DeployProject {
             DeploymentProgress progress,
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
+            ProjectEnvStore projectEnvStore,
+            SecretStore secretStore,
             RecordAudit recordAudit,
             RecordActivity recordActivity,
             UserDirectory users,
@@ -35,6 +39,8 @@ public class DeployProject {
                 progress,
                 processExecutor,
                 healthChecker,
+                projectEnvStore,
+                secretStore,
                 recordAudit,
                 recordActivity,
                 users,

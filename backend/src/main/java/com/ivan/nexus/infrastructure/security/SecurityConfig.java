@@ -45,6 +45,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/github/oauth/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/github/connection").hasRole("ADMIN")
+                .requestMatchers("/api/terminal/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET, "/api/**").hasAnyRole("ADMIN", "VIEWER")
                 .requestMatchers(HttpMethod.POST, "/api/projects/*/database/instances/*/query")
                     .hasAnyRole("ADMIN", "VIEWER")
