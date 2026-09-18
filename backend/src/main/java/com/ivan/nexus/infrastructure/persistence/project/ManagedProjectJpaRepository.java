@@ -42,6 +42,24 @@ interface ManagedProjectJpaRepository extends JpaRepository<ManagedProjectEntity
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Transactional
     @Query(value = """
+            INSERT INTO projects (
+                id, name, description, working_directory, manifest_path, created_at, updated_at
+            )
+            VALUES (
+                :id, :name, NULL, :workingDirectory, :manifestPath,
+                clock_timestamp(), clock_timestamp()
+            )
+            ON CONFLICT (id) DO NOTHING
+            """, nativeQuery = true)
+    int ensureProject(
+            @Param("id") String id,
+            @Param("name") String name,
+            @Param("workingDirectory") String workingDirectory,
+            @Param("manifestPath") String manifestPath);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query(value = """
             UPDATE projects
             SET github_owner = :owner,
                 github_repo = :repo,

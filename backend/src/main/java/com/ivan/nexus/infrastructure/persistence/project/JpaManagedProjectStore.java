@@ -30,6 +30,18 @@ public class JpaManagedProjectStore implements ManagedProjectStore {
     }
 
     @Override
+    public void ensureRegistered(String projectId, String workingDirectory, String manifestPath) {
+        if (projectId == null || projectId.isBlank()) {
+            return;
+        }
+        String directory = workingDirectory == null || workingDirectory.isBlank() ? projectId : workingDirectory;
+        String path = manifestPath == null || manifestPath.isBlank()
+                ? directory + "/nexus.yml"
+                : manifestPath;
+        repository.ensureProject(projectId, blankToId(null, projectId), directory, path);
+    }
+
+    @Override
     public void linkGitHub(String projectId, String owner, String repo, String branch) {
         int updated = repository.linkGitHub(projectId, owner, repo, branch);
         if (updated == 0) {

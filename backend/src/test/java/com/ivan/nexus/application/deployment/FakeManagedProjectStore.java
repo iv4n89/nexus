@@ -26,6 +26,16 @@ final class FakeManagedProjectStore implements ManagedProjectStore {
     }
 
     @Override
+    public void ensureRegistered(String projectId, String workingDirectory, String manifestPath) {
+        projects.putIfAbsent(projectId, new SavedProject(
+                projectId,
+                projectId,
+                null,
+                Path.of(workingDirectory),
+                Path.of(manifestPath)));
+    }
+
+    @Override
     public void linkGitHub(String projectId, String owner, String repo, String branch) {
         if (!projects.containsKey(projectId)) {
             throw new IllegalStateException("Project not found: " + projectId);
