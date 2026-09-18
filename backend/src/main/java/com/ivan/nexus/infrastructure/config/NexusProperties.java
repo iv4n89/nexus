@@ -13,6 +13,7 @@ public class NexusProperties {
     private final Security security = new Security();
     private final Terminal terminal = new Terminal();
     private final Caddy caddy = new Caddy();
+    private final Automation automation = new Automation();
 
     public Docker getDocker() {
         return docker;
@@ -48,6 +49,10 @@ public class NexusProperties {
 
     public Caddy getCaddy() {
         return caddy;
+    }
+
+    public Automation getAutomation() {
+        return automation;
     }
 
     public static class Docker {
@@ -452,6 +457,37 @@ public class NexusProperties {
 
         public void setHttpsProbeEnabled(boolean httpsProbeEnabled) {
             this.httpsProbeEnabled = httpsProbeEnabled;
+        }
+    }
+
+
+    public static class Automation {
+        private boolean securityGateEnabled;
+        private boolean trafficWatchEnabled;
+        private boolean postDeployBackupEnabled;
+
+        public boolean isSecurityGateEnabled() {
+            return securityGateEnabled;
+        }
+
+        public void setSecurityGateEnabled(boolean securityGateEnabled) {
+            this.securityGateEnabled = securityGateEnabled;
+        }
+
+        public boolean isTrafficWatchEnabled() {
+            return trafficWatchEnabled;
+        }
+
+        public void setTrafficWatchEnabled(boolean trafficWatchEnabled) {
+            this.trafficWatchEnabled = trafficWatchEnabled;
+        }
+
+        public boolean isPostDeployBackupEnabled() {
+            return postDeployBackupEnabled;
+        }
+
+        public void setPostDeployBackupEnabled(boolean postDeployBackupEnabled) {
+            this.postDeployBackupEnabled = postDeployBackupEnabled;
         }
     }
 }

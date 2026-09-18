@@ -97,3 +97,8 @@ nexus:
     scheduler-enabled: ${NEXUS_CADDY_SCHEDULER_ENABLED:false}
     cron: ${NEXUS_CADDY_CRON:0 0 5 * * *}
     https-probe-enabled: ${NEXUS_CADDY_HTTPS_PROBE_ENABLED:true}
+  # H1: deploy pipeline orchestration — all flags OFF by default
+  automation:
+    security-gate-enabled: ${NEXUS_AUTOMATION_SECURITY_GATE:false}
+    traffic-watch-enabled: ${NEXUS_AUTOMATION_TRAFFIC_WATCH:false}
+    post-deploy-backup-enabled: ${NEXUS_AUTOMATION_POST_DEPLOY_BACKUP:false}
