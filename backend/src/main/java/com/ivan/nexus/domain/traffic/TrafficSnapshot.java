@@ -1,7 +1,11 @@
 package com.ivan.nexus.domain.traffic;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public record TrafficSnapshot(
         String projectId,
@@ -14,8 +18,13 @@ public record TrafficSnapshot(
         long status3xx,
         long status4xx,
         long status5xx,
-        double latencyAvg,
-        Double latencyP95) {
+        double latencyAvgMs,
+        Double latencyP95Ms,
+        List<TrafficEndpointStat> topEndpoints) {
+
+    public TrafficSnapshot {
+        topEndpoints = List.copyOf(topEndpoints == null ? List.of() : topEndpoints);
+    }
 
     public static TrafficSnapshot aggregate(
             String projectId, Instant from, Instant to, List<TrafficHourlyBucket> buckets) {
@@ -28,6 +37,7 @@ public record TrafficSnapshot(
         long status5xx = 0;
         double latencyWeighted = 0;
         Double latencyP95 = null;
+        Map<String, TrafficEndpointStat> endpoints = new HashMap<>();
         for (TrafficHourlyBucket bucket : buckets) {
             requests += bucket.requests();
             bytesIn += bucket.bytesIn();
@@ -36,14 +46,23 @@ public record TrafficSnapshot(
             status3xx += bucket.status3xx();
             status4xx += bucket.status4xx();
             status5xx += bucket.status5xx();
-            latencyWeighted += bucket.latencyAvg() * bucket.requests();
-            if (bucket.latencyP95() != null) {
+            latencyWeighted += bucket.latencyAvgMs() * bucket.requests();
+            if (bucket.latencyP95Ms() != null) {
                 latencyP95 = latencyP95 == null
-                        ? bucket.latencyP95()
-                        : Math.max(latencyP95, bucket.latencyP95());
+                        ? bucket.latencyP95Ms()
+                        : Math.max(latencyP95, bucket.latencyP95Ms());
+            }
+            for (TrafficEndpointStat stat : bucket.topEndpoints()) {
+                endpoints.merge(stat.path(), stat, TrafficSnapshot::mergeStats);
             }
         }
         double latencyAvg = requests == 0 ? 0.0 : latencyWeighted / requests;
+        List<TrafficEndpointStat> top = new ArrayList<>(endpoints.values());
+        top.sort(Comparator.comparingLong(TrafficEndpointStat::requests).reversed()
+                .thenComparing(TrafficEndpointStat::path));
+        if (top.size() > TrafficHourlyBucket.MAX_TOP_ENDPOINTS) {
+            top = top.subList(0, TrafficHourlyBucket.MAX_TOP_ENDPOINTS);
+        }
         return new TrafficSnapshot(
                 projectId,
                 from,
@@ -56,6 +75,15 @@ public record TrafficSnapshot(
                 status4xx,
                 status5xx,
                 latencyAvg,
-                latencyP95);
+                latencyP95,
+                top);
+    }
+
+    private static TrafficEndpointStat mergeStats(TrafficEndpointStat a, TrafficEndpointStat b) {
+        long total = a.requests() + b.requests();
+        double avg = total == 0
+                ? 0.0
+                : ((a.latencyAvgMs() * a.requests()) + (b.latencyAvgMs() * b.requests())) / total;
+        return new TrafficEndpointStat(a.path(), total, avg);
     }
 }

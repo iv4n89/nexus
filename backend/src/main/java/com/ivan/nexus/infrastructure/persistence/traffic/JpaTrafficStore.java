@@ -47,6 +47,9 @@ public class JpaTrafficStore implements TrafficStore {
 
     @Override
     public TrafficSnapshot snapshot(String projectId, Instant from, Instant to) {
-        return TrafficSnapshot.aggregate(projectId, from, to, findByProjectSince(projectId, from));
+        List<TrafficHourlyBucket> buckets = findByProjectSince(projectId, from).stream()
+                .filter(bucket -> bucket.bucketStart().isBefore(to))
+                .toList();
+        return TrafficSnapshot.aggregate(projectId, from, to, buckets);
     }
 }

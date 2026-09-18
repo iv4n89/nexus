@@ -29,8 +29,8 @@ class HourlyTrafficIngestorTest {
 
     @Test
     void aggregatesRawEventsIntoHourlyBucket() {
-        ingestor.ingestRaw("lab", "web", 200, 100, 25);
-        ingestor.ingestRaw("lab", "web", 500, 50, 75);
+        ingestor.ingestRaw("lab", "web", 200, 100, 25, "/health");
+        ingestor.ingestRaw("lab", "web", 500, 50, 75, "/health");
 
         TrafficHourlyBucket bucket = store.findBucket(
                         "lab", "web", Instant.parse("2026-09-18T10:00:00Z"))
@@ -40,7 +40,10 @@ class HourlyTrafficIngestorTest {
         assertThat(bucket.bytesOut()).isEqualTo(150);
         assertThat(bucket.status2xx()).isEqualTo(1);
         assertThat(bucket.status5xx()).isEqualTo(1);
-        assertThat(bucket.latencyAvg()).isEqualTo(50.0);
+        assertThat(bucket.latencyAvgMs()).isEqualTo(50.0);
+        assertThat(bucket.latencyP95Ms()).isEqualTo(75.0);
+        assertThat(bucket.topEndpoints()).hasSize(1);
+        assertThat(bucket.topEndpoints().getFirst().path()).isEqualTo("/health");
     }
 
     @Test
@@ -48,16 +51,17 @@ class HourlyTrafficIngestorTest {
         Clock clock = Clock.fixed(Instant.parse("2026-09-18T12:00:00Z"), ZoneOffset.UTC);
         store.save(TrafficHourlyBucket.empty(
                         UUID.randomUUID(), "lab", "", Instant.parse("2026-09-18T10:00:00Z"))
-                .ingest(200, 10, 10));
+                .ingest(200, 10, 10, "/a"));
         store.save(TrafficHourlyBucket.empty(
                         UUID.randomUUID(), "lab", "", Instant.parse("2026-09-18T11:00:00Z"))
-                .ingest(200, 20, 30));
+                .ingest(200, 20, 30, "/b"));
 
         TrafficSnapshot snapshot = new GetProjectTraffic(store, clock).execute("lab", 24);
 
         assertThat(snapshot.requests()).isEqualTo(2);
         assertThat(snapshot.bytesOut()).isEqualTo(30);
-        assertThat(snapshot.latencyAvg()).isEqualTo(20.0);
+        assertThat(snapshot.latencyAvgMs()).isEqualTo(20.0);
+        assertThat(snapshot.topEndpoints()).hasSize(2);
     }
 
     private static final class FakeTrafficStore implements TrafficStore {
