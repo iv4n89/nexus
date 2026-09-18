@@ -30,7 +30,7 @@ class FileProjectDotEnvStoreTest {
         FakeManifestCatalog manifests = new FakeManifestCatalog()
                 .add("lab", manifest("lab", projectDir), projectDir.resolve("nexus.yml"));
         FileProjectDotEnvStore store = new FileProjectDotEnvStore(
-                manifests, emptyInventory(), allowedRoot, List.of());
+                manifests, emptyInventory(), allowedRoot, List.of(), null);
 
         Map<String, String> values = new java.util.LinkedHashMap<>();
         values.put("NODE_ENV", "production");
@@ -47,8 +47,8 @@ class FileProjectDotEnvStoreTest {
     @Test
     void readsDotEnvFromComposeWorkingDirUnderExtraRoot() throws Exception {
         Path projects = tempDir.resolve("srv-projects");
-        Path opt = tempDir.resolve("opt");
-        Path nexusDir = opt.resolve("nexus");
+        Path hostOpt = tempDir.resolve("host-opt");
+        Path nexusDir = hostOpt.resolve("nexus");
         Files.createDirectories(projects);
         Files.createDirectories(nexusDir);
         Files.writeString(nexusDir.resolve(".env"), "POSTGRES_PASSWORD=from-opt\nDOMAIN=0nexus.example.com\n");
@@ -62,12 +62,36 @@ class FileProjectDotEnvStoreTest {
                         "com.docker.compose.service", "postgres")));
 
         FileProjectDotEnvStore store = new FileProjectDotEnvStore(
-                new FakeManifestCatalog(), inventory, projects, List.of(opt.toString()));
+                new FakeManifestCatalog(),
+                inventory,
+                projects,
+                List.of(hostOpt.toString()),
+                hostOpt.toString());
 
         assertThat(store.read("nexus"))
                 .containsEntry("POSTGRES_PASSWORD", "from-opt")
                 .containsEntry("DOMAIN", "0nexus.example.com");
-        assertThat(store.resolveEnvPath("nexus")).isEqualTo(nexusDir.resolve(".env").toAbsolutePath().normalize());
+        assertThat(store.resolveEnvPath("nexus"))
+                .isEqualTo(nexusDir.resolve(".env").toAbsolutePath().normalize());
+    }
+
+    @Test
+    void remapsHostOptPathToContainerMount() throws Exception {
+        Path projects = tempDir.resolve("projects");
+        Path hostOpt = tempDir.resolve("host-opt");
+        Path nexusOnMount = hostOpt.resolve("nexus");
+        Files.createDirectories(projects);
+        Files.createDirectories(nexusOnMount);
+
+        FileProjectDotEnvStore store = new FileProjectDotEnvStore(
+                new FakeManifestCatalog(),
+                emptyInventory(),
+                projects,
+                List.of(hostOpt.toAbsolutePath().toString()),
+                hostOpt.toAbsolutePath().toString());
+
+        assertThat(store.usableProjectDir(Path.of("/opt/nexus")))
+                .isEqualTo(nexusOnMount.toAbsolutePath().normalize());
     }
 
     @Test
@@ -86,7 +110,7 @@ class FileProjectDotEnvStoreTest {
                         "com.docker.compose.project.working_dir", outside.toString())));
 
         FileProjectDotEnvStore store = new FileProjectDotEnvStore(
-                new FakeManifestCatalog(), inventory, projects, List.of());
+                new FakeManifestCatalog(), inventory, projects, List.of(), null);
 
         assertThat(store.read("nexus")).isEmpty();
     }
