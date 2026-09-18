@@ -54,17 +54,16 @@ services:
       NEXUS_ADMIN_USERNAME: ${NEXUS_ADMIN_USERNAME:-admin}
       NEXUS_ADMIN_PASSWORD: ${NEXUS_ADMIN_PASSWORD:-}
       NEXUS_MANIFEST_ROOT: /srv/projects
-      # Compose projects (e.g. nexus) keep .env under /opt/<name>; allow reading those paths.
-      # Host /opt is bind-mounted; the backend image keeps its JRE outside /opt (see Dockerfile).
-      NEXUS_DOTENV_EXTRA_ROOTS: /opt
+      # Host /opt is mounted at /host-opt so we never shadow the image JRE under /opt/java.
+      NEXUS_DOTENV_EXTRA_ROOTS: /host-opt
+      NEXUS_DOTENV_HOST_OPT_MOUNT: /host-opt
       NEXUS_VERSION: ${NEXUS_VERSION:-0.0.1-SNAPSHOT}
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /srv/projects:/srv/projects
-      # Read-only: project install dirs (/opt/nexus/.env, /opt/ava-assistant/.env, …).
-      # Must not hide the image JRE — Java lives under /usr/lib/jvm in the backend image.
-      - /opt:/opt:ro
+      # Host project installs (/opt/nexus/.env, …) visible as /host-opt/<name> inside the container.
+      - /opt:/host-opt:ro
     group_add:
       - "${DOCKER_GID:?set DOCKER_GID from the host docker socket gid}"
     depends_on:

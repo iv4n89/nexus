@@ -33,28 +33,35 @@ import java.util.Set;
  * Resolves {@code .env} as:
  * <ol>
  *   <li>manifest {@code workingDirectory}/.env</li>
- *   <li>{@code com.docker.compose.project.working_dir}/.env (e.g. {@code /opt/nexus/.env})</li>
+ *   <li>{@code com.docker.compose.project.working_dir}/.env (host path, remapped if needed)</li>
  *   <li>{@code {allowedRoot}/{projectId}/.env}</li>
  * </ol>
- * Paths must stay under configured allowed roots (manifest root + extras such as {@code /opt}).
+ * Production mounts host {@code /opt} at {@code /host-opt} so the Temurin JRE under
+ * {@code /opt/java} inside the image is never shadowed.
  */
 @Component
 public class FileProjectDotEnvStore implements ProjectDotEnvStore {
     private static final Logger log = LoggerFactory.getLogger(FileProjectDotEnvStore.class);
+    private static final Path HOST_OPT = Path.of("/opt");
 
     private final ManifestCatalog manifests;
     private final ContainerInventory inventory;
     private final List<Path> allowedRoots;
+    private final Path hostOptMount;
 
     @Autowired
     public FileProjectDotEnvStore(
             ManifestCatalog manifests,
             ContainerInventory inventory,
             @Qualifier("manifestAllowedRoot") Path allowedRoot,
-            @Value("${nexus.dotenv.extra-roots:/opt}") List<String> extraRoots) {
+            @Value("${nexus.dotenv.extra-roots:/host-opt}") List<String> extraRoots,
+            @Value("${nexus.dotenv.host-opt-mount:/host-opt}") String hostOptMount) {
         this.manifests = manifests;
         this.inventory = inventory;
         this.allowedRoots = buildAllowedRoots(allowedRoot, extraRoots);
+        this.hostOptMount = hostOptMount == null || hostOptMount.isBlank()
+                ? null
+                : Path.of(hostOptMount.trim()).toAbsolutePath().normalize();
     }
 
     @Override
@@ -133,8 +140,7 @@ public class FileProjectDotEnvStore implements ProjectDotEnvStore {
             if (working == null || working.isBlank()) {
                 return null;
             }
-            Path projectDir = Path.of(working).toAbsolutePath().normalize();
-            return isUnderAllowedRoot(projectDir) ? projectDir : null;
+            return usableProjectDir(Path.of(working));
         } catch (RuntimeException ex) {
             return null;
         }
@@ -150,13 +156,33 @@ public class FileProjectDotEnvStore implements ProjectDotEnvStore {
                 if (working == null) {
                     continue;
                 }
-                Path projectDir = Path.of(working).toAbsolutePath().normalize();
-                if (isUnderAllowedRoot(projectDir)) {
+                Path projectDir = usableProjectDir(Path.of(working));
+                if (projectDir != null) {
                     return projectDir;
                 }
             }
         } catch (RuntimeException ex) {
             log.debug("compose working_dir lookup failed for {}: {}", projectId, ex.toString());
+        }
+        return null;
+    }
+
+    /**
+     * Maps host compose paths under {@code /opt} to the in-container mount ({@code /host-opt}).
+     */
+    Path usableProjectDir(Path raw) {
+        if (raw == null) {
+            return null;
+        }
+        Path normalized = raw.toAbsolutePath().normalize();
+        if (isUnderAllowedRoot(normalized)) {
+            return normalized;
+        }
+        if (hostOptMount != null && normalized.startsWith(HOST_OPT)) {
+            Path remapped = hostOptMount.resolve(HOST_OPT.relativize(normalized)).toAbsolutePath().normalize();
+            if (isUnderAllowedRoot(remapped)) {
+                return remapped;
+            }
         }
         return null;
     }

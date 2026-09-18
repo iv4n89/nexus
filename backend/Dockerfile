@@ -5,12 +5,6 @@ COPY src src
 RUN mvn -q -B -DskipTests package
 
 FROM eclipse-temurin:21-jre
-# Production bind-mounts host /opt (project .env trees). Keep the JRE outside that path
-# so the mount cannot hide java from PATH.
-RUN mkdir -p /usr/lib/jvm \
-    && mv /opt/java /usr/lib/jvm/temurin-21
-ENV JAVA_HOME=/usr/lib/jvm/temurin-21
-ENV PATH="${JAVA_HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \

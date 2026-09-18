@@ -44,8 +44,9 @@ nexus:
   manifest:
     allowed-root: ${NEXUS_MANIFEST_ROOT:/home/ibetanzos/dev/nexus_project/projects}
   dotenv:
-    # Host dirs where project .env may live (compose working_dir often under /opt).
-    extra-roots: ${NEXUS_DOTENV_EXTRA_ROOTS:/opt}
+    # Inside the container, host /opt is bind-mounted at /host-opt (see docker-compose).
+    extra-roots: ${NEXUS_DOTENV_EXTRA_ROOTS:/host-opt}
+    host-opt-mount: ${NEXUS_DOTENV_HOST_OPT_MOUNT:/host-opt}
   alerts:
     enabled: true
     interval-ms: 30000
