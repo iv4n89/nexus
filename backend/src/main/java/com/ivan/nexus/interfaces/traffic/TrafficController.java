@@ -1,9 +1,15 @@
 package com.ivan.nexus.interfaces.traffic;
 
 import com.ivan.nexus.application.traffic.CorrelateDeployTraffic;
+import com.ivan.nexus.application.traffic.GetGlobalTraffic;
 import com.ivan.nexus.application.traffic.GetProjectTraffic;
 import com.ivan.nexus.domain.traffic.DeployTrafficDelta;
 import com.ivan.nexus.domain.traffic.TrafficEndpointStat;
+import com.ivan.nexus.domain.traffic.TrafficOverview;
+import com.ivan.nexus.domain.traffic.TrafficProjectRanking;
+import com.ivan.nexus.domain.traffic.TrafficReport;
+import com.ivan.nexus.domain.traffic.TrafficSeriesPoint;
+import com.ivan.nexus.domain.traffic.TrafficServiceBreakdown;
 import com.ivan.nexus.domain.traffic.TrafficSnapshot;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,19 +23,28 @@ import java.util.UUID;
 @RestController
 public class TrafficController {
     private final GetProjectTraffic getProjectTraffic;
+    private final GetGlobalTraffic getGlobalTraffic;
     private final CorrelateDeployTraffic correlateDeployTraffic;
 
     public TrafficController(
-            GetProjectTraffic getProjectTraffic, CorrelateDeployTraffic correlateDeployTraffic) {
+            GetProjectTraffic getProjectTraffic,
+            GetGlobalTraffic getGlobalTraffic,
+            CorrelateDeployTraffic correlateDeployTraffic) {
         this.getProjectTraffic = getProjectTraffic;
+        this.getGlobalTraffic = getGlobalTraffic;
         this.correlateDeployTraffic = correlateDeployTraffic;
     }
 
+    @GetMapping("/api/traffic")
+    public GlobalTrafficResponse global(@RequestParam(defaultValue = "24") int hours) {
+        return GlobalTrafficResponse.from(getGlobalTraffic.execute(hours), hours);
+    }
+
     @GetMapping("/api/projects/{id}/traffic")
-    public TrafficResponse traffic(
+    public ProjectTrafficResponse traffic(
             @PathVariable("id") String projectId,
             @RequestParam(defaultValue = "24") int hours) {
-        return TrafficResponse.from(getProjectTraffic.execute(projectId, hours));
+        return ProjectTrafficResponse.from(getProjectTraffic.execute(projectId, hours));
     }
 
     @GetMapping("/api/projects/{id}/traffic/deploy-delta")
@@ -39,7 +54,7 @@ public class TrafficController {
         return DeployDeltaResponse.from(correlateDeployTraffic.execute(projectId, deploymentId));
     }
 
-    public record TrafficResponse(
+    public record ProjectTrafficResponse(
             String projectId,
             Instant from,
             Instant to,
@@ -52,22 +67,101 @@ public class TrafficController {
             long status5xx,
             double latencyAvgMs,
             Double latencyP95Ms,
-            List<EndpointStatResponse> topEndpoints) {
-        static TrafficResponse from(TrafficSnapshot snapshot) {
-            return new TrafficResponse(
-                    snapshot.projectId(),
-                    snapshot.from(),
-                    snapshot.to(),
-                    snapshot.requests(),
-                    snapshot.bytesIn(),
-                    snapshot.bytesOut(),
-                    snapshot.status2xx(),
-                    snapshot.status3xx(),
-                    snapshot.status4xx(),
-                    snapshot.status5xx(),
-                    snapshot.latencyAvgMs(),
-                    snapshot.latencyP95Ms(),
-                    snapshot.topEndpoints().stream().map(EndpointStatResponse::from).toList());
+            Double latencyMaxMs,
+            List<EndpointStatResponse> topEndpoints,
+            List<SeriesPointResponse> series,
+            List<ServiceBreakdownResponse> services) {
+        static ProjectTrafficResponse from(TrafficReport report) {
+            TrafficSnapshot totals = report.totals();
+            Double latencyMaxMs = totals.latencyP95Ms();
+            return new ProjectTrafficResponse(
+                    report.projectId(),
+                    report.from(),
+                    report.to(),
+                    totals.requests(),
+                    totals.bytesIn(),
+                    totals.bytesOut(),
+                    totals.status2xx(),
+                    totals.status3xx(),
+                    totals.status4xx(),
+                    totals.status5xx(),
+                    totals.latencyAvgMs(),
+                    totals.latencyP95Ms(),
+                    latencyMaxMs,
+                    totals.topEndpoints().stream().map(EndpointStatResponse::from).toList(),
+                    report.series().stream().map(SeriesPointResponse::from).toList(),
+                    report.services().stream().map(ServiceBreakdownResponse::from).toList());
+        }
+    }
+
+    public record GlobalTrafficResponse(
+            Instant from,
+            Instant to,
+            int hours,
+            long requests,
+            long bytesOut,
+            long status2xx,
+            long status4xx,
+            long status5xx,
+            double latencyAvgMs,
+            Double latencyMaxMs,
+            List<SeriesPointResponse> series,
+            List<ProjectRankingResponse> projects) {
+        static GlobalTrafficResponse from(TrafficOverview overview, int hours) {
+            TrafficSnapshot totals = overview.totals();
+            return new GlobalTrafficResponse(
+                    overview.from(),
+                    overview.to(),
+                    hours,
+                    totals.requests(),
+                    totals.bytesOut(),
+                    totals.status2xx(),
+                    totals.status4xx(),
+                    totals.status5xx(),
+                    totals.latencyAvgMs(),
+                    totals.latencyP95Ms(),
+                    overview.series().stream().map(SeriesPointResponse::from).toList(),
+                    overview.projects().stream().map(ProjectRankingResponse::from).toList());
+        }
+    }
+
+    public record SeriesPointResponse(
+            Instant t,
+            long requests,
+            long status5xx,
+            double latencyAvgMs,
+            Double latencyMaxMs) {
+        static SeriesPointResponse from(TrafficSeriesPoint point) {
+            return new SeriesPointResponse(
+                    point.t(),
+                    point.requests(),
+                    point.status5xx(),
+                    point.latencyAvgMs(),
+                    point.latencyMaxMs());
+        }
+    }
+
+    public record ServiceBreakdownResponse(
+            String serviceId,
+            long requests,
+            long status5xx,
+            double latencyAvgMs,
+            Double latencyMaxMs) {
+        static ServiceBreakdownResponse from(TrafficServiceBreakdown service) {
+            return new ServiceBreakdownResponse(
+                    service.serviceId(),
+                    service.requests(),
+                    service.status5xx(),
+                    service.latencyAvgMs(),
+                    service.latencyMaxMs());
+        }
+    }
+
+    public record ProjectRankingResponse(
+            String projectId, long requests, long status5xx, double latencyAvgMs) {
+        static ProjectRankingResponse from(TrafficProjectRanking ranking) {
+            return new ProjectRankingResponse(
+                    ranking.projectId(), ranking.requests(), ranking.status5xx(), ranking.latencyAvgMs());
         }
     }
 

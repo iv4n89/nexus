@@ -6,12 +6,17 @@ import { usePathname } from 'next/navigation'
 const NAV = [
   { href: '/', label: 'Dashboard' },
   { href: '/activity', label: 'Activity' },
+  { href: '/traffic', label: 'Traffic' },
   { href: '/settings', label: 'Settings' },
 ]
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const wide = pathname.includes('/database') || pathname.includes('/logs') || pathname.includes('/services')
+  const wide =
+    pathname.includes('/database') ||
+    pathname.includes('/logs') ||
+    pathname.includes('/services') ||
+    pathname.includes('/traffic')
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-black text-[#f5f5f5]">

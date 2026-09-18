@@ -1,6 +1,6 @@
 package com.ivan.nexus.application.traffic;
 
-import com.ivan.nexus.domain.traffic.TrafficHourlyBucket;
+import com.ivan.nexus.domain.traffic.TrafficMinuteBucket;
 import com.ivan.nexus.domain.traffic.TrafficSnapshot;
 
 import java.time.Instant;
@@ -8,11 +8,15 @@ import java.util.List;
 import java.util.Optional;
 
 public interface TrafficStore {
-    Optional<TrafficHourlyBucket> findBucket(String projectId, String domainId, Instant bucketStart);
+    Optional<TrafficMinuteBucket> findBucket(String projectId, String serviceId, String host, Instant bucketStart);
 
-    TrafficHourlyBucket save(TrafficHourlyBucket bucket);
+    TrafficMinuteBucket save(TrafficMinuteBucket bucket);
 
-    List<TrafficHourlyBucket> findByProjectSince(String projectId, Instant since);
+    List<TrafficMinuteBucket> findByProjectSince(String projectId, Instant since);
+
+    List<TrafficMinuteBucket> findSince(Instant since);
 
     TrafficSnapshot snapshot(String projectId, Instant from, Instant to);
+
+    int deleteOlderThan(Instant cutoff);
 }
