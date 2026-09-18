@@ -33,7 +33,7 @@ public class JpaDeploymentStore implements DeploymentStore {
     }
 
     @Override
-    public Deployment createPending(UUID id, String projectId, String triggeredBy, String kind) {
+    public Deployment createPending(UUID id, String projectId, String triggeredBy, String kind, String commitSha) {
         DeploymentEntity entity = new DeploymentEntity(
                 id,
                 projectId,
@@ -41,7 +41,7 @@ public class JpaDeploymentStore implements DeploymentStore {
                 null,
                 null,
                 triggeredBy,
-                null,
+                commitSha,
                 null,
                 null,
                 null,

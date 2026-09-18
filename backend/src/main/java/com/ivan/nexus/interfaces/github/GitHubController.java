@@ -1,6 +1,7 @@
 package com.ivan.nexus.interfaces.github;
 
 import com.ivan.nexus.application.github.ConnectGitHub;
+import com.ivan.nexus.application.github.CreateProjectFromRepo;
 import com.ivan.nexus.application.github.DisconnectGitHub;
 import com.ivan.nexus.application.github.GetGitHubConnection;
 import com.ivan.nexus.application.github.StartGitHubOAuth;
@@ -9,6 +10,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,16 +22,19 @@ public class GitHubController {
     private final StartGitHubOAuth startGitHubOAuth;
     private final ConnectGitHub connectGitHub;
     private final DisconnectGitHub disconnectGitHub;
+    private final CreateProjectFromRepo createProjectFromRepo;
 
     public GitHubController(
             GetGitHubConnection getGitHubConnection,
             StartGitHubOAuth startGitHubOAuth,
             ConnectGitHub connectGitHub,
-            DisconnectGitHub disconnectGitHub) {
+            DisconnectGitHub disconnectGitHub,
+            CreateProjectFromRepo createProjectFromRepo) {
         this.getGitHubConnection = getGitHubConnection;
         this.startGitHubOAuth = startGitHubOAuth;
         this.connectGitHub = connectGitHub;
         this.disconnectGitHub = disconnectGitHub;
+        this.createProjectFromRepo = createProjectFromRepo;
     }
 
     @GetMapping("/api/github/status")
@@ -55,6 +61,17 @@ public class GitHubController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void disconnect(Authentication authentication, HttpServletRequest request) {
         disconnectGitHub.execute(authentication.getName(), clientIp(request));
+    }
+
+    @PostMapping("/api/github/projects")
+    @ResponseStatus(HttpStatus.CREATED)
+    public GitHubDtos.CreateProjectResponse createProject(@RequestBody GitHubDtos.CreateProjectRequest request) {
+        CreateProjectFromRepo.Result result = createProjectFromRepo.execute(
+                request.owner(),
+                request.repo(),
+                request.branch(),
+                request.projectId());
+        return GitHubDtos.CreateProjectResponse.from(result);
     }
 
     private static String clientIp(HttpServletRequest request) {

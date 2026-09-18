@@ -141,6 +141,10 @@ public class DeploymentEntity {
         this.healthOk = healthOk;
     }
 
+    public void setCommitSha(String commitSha) {
+        this.commitSha = commitSha;
+    }
+
     public void setMetadata(Map<String, Object> metadata) {
         this.metadata = metadata == null ? new HashMap<>() : new HashMap<>(metadata);
     }

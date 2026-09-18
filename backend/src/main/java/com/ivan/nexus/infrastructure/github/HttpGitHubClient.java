@@ -110,6 +110,39 @@ public class HttpGitHubClient implements GitHubClient {
         throw new UnsupportedOperationException("Repository listing is Phase B2");
     }
 
+    @Override
+    public String getBranchHead(String accessToken, String owner, String repo, String branch) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = restClient.get()
+                    .uri("https://api.github.com/repos/{owner}/{repo}/branches/{branch}", owner, repo, branch)
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Accept", "application/vnd.github+json")
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .retrieve()
+                    .body(Map.class);
+            if (body == null) {
+                throw new DomainException(NexusErrorCode.GITHUB_BRANCH_NOT_FOUND, "GitHub branch not found");
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Object> commit = body.get("commit") instanceof Map<?, ?> map
+                    ? (Map<String, Object>) map
+                    : Map.of();
+            Object sha = commit.get("sha");
+            if (sha == null || String.valueOf(sha).isBlank()) {
+                throw new DomainException(NexusErrorCode.GITHUB_BRANCH_NOT_FOUND, "GitHub branch head SHA missing");
+            }
+            return String.valueOf(sha);
+        } catch (DomainException ex) {
+            throw ex;
+        } catch (RestClientResponseException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                throw new DomainException(NexusErrorCode.GITHUB_BRANCH_NOT_FOUND, "GitHub branch not found");
+            }
+            throw new DomainException(NexusErrorCode.GITHUB_OAUTH_FAILED, "GitHub branch lookup failed");
+        }
+    }
+
     private void requireConfigured() {
         if (clientId == null || clientSecret == null || redirectUri == null) {
             throw new IllegalStateException("GitHub OAuth is not configured (client-id, client-secret, redirect-uri)");

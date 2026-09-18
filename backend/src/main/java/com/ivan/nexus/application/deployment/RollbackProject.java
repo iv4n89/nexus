@@ -57,7 +57,8 @@ public class RollbackProject {
                 loaded.manifestPath(),
                 command,
                 "rollback",
-                AuditAction.ROLLBACK);
+                AuditAction.ROLLBACK,
+                null);
     }
 
     private static String rollbackCommand(ProjectManifest manifest) {

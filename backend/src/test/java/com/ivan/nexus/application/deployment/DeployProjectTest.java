@@ -220,6 +220,41 @@ class DeployProjectTest {
         assertThat(projects.projects.get("lab").name()).isEqualTo("lab");
     }
 
+    @Test
+    void recordsCommitShaFromGitHubBranchHeadWhenLinked() throws Exception {
+        writeLabManifest(null);
+        projects.upsert(
+                manifests.loadRequired("lab").manifest(),
+                allowedRoot.resolve("lab"),
+                allowedRoot.resolve("lab").resolve("nexus.yml"));
+        projects.linkGitHub("lab", "octo", "lab-repo", "main");
+
+        com.ivan.nexus.application.github.GitHubClient gitHubClient =
+                mock(com.ivan.nexus.application.github.GitHubClient.class);
+        com.ivan.nexus.application.github.RequireGitHubAccessToken accessToken =
+                mock(com.ivan.nexus.application.github.RequireGitHubAccessToken.class);
+        when(accessToken.execute()).thenReturn("token");
+        when(gitHubClient.getBranchHead("token", "octo", "lab-repo", "main")).thenReturn("deadbeef");
+
+        DeployProject linked = new DeployProject(
+                manifests,
+                projects,
+                deployments,
+                progress,
+                processExecutor,
+                healthChecker,
+                recordAudit,
+                recordActivity,
+                users,
+                gitHubClient,
+                accessToken,
+                Runnable::run);
+
+        Deployment started = linked.execute("lab", "admin");
+
+        assertThat(deployments.deployments.get(started.id()).commitSha()).isEqualTo("deadbeef");
+    }
+
     private DeployProject useCaseWithExecutor(Executor executor) {
         return new DeployProject(
                 manifests,
@@ -231,6 +266,8 @@ class DeployProjectTest {
                 recordAudit,
                 recordActivity,
                 users,
+                mock(com.ivan.nexus.application.github.GitHubClient.class),
+                mock(com.ivan.nexus.application.github.RequireGitHubAccessToken.class),
                 executor);
     }
 

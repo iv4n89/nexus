@@ -51,7 +51,7 @@ class DeploymentCommandRunnerTest {
         ProjectManifest manifest = manifest(tempDir);
 
         when(deployments.hasActiveDeployment("lab")).thenReturn(false);
-        when(deployments.createPending(any(), eq("lab"), eq("admin"), eq("deploy")))
+        when(deployments.createPending(any(), eq("lab"), eq("admin"), eq("deploy"), isNull()))
                 .thenAnswer(invocation -> deployment(
                         invocation.getArgument(0), DeploymentStatus.PENDING, null));
         when(deployments.markRunning(any(), any()))
@@ -73,7 +73,8 @@ class DeploymentCommandRunnerTest {
                 tempDir.resolve(".").resolve("nexus.yml"),
                 "./deploy.sh",
                 "deploy",
-                AuditAction.DEPLOY);
+                AuditAction.DEPLOY,
+                null);
         org.mockito.Mockito.verify(executor).execute(async.capture());
         async.getValue().run();
 
@@ -81,7 +82,7 @@ class DeploymentCommandRunnerTest {
         order.verify(deployments).hasActiveDeployment("lab");
         order.verify(projects).upsert(eq(manifest), eq(tempDir.toAbsolutePath().normalize()),
                 eq(tempDir.resolve("nexus.yml").toAbsolutePath().normalize()));
-        order.verify(deployments).createPending(started.id(), "lab", "admin", "deploy");
+        order.verify(deployments).createPending(started.id(), "lab", "admin", "deploy", null);
         order.verify(deployments).markRunning(eq(started.id()), any());
         order.verify(executor).execute(any());
         order.verify(deployments).findById(started.id());

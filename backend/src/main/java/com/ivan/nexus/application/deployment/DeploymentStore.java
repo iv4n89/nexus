@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface DeploymentStore {
     boolean hasActiveDeployment(String projectId);
 
-    Deployment createPending(UUID id, String projectId, String triggeredBy, String kind);
+    Deployment createPending(UUID id, String projectId, String triggeredBy, String kind, String commitSha);
 
     Deployment markRunning(UUID id, Instant startedAt);
 

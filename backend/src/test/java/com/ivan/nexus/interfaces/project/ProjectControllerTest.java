@@ -1,5 +1,7 @@
 package com.ivan.nexus.interfaces.project;
 
+import com.ivan.nexus.application.github.GetProjectGitHubStatus;
+import com.ivan.nexus.application.github.ProjectGitHubStatusView;
 import com.ivan.nexus.application.log.GetRecentErrors;
 import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.application.project.ContainerInventory;
@@ -46,6 +48,9 @@ class ProjectControllerTest {
     @MockitoBean
     ManifestCatalog manifests;
 
+    @MockitoBean
+    GetProjectGitHubStatus getProjectGitHubStatus;
+
     @BeforeEach
     void setUpManifestCatalog() {
         given(manifests.discoverProjectIds()).willReturn(Set.of("lab"));
@@ -81,6 +86,23 @@ class ProjectControllerTest {
         mockMvc.perform(get("/api/projects/missing"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("PROJECT_NOT_FOUND"));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void returnsGitHubStatusForLinkedProject() throws Exception {
+        given(getProjectGitHubStatus.execute("lab")).willReturn(new ProjectGitHubStatusView(
+                "lab", "octo", "lab-repo", "main", "abc", "abc", true));
+
+        mockMvc.perform(get("/api/projects/lab/github-status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projectId").value("lab"))
+                .andExpect(jsonPath("$.owner").value("octo"))
+                .andExpect(jsonPath("$.repo").value("lab-repo"))
+                .andExpect(jsonPath("$.branch").value("main"))
+                .andExpect(jsonPath("$.remoteHeadSha").value("abc"))
+                .andExpect(jsonPath("$.deployedCommitSha").value("abc"))
+                .andExpect(jsonPath("$.upToDate").value(true));
     }
 
     @Test
