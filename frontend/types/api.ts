@@ -161,6 +161,8 @@ export type ActivityType =
   | 'SECURITY_SCAN_COMPLETED'
   | 'DOMAIN_ADDED'
   | 'DOMAIN_REMOVED'
+  | 'BACKUP_COMPLETED'
+  | 'BACKUP_FAILED'
 
 export type ActivityEvent = {
   id: string
