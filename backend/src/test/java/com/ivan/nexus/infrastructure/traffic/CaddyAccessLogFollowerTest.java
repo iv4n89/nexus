@@ -6,6 +6,7 @@ import com.github.dockerjava.api.model.Container;
 import com.ivan.nexus.application.log.LogProvider;
 import com.ivan.nexus.application.traffic.ResolveTrafficTarget;
 import com.ivan.nexus.application.traffic.TrafficIngestor;
+import com.ivan.nexus.infrastructure.config.NexusProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -159,8 +160,10 @@ class CaddyAccessLogFollowerTest {
     }
 
     private CaddyAccessLogFollower follower(String configuredContainer) {
+        NexusProperties properties = new NexusProperties();
+        properties.getTraffic().setCaddyContainer(configuredContainer);
         return new CaddyAccessLogFollower(
-                dockerClient, logProvider, parser, resolve, ingestor, configuredContainer);
+                dockerClient, logProvider, parser, resolve, ingestor, properties);
     }
 
     private static Container container(String id, String name, Map<String, String> labels) {

@@ -13,6 +13,7 @@ public class NexusProperties {
     private final Security security = new Security();
     private final Terminal terminal = new Terminal();
     private final Caddy caddy = new Caddy();
+    private final Traffic traffic = new Traffic();
     private final Automation automation = new Automation();
 
     public Docker getDocker() {
@@ -49,6 +50,10 @@ public class NexusProperties {
 
     public Caddy getCaddy() {
         return caddy;
+    }
+
+    public Traffic getTraffic() {
+        return traffic;
     }
 
     public Automation getAutomation() {
@@ -460,6 +465,54 @@ public class NexusProperties {
         }
     }
 
+
+    public static class Traffic {
+        private boolean ingestEnabled = true;
+        private String caddyContainer = "";
+        private int retentionDays = 7;
+        private String retentionCron = "0 15 3 * * *";
+        private long alertIntervalMs = 60_000L;
+
+        public boolean isIngestEnabled() {
+            return ingestEnabled;
+        }
+
+        public void setIngestEnabled(boolean ingestEnabled) {
+            this.ingestEnabled = ingestEnabled;
+        }
+
+        public String getCaddyContainer() {
+            return caddyContainer;
+        }
+
+        public void setCaddyContainer(String caddyContainer) {
+            this.caddyContainer = caddyContainer == null ? "" : caddyContainer;
+        }
+
+        public int getRetentionDays() {
+            return retentionDays;
+        }
+
+        public void setRetentionDays(int retentionDays) {
+            this.retentionDays = retentionDays;
+        }
+
+        public String getRetentionCron() {
+            return retentionCron;
+        }
+
+        public void setRetentionCron(String retentionCron) {
+            this.retentionCron = retentionCron;
+        }
+
+        public long getAlertIntervalMs() {
+            return alertIntervalMs;
+        }
+
+        public void setAlertIntervalMs(long alertIntervalMs) {
+            this.alertIntervalMs = alertIntervalMs;
+        }
+    }
 
     public static class Automation {
         private boolean securityGateEnabled;

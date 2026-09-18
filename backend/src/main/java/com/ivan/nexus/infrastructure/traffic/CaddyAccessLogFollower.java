@@ -7,11 +7,11 @@ import com.ivan.nexus.application.traffic.ResolveTrafficTarget;
 import com.ivan.nexus.application.traffic.TrafficIngestor;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
+import com.ivan.nexus.infrastructure.config.NexusProperties;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -53,12 +53,13 @@ public class CaddyAccessLogFollower {
             CaddyJsonAccessLogParser parser,
             ResolveTrafficTarget resolve,
             TrafficIngestor ingestor,
-            @Value("${nexus.traffic.caddy-container:}") String configuredContainer) {
+            NexusProperties properties) {
         this.dockerClient = dockerClient;
         this.logProvider = logProvider;
         this.parser = parser;
         this.resolve = resolve;
         this.ingestor = ingestor;
+        String configuredContainer = properties.getTraffic().getCaddyContainer();
         this.configuredContainer = configuredContainer == null ? "" : configuredContainer;
     }
 
