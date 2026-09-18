@@ -316,7 +316,13 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
           <p className="text-sm text-[#888]">No traffic yet</p>
         ) : (
           <div className="flex flex-col gap-4">
-            <TrafficChart series={traffic.data.series} field="requests" stroke="#f5f5f5" />
+            <TrafficChart
+              series={traffic.data.series}
+              field="requests"
+              stroke="#f5f5f5"
+              from={traffic.data.from}
+              to={traffic.data.to}
+            />
             <p className="font-mono text-sm">
               <span className="text-[#888]">5xx </span>
               <span className={traffic.data.status5xx > 0 ? 'text-[#ff4d4f]' : undefined}>

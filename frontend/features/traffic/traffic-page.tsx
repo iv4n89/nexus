@@ -61,6 +61,38 @@ export function TrafficPage() {
           <p className="text-sm text-[#888]">No traffic yet</p>
         ) : (
           <div className="flex flex-col gap-10">
+            <div>
+              <h3 className="mb-3 text-xs tracking-[0.25em] text-[#888]">ALERTS</h3>
+              {alerts.isPending ? (
+                <p className="text-sm text-[#888]">Loading…</p>
+              ) : alerts.isError ? (
+                <p className="text-sm text-[#ff4d4f]">{alerts.error.message}</p>
+              ) : trafficAlerts.length === 0 ? (
+                <p className="text-sm">0 traffic alerts</p>
+              ) : (
+                <ul>
+                  {trafficAlerts.map((alert) => {
+                    const label = [alert.type, alert.message].filter(Boolean).join(' — ')
+                    return (
+                      <li
+                        key={alert.id}
+                        className="border-b border-[#2a2a2a] py-2 text-sm text-[#ff4d4f] last:border-b-0"
+                      >
+                        {alert.projectId ? (
+                          <Link href={`/projects/${alert.projectId}`} className="flex justify-between gap-4">
+                            <span className="min-w-0 break-all">{label}</span>
+                            <span className="shrink-0 text-[#888]">{alert.projectId}</span>
+                          </Link>
+                        ) : (
+                          <span>{label}</span>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+
             <dl className="grid max-w-xs grid-cols-[6.5rem_1fr] gap-y-2 font-mono text-sm">
               <dt className="text-[#888]">Requests</dt>
               <dd>{traffic.data.requests}</dd>
@@ -82,45 +114,26 @@ export function TrafficPage() {
 
             <div>
               <h3 className="mb-3 text-xs tracking-[0.25em] text-[#888]">REQUESTS</h3>
-              <TrafficChart series={traffic.data.series} field="requests" stroke="#f5f5f5" />
+              <TrafficChart
+                series={traffic.data.series}
+                field="requests"
+                stroke="#f5f5f5"
+                from={traffic.data.from}
+                to={traffic.data.to}
+              />
             </div>
 
             <div>
               <h3 className="mb-3 text-xs tracking-[0.25em] text-[#888]">5XX</h3>
-              <TrafficChart series={traffic.data.series} field="status5xx" stroke="#ff4d4f" />
+              <TrafficChart
+                series={traffic.data.series}
+                field="status5xx"
+                stroke="#ff4d4f"
+                from={traffic.data.from}
+                to={traffic.data.to}
+              />
             </div>
           </div>
-        )}
-      </section>
-
-      <hr className="border-[#2a2a2a]" />
-
-      <section>
-        <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">ALERTS</h2>
-        {alerts.isPending ? (
-          <p className="text-sm text-[#888]">Loading…</p>
-        ) : alerts.isError ? (
-          <p className="text-sm text-[#ff4d4f]">{alerts.error.message}</p>
-        ) : trafficAlerts.length === 0 ? (
-          <p className="text-sm">0 traffic alerts</p>
-        ) : (
-          <ul>
-            {trafficAlerts.map((alert) => {
-              const label = [alert.type, alert.message].filter(Boolean).join(' — ')
-              return (
-                <li key={alert.id} className="border-b border-[#2a2a2a] py-2 text-sm last:border-b-0">
-                  {alert.projectId ? (
-                    <Link href={`/projects/${alert.projectId}`} className="flex justify-between gap-4">
-                      <span className="min-w-0 break-all">{label}</span>
-                      <span className="shrink-0 text-[#888]">{alert.projectId}</span>
-                    </Link>
-                  ) : (
-                    <span>{label}</span>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
         )}
       </section>
 

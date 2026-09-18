@@ -8,12 +8,16 @@ export function TrafficChart({
   series,
   field,
   stroke,
+  from,
+  to,
 }: {
   series: TrafficSeriesPoint[]
   field: 'requests' | 'status5xx'
   stroke: string
+  from?: string
+  to?: string
 }) {
-  const points = polylinePoints(series, field, WIDTH, HEIGHT)
+  const points = polylinePoints(series, field, WIDTH, HEIGHT, from, to)
 
   return (
     <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full" role="img">
