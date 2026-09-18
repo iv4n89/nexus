@@ -59,8 +59,11 @@ public class DeployProject {
     }
 
     public Deployment execute(String projectId, String username) {
+        return execute(projectId, username, resolveCommitSha(projectId));
+    }
+
+    public Deployment execute(String projectId, String username, String commitSha) {
         LoadedManifest loaded = manifests.loadRequired(projectId);
-        String commitSha = resolveCommitSha(projectId);
         return runner.start(
                 projectId,
                 username,
@@ -79,6 +82,9 @@ public class DeployProject {
     }
 
     private String fetchBranchHead(ProjectGitHubLink link) {
+        if (link.lastRemoteSha() != null && !link.lastRemoteSha().isBlank()) {
+            return link.lastRemoteSha();
+        }
         return gitHubClient.getBranchHead(
                 accessToken.execute(),
                 link.owner(),

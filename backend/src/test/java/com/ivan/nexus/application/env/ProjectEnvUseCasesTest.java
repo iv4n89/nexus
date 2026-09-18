@@ -46,12 +46,14 @@ class ProjectEnvUseCasesTest {
     private UpsertProjectEnv upsert;
     private ListProjectEnv list;
     private DeleteProjectEnv delete;
+    private RotateProjectEnv rotate;
 
     @BeforeEach
     void setUp() {
         upsert = new UpsertProjectEnv(store, secretStore, recordAudit, recordActivity, users);
         list = new ListProjectEnv(store, secretStore);
         delete = new DeleteProjectEnv(store, recordAudit, recordActivity, users);
+        rotate = new RotateProjectEnv(store, secretStore, recordAudit, recordActivity, users);
     }
 
     @Test
@@ -99,6 +101,46 @@ class ProjectEnvUseCasesTest {
         ProjectEnvVarView plain = views.stream().filter(v -> !v.secret()).findFirst().orElseThrow();
         assertThat(secret.value()).isNull();
         assertThat(plain.value()).isEqualTo("production");
+    }
+
+    @Test
+    void rotateEncryptsNewValueAndRecordsAudit() {
+        Instant created = Instant.parse("2026-09-18T09:00:00Z");
+        UUID id = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        store.upsert(new StoredProjectEnvVar(id, "lab", "API_KEY", "old-cipher", true, created, created));
+        when(secretStore.encrypt("new-secret")).thenReturn("new-cipher");
+        when(users.findIdByUsername("admin")).thenReturn(Optional.of(adminId));
+
+        ProjectEnvVarView view = rotate.execute("lab", "API_KEY", "new-secret", "admin", "10.0.0.2");
+
+        assertThat(view.secret()).isTrue();
+        assertThat(view.value()).isNull();
+        assertThat(view.id()).isEqualTo(id);
+        assertThat(view.createdAt()).isEqualTo(created);
+        assertThat(store.findByProjectAndName("lab", "API_KEY").orElseThrow().encryptedValue())
+                .isEqualTo("new-cipher");
+
+        verify(recordAudit).execute(
+                eq(adminId),
+                eq(AuditAction.CONFIG_CHANGE),
+                eq("lab"),
+                isNull(),
+                eq("10.0.0.2"),
+                any());
+        verify(recordActivity).execute(
+                eq(ActivityType.CONFIG_CHANGED),
+                eq("lab"),
+                isNull(),
+                eq("Environment variable API_KEY rotated"),
+                any());
+    }
+
+    @Test
+    void rotateMissingThrowsNotFound() {
+        assertThatThrownBy(() -> rotate.execute("lab", "MISSING", "x", "admin", null))
+                .isInstanceOf(DomainException.class)
+                .satisfies(ex -> assertThat(((DomainException) ex).getCode())
+                        .isEqualTo(NexusErrorCode.ENV_VAR_NOT_FOUND));
     }
 
     @Test

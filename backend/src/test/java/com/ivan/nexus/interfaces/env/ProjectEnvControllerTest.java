@@ -3,6 +3,7 @@ package com.ivan.nexus.interfaces.env;
 import com.ivan.nexus.application.env.DeleteProjectEnv;
 import com.ivan.nexus.application.env.ListProjectEnv;
 import com.ivan.nexus.application.env.ProjectEnvVarView;
+import com.ivan.nexus.application.env.RotateProjectEnv;
 import com.ivan.nexus.application.env.UpsertProjectEnv;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
@@ -32,6 +33,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -48,6 +50,9 @@ class ProjectEnvControllerTest {
 
     @MockitoBean
     UpsertProjectEnv upsertProjectEnv;
+
+    @MockitoBean
+    RotateProjectEnv rotateProjectEnv;
 
     @MockitoBean
     DeleteProjectEnv deleteProjectEnv;
@@ -130,6 +135,67 @@ class ProjectEnvControllerTest {
                 .andExpect(status().isForbidden());
         verify(upsertProjectEnv, never()).execute(
                 anyString(), anyString(), anyString(), anyBoolean(), anyString(), anyString());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminRotatesEnv() throws Exception {
+        Instant now = Instant.parse("2026-09-18T10:00:00Z");
+        given(rotateProjectEnv.execute(eq("lab"), eq("API_KEY"), eq("rotated"), eq("user"), anyString()))
+                .willReturn(new ProjectEnvVarView(
+                        UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                        "lab",
+                        "API_KEY",
+                        true,
+                        null,
+                        now,
+                        now));
+
+        mockMvc.perform(post("/api/projects/lab/env/API_KEY/rotate")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "value": "rotated"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("API_KEY"))
+                .andExpect(jsonPath("$.value").value(nullValue()));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void viewerRotateForbidden() throws Exception {
+        mockMvc.perform(post("/api/projects/lab/env/API_KEY/rotate")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "value": "rotated"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+        verify(rotateProjectEnv, never()).execute(anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void rotateMissingReturnsNotFound() throws Exception {
+        org.mockito.Mockito.doThrow(new DomainException(NexusErrorCode.ENV_VAR_NOT_FOUND, "missing"))
+                .when(rotateProjectEnv)
+                .execute(eq("lab"), eq("MISSING"), eq("x"), eq("user"), anyString());
+
+        mockMvc.perform(post("/api/projects/lab/env/MISSING/rotate")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "value": "x"
+                                }
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("ENV_VAR_NOT_FOUND"));
     }
 
     @Test

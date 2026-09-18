@@ -117,6 +117,7 @@ public class NexusProperties {
         private String clientId = "";
         private String clientSecret = "";
         private String redirectUri = "";
+        private String webhookSecret = "";
 
         public String getClientId() {
             return clientId;
@@ -140,6 +141,14 @@ public class NexusProperties {
 
         public void setRedirectUri(String redirectUri) {
             this.redirectUri = redirectUri;
+        }
+
+        public String getWebhookSecret() {
+            return webhookSecret;
+        }
+
+        public void setWebhookSecret(String webhookSecret) {
+            this.webhookSecret = webhookSecret;
         }
     }
 
@@ -327,6 +336,8 @@ public class NexusProperties {
     public static class Terminal {
         private boolean enabled = false;
         private int sessionTimeoutMinutes = 15;
+        /** Empty = same-host Origin only; use "*" to allow any (not recommended). */
+        private java.util.List<String> allowedOrigins = new java.util.ArrayList<>();
 
         public boolean isEnabled() {
             return enabled;
@@ -342,6 +353,14 @@ public class NexusProperties {
 
         public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) {
             this.sessionTimeoutMinutes = sessionTimeoutMinutes;
+        }
+
+        public java.util.List<String> getAllowedOrigins() {
+            return allowedOrigins;
+        }
+
+        public void setAllowedOrigins(java.util.List<String> allowedOrigins) {
+            this.allowedOrigins = allowedOrigins == null ? new java.util.ArrayList<>() : allowedOrigins;
         }
     }
 
