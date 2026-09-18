@@ -4,7 +4,11 @@ import com.ivan.nexus.application.github.ConnectGitHub;
 import com.ivan.nexus.application.github.CreateProjectFromRepo;
 import com.ivan.nexus.application.github.DisconnectGitHub;
 import com.ivan.nexus.application.github.GetGitHubConnection;
+import com.ivan.nexus.application.github.GitHubBranchSummary;
 import com.ivan.nexus.application.github.GitHubConnectionView;
+import com.ivan.nexus.application.github.GitHubRepositorySummary;
+import com.ivan.nexus.application.github.ListGitHubBranches;
+import com.ivan.nexus.application.github.ListGitHubRepositories;
 import com.ivan.nexus.application.github.StartGitHubOAuth;
 import com.ivan.nexus.infrastructure.security.SecurityConfig;
 import org.junit.jupiter.api.Test;
@@ -18,6 +22,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -48,6 +53,10 @@ class GitHubControllerTest {
     DisconnectGitHub disconnectGitHub;
     @MockitoBean
     CreateProjectFromRepo createProjectFromRepo;
+    @MockitoBean
+    ListGitHubRepositories listGitHubRepositories;
+    @MockitoBean
+    ListGitHubBranches listGitHubBranches;
 
     @Test
     @WithMockUser(roles = "VIEWER")
@@ -135,5 +144,29 @@ class GitHubControllerTest {
                                 {"owner":"octo","repo":"lab","branch":"main"}
                                 """))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void viewerCanListRepositories() throws Exception {
+        when(listGitHubRepositories.execute()).thenReturn(List.of(
+                new GitHubRepositorySummary(1L, "octocat/lab", "lab", "octocat", "main", false)));
+
+        mockMvc.perform(get("/api/github/repositories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].fullName").value("octocat/lab"))
+                .andExpect(jsonPath("$[0].defaultBranch").value("main"));
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void viewerCanListBranches() throws Exception {
+        when(listGitHubBranches.execute("octocat", "lab")).thenReturn(List.of(
+                new GitHubBranchSummary("main", "abc123", false)));
+
+        mockMvc.perform(get("/api/github/repositories/octocat/lab/branches"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("main"))
+                .andExpect(jsonPath("$[0].commitSha").value("abc123"));
     }
 }

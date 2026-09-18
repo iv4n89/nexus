@@ -12,11 +12,9 @@ public interface GitHubClient {
 
     GitHubIdentity getAuthenticatedUser(String accessToken);
 
-    /**
-     * Lists repositories visible to the authenticated user.
-     * Not implemented until Phase B2.
-     */
     List<GitHubRepositorySummary> listRepositories(String accessToken);
+
+    List<GitHubBranchSummary> listBranches(String accessToken, String owner, String repo);
 
     /**
      * Returns the commit SHA at the tip of {@code branch}.
