@@ -11,5 +11,7 @@ public enum AuditAction {
     DB_QUERY,
     DB_CELL_EDIT,
     GITHUB_CONNECT,
-    GITHUB_DISCONNECT
+    GITHUB_DISCONNECT,
+    DOMAIN_ADD,
+    DOMAIN_REMOVE
 }
