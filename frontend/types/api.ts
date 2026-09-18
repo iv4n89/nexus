@@ -20,6 +20,20 @@ export type ProjectDetail = Project & {
   recentErrors?: RecentError[]
 }
 
+export type ProjectHealth = {
+  projectId: string
+  projectStatus: string
+  containersRunning: number
+  containersTotal: number
+  lastDeploymentStatus: string | null
+  lastDeploymentAt: string | null
+  openAlertsCount: number
+  openSecurityFindingsCount: number | null
+  backupsAvailable: boolean
+  lastBackupSuccessAt: string | null
+  domainsCount: number | null
+}
+
 export type RecentError = {
   serviceId: string
   sampleMessage: string

@@ -10,7 +10,8 @@ import java.util.List;
 
 /**
  * Regenerates the Caddy snippet for a project after domain CRUD.
- * Optional hook: call from AddDomain/RemoveDomain once Phase C1 is merged.
+ * Invoked optionally from {@link com.ivan.nexus.application.site.AddDomain}
+ * and {@link com.ivan.nexus.application.site.RemoveDomain} when Caddy is enabled.
  */
 @Service
 @ConditionalOnProperty(name = "nexus.caddy.enabled", havingValue = "true")
