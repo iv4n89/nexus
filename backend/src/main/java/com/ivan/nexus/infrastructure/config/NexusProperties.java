@@ -9,6 +9,7 @@ public class NexusProperties {
     private final Retention retention = new Retention();
     private final GitHub github = new GitHub();
     private final Secrets secrets = new Secrets();
+    private final Backup backup = new Backup();
     private final Security security = new Security();
 
     public Docker getDocker() {
@@ -29,6 +30,10 @@ public class NexusProperties {
 
     public Secrets getSecrets() {
         return secrets;
+    }
+
+    public Backup getBackup() {
+        return backup;
     }
 
     public Security getSecurity() {
@@ -137,6 +142,54 @@ public class NexusProperties {
 
         public void setKey(String key) {
             this.key = key;
+        }
+    }
+
+    public static class Backup {
+        private boolean enabled;
+        private boolean schedulerEnabled;
+        private String localPath = "/var/lib/nexus/backups";
+        private String pgDumpExecutable = "pg_dump";
+        private String cron = "0 0 2 * * *";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isSchedulerEnabled() {
+            return schedulerEnabled;
+        }
+
+        public void setSchedulerEnabled(boolean schedulerEnabled) {
+            this.schedulerEnabled = schedulerEnabled;
+        }
+
+        public String getLocalPath() {
+            return localPath;
+        }
+
+        public void setLocalPath(String localPath) {
+            this.localPath = localPath;
+        }
+
+        public String getPgDumpExecutable() {
+            return pgDumpExecutable;
+        }
+
+        public void setPgDumpExecutable(String pgDumpExecutable) {
+            this.pgDumpExecutable = pgDumpExecutable;
+        }
+
+        public String getCron() {
+            return cron;
+        }
+
+        public void setCron(String cron) {
+            this.cron = cron;
         }
     }
 
