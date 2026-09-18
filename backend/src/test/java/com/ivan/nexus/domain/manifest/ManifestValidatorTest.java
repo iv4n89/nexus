@@ -143,6 +143,48 @@ class ManifestValidatorTest {
         ManifestValidator.validate(manifest, allowedRoot);
     }
 
+    @Test
+    void acceptsDeclaredBackupVolumes() {
+        ProjectManifest manifest = new ProjectManifest(
+                project("lab", workingDirectory().toString()),
+                List.of("api"),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
+                null,
+                null,
+                null,
+                new ProjectManifest.BackupBlock(List.of("lab_data", "lab_uploads")));
+
+        ManifestValidator.validate(manifest, allowedRoot);
+    }
+
+    @Test
+    void rejectsInvalidBackupVolumeNames() {
+        ProjectManifest manifest = new ProjectManifest(
+                project("lab", workingDirectory().toString()),
+                List.of("api"),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
+                null,
+                null,
+                null,
+                new ProjectManifest.BackupBlock(List.of("../escape")));
+
+        assertInvalid(() -> ManifestValidator.validate(manifest, allowedRoot));
+    }
+
+    @Test
+    void rejectsDuplicateBackupVolumes() {
+        ProjectManifest manifest = new ProjectManifest(
+                project("lab", workingDirectory().toString()),
+                List.of("api"),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
+                null,
+                null,
+                null,
+                new ProjectManifest.BackupBlock(List.of("lab_data", "lab_data")));
+
+        assertInvalid(() -> ManifestValidator.validate(manifest, allowedRoot));
+    }
+
     private Path workingDirectory() {
         return allowedRoot.resolve("lab");
     }

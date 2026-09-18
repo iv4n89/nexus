@@ -62,7 +62,14 @@ nexus:
     scheduler-enabled: ${NEXUS_BACKUP_SCHEDULER_ENABLED:false}
     local-path: ${NEXUS_BACKUP_LOCAL_PATH:/var/lib/nexus/backups}
     pg-dump-executable: ${NEXUS_PG_DUMP_EXECUTABLE:pg_dump}
-    cron: ${NEXUS_BACKUP_CRON:0 0 2 * * *}
+    pg-restore-executable: ${NEXUS_PG_RESTORE_EXECUTABLE:pg_restore}
+    # Daily backups at 03:00 UTC; retention cleanup at 03:30 UTC
+    cron: ${NEXUS_BACKUP_CRON:0 0 3 * * *}
+    retention-cron: ${NEXUS_BACKUP_RETENTION_CRON:0 30 3 * * *}
+    s3:
+      enabled: ${NEXUS_BACKUP_S3_ENABLED:false}
+      endpoint: ${NEXUS_BACKUP_S3_ENDPOINT:}
+      bucket: ${NEXUS_BACKUP_S3_BUCKET:}
   security:
     trivy:
       enabled: ${NEXUS_TRIVY_ENABLED:false}

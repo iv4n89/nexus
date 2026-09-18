@@ -160,7 +160,11 @@ public class NexusProperties {
         private boolean schedulerEnabled;
         private String localPath = "/var/lib/nexus/backups";
         private String pgDumpExecutable = "pg_dump";
-        private String cron = "0 0 2 * * *";
+        private String pgRestoreExecutable = "pg_restore";
+        /** Daily backup at 03:00 UTC by default. */
+        private String cron = "0 0 3 * * *";
+        private String retentionCron = "0 30 3 * * *";
+        private final S3 s3 = new S3();
 
         public boolean isEnabled() {
             return enabled;
@@ -194,12 +198,62 @@ public class NexusProperties {
             this.pgDumpExecutable = pgDumpExecutable;
         }
 
+        public String getPgRestoreExecutable() {
+            return pgRestoreExecutable;
+        }
+
+        public void setPgRestoreExecutable(String pgRestoreExecutable) {
+            this.pgRestoreExecutable = pgRestoreExecutable;
+        }
+
         public String getCron() {
             return cron;
         }
 
         public void setCron(String cron) {
             this.cron = cron;
+        }
+
+        public String getRetentionCron() {
+            return retentionCron;
+        }
+
+        public void setRetentionCron(String retentionCron) {
+            this.retentionCron = retentionCron;
+        }
+
+        public S3 getS3() {
+            return s3;
+        }
+
+        public static class S3 {
+            private boolean enabled;
+            private String endpoint = "";
+            private String bucket = "";
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public String getEndpoint() {
+                return endpoint;
+            }
+
+            public void setEndpoint(String endpoint) {
+                this.endpoint = endpoint;
+            }
+
+            public String getBucket() {
+                return bucket;
+            }
+
+            public void setBucket(String bucket) {
+                this.bucket = bucket;
+            }
         }
     }
 
