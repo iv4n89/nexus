@@ -12,7 +12,7 @@ public final class TrafficSpikeRules {
     public static final int MIN_VOLUME_REQUESTS = 30;
     public static final double VOLUME_MULTIPLIER = 3.0;
     public static final double VOLUME_RESOLVE_MULTIPLIER = 1.5;
-    public static final int MIN_BASELINE_SAMPLES = 12;
+    public static final int MIN_BASELINE_SAMPLES = 7;
     public static final int MIN_5XX_REQUESTS = 10;
     public static final double FIVE_XX_RATE = 0.05;
     public static final int FIVE_XX_ABSOLUTE = 10;

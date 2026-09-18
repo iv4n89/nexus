@@ -59,7 +59,7 @@ class EvaluateTrafficAlertsTest {
 
     @Test
     void volumeSpikeFiresWhenClosedMinuteIsThreeTimesMedian() {
-        addBaseline("lab", 12, 20, 10);
+        addBaseline("lab", 7, 20, 10);
         store.save(minute("lab", "web", "a.example", CLOSED, 50, 0));
         store.save(minute("lab", "api", "b.example", CLOSED, 40, 0));
 
@@ -74,7 +74,7 @@ class EvaluateTrafficAlertsTest {
 
     @Test
     void volumeDoesNotFireBelow30Requests() {
-        addBaseline("lab", 12, 30, 0);
+        addBaseline("lab", 7, 30, 0);
         store.save(minute("lab", "web", "", CLOSED, 29, 0));
 
         evaluate.execute();
@@ -85,7 +85,7 @@ class EvaluateTrafficAlertsTest {
 
     @Test
     void thinBaselineDoesNotFire() {
-        addBaseline("lab", 11, 30, 0);
+        addBaseline("lab", 6, 30, 0);
         store.save(minute("lab", "web", "", CLOSED, 90, 0));
 
         evaluate.execute();
@@ -118,7 +118,7 @@ class EvaluateTrafficAlertsTest {
 
     @Test
     void resolvesVolumeWhenRequestsDropBelowThreshold() {
-        addBaseline("lab", 12, 30, 0);
+        addBaseline("lab", 7, 30, 0);
         store.save(minute("lab", "web", "", CLOSED, 20, 0));
 
         evaluate.execute();
@@ -131,7 +131,7 @@ class EvaluateTrafficAlertsTest {
 
     @Test
     void projectComputeFailureDoesNotSkipOthers() {
-        addBaseline("shop", 12, 30, 0);
+        addBaseline("shop", 7, 30, 0);
         store.save(minute("shop", "web", "", CLOSED, 90, 0));
         store.save(new TrafficMinuteBucket(
                 UUID.randomUUID(),

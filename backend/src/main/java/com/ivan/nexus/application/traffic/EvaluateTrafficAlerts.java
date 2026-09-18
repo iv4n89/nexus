@@ -48,8 +48,7 @@ public class EvaluateTrafficAlerts {
     public void execute() {
         Instant now = clock.instant();
         Instant closed = now.truncatedTo(ChronoUnit.MINUTES).minus(1, ChronoUnit.MINUTES);
-        List<TrafficMinuteBucket> buckets = store.findSince(
-                closed.minus(TrafficSpikeRules.MIN_BASELINE_SAMPLES, ChronoUnit.DAYS));
+        List<TrafficMinuteBucket> buckets = store.findSince(closed.minus(7, ChronoUnit.DAYS));
 
         Map<String, List<TrafficMinuteBucket>> byProject = new LinkedHashMap<>();
         for (TrafficMinuteBucket bucket : buckets) {

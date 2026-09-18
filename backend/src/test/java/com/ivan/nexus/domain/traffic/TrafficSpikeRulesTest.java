@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TrafficSpikeRulesTest {
     @Test
     void volumeFiresAtThreeTimesMedianWhenAtLeast30Requests() {
-        assertThat(TrafficSpikeRules.volumeSpike(90, baselineOf(30, 12))).isTrue();
+        assertThat(TrafficSpikeRules.volumeSpike(90, baselineOf(30, 7))).isTrue();
     }
 
     @Test
@@ -20,7 +20,7 @@ class TrafficSpikeRulesTest {
 
     @Test
     void volumeDoesNotFireWithThinBaseline() {
-        assertThat(TrafficSpikeRules.volumeSpike(90, baselineOf(30, 11))).isFalse();
+        assertThat(TrafficSpikeRules.volumeSpike(90, baselineOf(30, 6))).isFalse();
     }
 
     @Test
