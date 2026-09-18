@@ -9,6 +9,7 @@ public class NexusProperties {
     private final Retention retention = new Retention();
     private final GitHub github = new GitHub();
     private final Secrets secrets = new Secrets();
+    private final Security security = new Security();
 
     public Docker getDocker() {
         return docker;
@@ -28,6 +29,10 @@ public class NexusProperties {
 
     public Secrets getSecrets() {
         return secrets;
+    }
+
+    public Security getSecurity() {
+        return security;
     }
 
     public static class Docker {
@@ -132,6 +137,73 @@ public class NexusProperties {
 
         public void setKey(String key) {
             this.key = key;
+        }
+    }
+
+    public static class Security {
+        private final Trivy trivy = new Trivy();
+
+        public Trivy getTrivy() {
+            return trivy;
+        }
+
+        public static class Trivy {
+            private boolean enabled;
+            private boolean schedulerEnabled;
+            private String executable = "trivy";
+            /** {@code fs} (default) or {@code image}. */
+            private String mode = "fs";
+            /** Image reference template; {@code {projectId}} is substituted when mode=image. */
+            private String imageRef = "";
+            private String cron = "0 0 4 * * *";
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public boolean isSchedulerEnabled() {
+                return schedulerEnabled;
+            }
+
+            public void setSchedulerEnabled(boolean schedulerEnabled) {
+                this.schedulerEnabled = schedulerEnabled;
+            }
+
+            public String getExecutable() {
+                return executable;
+            }
+
+            public void setExecutable(String executable) {
+                this.executable = executable;
+            }
+
+            public String getMode() {
+                return mode;
+            }
+
+            public void setMode(String mode) {
+                this.mode = mode;
+            }
+
+            public String getImageRef() {
+                return imageRef;
+            }
+
+            public void setImageRef(String imageRef) {
+                this.imageRef = imageRef;
+            }
+
+            public String getCron() {
+                return cron;
+            }
+
+            public void setCron(String cron) {
+                this.cron = cron;
+            }
         }
     }
 }

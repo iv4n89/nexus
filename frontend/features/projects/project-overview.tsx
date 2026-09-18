@@ -19,6 +19,7 @@ import type {
   DeployAccepted,
   Deployment,
   ProjectDetail,
+  ProjectHealth,
   ProjectMetrics,
   RecentError,
 } from '@/types/api'
@@ -99,6 +100,11 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
   const alerts = useQuery({
     queryKey: ['alerts', 'ACTIVE'],
     queryFn: () => api<Alert[]>(alertsPath('ACTIVE')),
+    refetchInterval: 30_000,
+  })
+  const health = useQuery({
+    queryKey: ['projects', projectId, 'health'],
+    queryFn: () => api<ProjectHealth>(`/api/projects/${projectId}/health`),
     refetchInterval: 30_000,
   })
   const acknowledge = useMutation({
@@ -227,6 +233,55 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
       </section>
 
       <hr className="border-[#2a2a2a]" />
+
+      <section>
+        <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Health</h2>
+        {health.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : health.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{health.error.message}</p>
+        ) : health.data ? (
+          <dl className="grid max-w-md grid-cols-[9rem_1fr] gap-y-2 font-mono text-sm">
+            <dt className="text-[#888]">Containers</dt>
+            <dd>
+              {health.data.containersRunning}/{health.data.containersTotal} running
+            </dd>
+            <dt className="text-[#888]">Deployment</dt>
+            <dd>
+              {health.data.lastDeploymentStatus ?? '—'}
+              {health.data.lastDeploymentAt
+                ? ` · ${formatClock(health.data.lastDeploymentAt)}`
+                : ''}
+            </dd>
+            <dt className="text-[#888]">Alerts</dt>
+            <dd>{health.data.openAlertsCount} open</dd>
+            {health.data.openSecurityFindingsCount != null ? (
+              <>
+                <dt className="text-[#888]">Security</dt>
+                <dd>{health.data.openSecurityFindingsCount} open</dd>
+              </>
+            ) : null}
+            {health.data.backupsAvailable ? (
+              <>
+                <dt className="text-[#888]">Backup</dt>
+                <dd>
+                  {health.data.lastBackupSuccessAt
+                    ? formatClock(health.data.lastBackupSuccessAt)
+                    : '—'}
+                </dd>
+              </>
+            ) : null}
+            {health.data.domainsCount != null ? (
+              <>
+                <dt className="text-[#888]">Domains</dt>
+                <dd>{health.data.domainsCount}</dd>
+              </>
+            ) : null}
+          </dl>
+        ) : (
+          <p className="text-sm text-[#888]">No health data</p>
+        )}
+      </section>
 
       <section>
         <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Services</h2>

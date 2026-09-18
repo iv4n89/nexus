@@ -4,6 +4,9 @@ import com.ivan.nexus.application.github.ConnectGitHub;
 import com.ivan.nexus.application.github.DisconnectGitHub;
 import com.ivan.nexus.application.github.GetGitHubConnection;
 import com.ivan.nexus.application.github.GitHubConnectionView;
+import com.ivan.nexus.application.github.GitHubRepositorySummary;
+import com.ivan.nexus.application.github.ListGitHubBranches;
+import com.ivan.nexus.application.github.ListGitHubRepositories;
 import com.ivan.nexus.application.github.StartGitHubOAuth;
 import com.ivan.nexus.infrastructure.security.SecurityConfig;
 import org.junit.jupiter.api.Test;
@@ -16,6 +19,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -42,6 +46,10 @@ class GitHubControllerTest {
     ConnectGitHub connectGitHub;
     @MockitoBean
     DisconnectGitHub disconnectGitHub;
+    @MockitoBean
+    ListGitHubRepositories listGitHubRepositories;
+    @MockitoBean
+    ListGitHubBranches listGitHubBranches;
 
     @Test
     @WithMockUser(roles = "VIEWER")
@@ -96,5 +104,17 @@ class GitHubControllerTest {
     void anonymousStatusIsUnauthorized() throws Exception {
         mockMvc.perform(get("/api/github/status"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @WithMockUser(roles = "VIEWER")
+    void viewerCanListRepositories() throws Exception {
+        when(listGitHubRepositories.execute()).thenReturn(List.of(
+                new GitHubRepositorySummary(1L, "octocat/lab", "lab", "octocat", "main", false)));
+
+        mockMvc.perform(get("/api/github/repositories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].fullName").value("octocat/lab"))
+                .andExpect(jsonPath("$[0].defaultBranch").value("main"));
     }
 }
