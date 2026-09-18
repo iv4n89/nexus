@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 interface ManagedProjectJpaRepository extends JpaRepository<ManagedProjectEntity, String> {
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -31,4 +33,17 @@ interface ManagedProjectJpaRepository extends JpaRepository<ManagedProjectEntity
             @Param("description") String description,
             @Param("workingDirectory") String workingDirectory,
             @Param("manifestPath") String manifestPath);
+
+    List<ManagedProjectEntity> findByGithubOwnerAndGithubRepoAndGithubBranch(
+            String githubOwner, String githubRepo, String githubBranch);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query(value = """
+            UPDATE projects
+            SET github_last_remote_sha = :sha,
+                updated_at = clock_timestamp()
+            WHERE id = :projectId
+            """, nativeQuery = true)
+    int updateLastRemoteSha(@Param("projectId") String projectId, @Param("sha") String sha);
 }

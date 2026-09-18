@@ -97,6 +97,7 @@ public class NexusProperties {
         private String clientId = "";
         private String clientSecret = "";
         private String redirectUri = "";
+        private String webhookSecret = "";
 
         public String getClientId() {
             return clientId;
@@ -120,6 +121,14 @@ public class NexusProperties {
 
         public void setRedirectUri(String redirectUri) {
             this.redirectUri = redirectUri;
+        }
+
+        public String getWebhookSecret() {
+            return webhookSecret;
+        }
+
+        public void setWebhookSecret(String webhookSecret) {
+            this.webhookSecret = webhookSecret;
         }
     }
 
