@@ -73,6 +73,7 @@ public class TrafficController {
             List<ServiceBreakdownResponse> services) {
         static ProjectTrafficResponse from(TrafficReport report) {
             TrafficSnapshot totals = report.totals();
+            Double latencyMaxMs = totals.latencyP95Ms();
             return new ProjectTrafficResponse(
                     report.projectId(),
                     report.from(),
@@ -86,7 +87,7 @@ public class TrafficController {
                     totals.status5xx(),
                     totals.latencyAvgMs(),
                     totals.latencyP95Ms(),
-                    totals.latencyP95Ms(),
+                    latencyMaxMs,
                     totals.topEndpoints().stream().map(EndpointStatResponse::from).toList(),
                     report.series().stream().map(SeriesPointResponse::from).toList(),
                     report.services().stream().map(ServiceBreakdownResponse::from).toList());

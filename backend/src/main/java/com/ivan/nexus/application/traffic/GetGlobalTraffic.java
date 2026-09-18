@@ -6,9 +6,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Service
@@ -23,12 +20,10 @@ public class GetGlobalTraffic {
 
     @Transactional(readOnly = true)
     public TrafficOverview execute(int hours) {
-        Duration binSize = GetProjectTraffic.binSizeFor(hours);
-        Instant to = clock.instant();
-        Instant from = to.minus(hours, ChronoUnit.HOURS);
-        List<TrafficMinuteBucket> minutes = store.findSince(from).stream()
-                .filter(bucket -> bucket.bucketStart().isBefore(to))
+        TrafficHours.Window window = TrafficHours.window(clock, hours);
+        List<TrafficMinuteBucket> minutes = store.findSince(window.from()).stream()
+                .filter(bucket -> bucket.bucketStart().isBefore(window.to()))
                 .toList();
-        return TrafficOverview.fromMinutes(from, to, minutes, binSize);
+        return TrafficOverview.fromMinutes(window.from(), window.to(), minutes, window.binSize());
     }
 }
