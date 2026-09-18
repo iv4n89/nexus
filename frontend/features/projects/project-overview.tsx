@@ -11,6 +11,7 @@ import { RollbackDialog } from '@/features/deployments/rollback-dialog'
 import { ErrorList, logsHref } from '@/features/logs/error-list'
 import { ProjectDomainsSection } from '@/features/projects/project-domains-section'
 import { ProjectEnvSection } from '@/features/projects/project-env-section'
+import { TrafficChart } from '@/features/traffic/traffic-chart'
 import { api } from '@/lib/api'
 import { containersForProject, displayName, projectLabel, serviceLabel } from '@/lib/docker'
 import { formatBytes, formatClock, formatElapsed, formatPercent, healthOkLabel } from '@/lib/format'
@@ -24,6 +25,7 @@ import type {
   ProjectDetail,
   ProjectHealth,
   ProjectMetrics,
+  ProjectTraffic,
   RecentError,
 } from '@/types/api'
 
@@ -114,6 +116,10 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
     queryKey: ['projects', projectId, 'health'],
     queryFn: () => api<ProjectHealth>(`/api/projects/${projectId}/health`),
     refetchInterval: 30_000,
+  })
+  const traffic = useQuery({
+    queryKey: ['projects', projectId, 'traffic'],
+    queryFn: () => api<ProjectTraffic>(`/api/projects/${projectId}/traffic?hours=24`),
   })
   const acknowledge = useMutation({
     mutationFn: (id: string) => api<Alert>(`/api/alerts/${id}/acknowledge`, { method: 'POST' }),
@@ -290,6 +296,52 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
           </dl>
         ) : (
           <p className="text-sm text-[#888]">No health data</p>
+        )}
+      </section>
+
+      <hr className="border-[#2a2a2a]" />
+
+      <section>
+        <div className="mb-4 flex items-baseline justify-between gap-4">
+          <h2 className="text-xs tracking-[0.25em] text-[#888]">TRAFFIC</h2>
+          <Link href="/traffic" className="text-sm">
+            Full traffic
+          </Link>
+        </div>
+        {traffic.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : traffic.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{traffic.error.message}</p>
+        ) : traffic.data.requests === 0 && traffic.data.series.length === 0 ? (
+          <p className="text-sm text-[#888]">No traffic yet</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <TrafficChart series={traffic.data.series} field="requests" stroke="#f5f5f5" />
+            <p className="font-mono text-sm">
+              <span className="text-[#888]">5xx </span>
+              <span className={traffic.data.status5xx > 0 ? 'text-[#ff4d4f]' : undefined}>
+                {traffic.data.status5xx}
+              </span>
+            </p>
+            {traffic.data.services.length > 0 ? (
+              <ul>
+                {traffic.data.services.map((service) => (
+                  <li
+                    key={service.serviceId}
+                    className="flex items-center justify-between border-b border-[#2a2a2a] py-2 font-mono text-sm last:border-b-0"
+                  >
+                    <span className="min-w-0 break-all">{service.serviceId}</span>
+                    <span className="flex shrink-0 gap-4">
+                      <span>{service.requests}</span>
+                      <span className={service.status5xx > 0 ? 'text-[#ff4d4f]' : 'text-[#888]'}>
+                        {service.status5xx}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         )}
       </section>
 
