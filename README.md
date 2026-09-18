@@ -2,7 +2,11 @@
 
 A self-hosted control plane for the Docker applications that live on your own VPS. Nexus discovers containers, groups them into projects, streams logs, runs allowlisted deploys and rollbacks, and records alerts, activity, and audit — without Kubernetes, a plugin marketplace, or an arbitrary shell.
 
-> **Danger (optional VPS terminal):** When `nexus.terminal.enabled=true`, Nexus exposes `ws://…/api/terminal/vps` as an **ADMIN-only** interactive `/bin/bash` on the host. Sessions are audited (start/end) and time out after 15 minutes; transcripts are **not** stored. Treat this like SSH: leave it disabled unless you accept host shell risk, and never expose it without strong auth and network controls.
+> **Danger (optional VPS / container terminal):** When `nexus.terminal.enabled=true`, Nexus exposes ADMIN-only interactive shells:
+> - `ws://…/api/terminal/vps` — host `/bin/bash`
+> - `ws://…/ws/terminal/projects/{id}/containers/{containerId}` (also `/api/terminal/projects/...`) — `docker exec -i` into a project-labeled container
+>
+> Sessions are audited (start/end), origin-checked, and time out after 15 minutes; transcripts are **not** stored. Leave disabled unless you accept shell risk.
 
 ## What is Nexus?
 

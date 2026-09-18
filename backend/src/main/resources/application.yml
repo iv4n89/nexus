@@ -19,6 +19,9 @@ spring:
     open-in-view: false
   flyway:
     locations: classpath:db/migration
+    # Allow parallel feature branches that land migrations out of numeric order.
+    out-of-order: true
+
 management:
   endpoints:
     web:
@@ -55,6 +58,7 @@ nexus:
     client-id: ${NEXUS_GITHUB_CLIENT_ID:}
     client-secret: ${NEXUS_GITHUB_CLIENT_SECRET:}
     redirect-uri: ${NEXUS_GITHUB_REDIRECT_URI:}
+    webhook-secret: ${NEXUS_GITHUB_WEBHOOK_SECRET:}
     # H4: optional stub sync every 15 minutes (disabled by default)
     sync-enabled: ${NEXUS_GITHUB_SYNC_ENABLED:false}
     sync-cron: ${NEXUS_GITHUB_SYNC_CRON:0 */15 * * * *}
@@ -84,6 +88,7 @@ nexus:
   terminal:
     enabled: ${NEXUS_TERMINAL_ENABLED:false}
     session-timeout-minutes: ${NEXUS_TERMINAL_TIMEOUT_MINUTES:15}
+    allowed-origins: []
   caddy:
     enabled: ${NEXUS_CADDY_ENABLED:false}
     sites-path: ${NEXUS_CADDY_SITES_PATH:/opt/nexus/caddy/sites}

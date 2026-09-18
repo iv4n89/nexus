@@ -1,6 +1,5 @@
 package com.ivan.nexus.application.automation;
 
-import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.backup.BackupPolicyStore;
 import com.ivan.nexus.application.backup.RunBackup;
 import com.ivan.nexus.application.deployment.DeployProject;
@@ -18,6 +17,7 @@ import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -44,6 +44,7 @@ public class RunDeployPipeline {
     private final Sleeper sleeper;
     private final Duration healthWait;
 
+    @Autowired
     public RunDeployPipeline(
             DeployProject deployProject,
             DeploymentStore deployments,
