@@ -79,7 +79,13 @@ public class DiscoverProjectDatabases {
             if (NexusDatabaseExclusions.skip(snapshot.image(), snapshot.labels())) {
                 continue;
             }
-            if (EngineDetector.fromImage(snapshot.image()).isEmpty()) {
+            boolean knownEngine = EngineDetector.fromImage(snapshot.image()).isPresent();
+            boolean maybeDatabase = knownEngine
+                    || EngineDetector.looksLikeImageId(snapshot.image())
+                    || EngineDetector.looksLikeDatabaseService(
+                            ProjectGrouping.serviceId(snapshot.name(), snapshot.labels()))
+                    || EngineDetector.looksLikeDatabaseService(snapshot.name());
+            if (!maybeDatabase) {
                 continue;
             }
             Optional<ContainerInspect> inspect = inventory.inspect(snapshot.id());

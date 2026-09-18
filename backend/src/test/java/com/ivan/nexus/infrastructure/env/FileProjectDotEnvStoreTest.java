@@ -95,6 +95,46 @@ class FileProjectDotEnvStoreTest {
     }
 
     @Test
+    void fallsBackToExtraRootDirectoryWhenComposeLabelMissing() throws Exception {
+        Path projects = tempDir.resolve("srv-projects");
+        Path hostOpt = tempDir.resolve("host-opt");
+        Path nexusDir = hostOpt.resolve("nexus");
+        Files.createDirectories(projects);
+        Files.createDirectories(nexusDir);
+        Files.writeString(nexusDir.resolve(".env"), "POSTGRES_PASSWORD=from-host-opt\n");
+
+        FileProjectDotEnvStore store = new FileProjectDotEnvStore(
+                new FakeManifestCatalog(),
+                emptyInventory(),
+                projects,
+                List.of(hostOpt.toString()),
+                hostOpt.toString());
+
+        assertThat(store.read("nexus")).containsEntry("POSTGRES_PASSWORD", "from-host-opt");
+        assertThat(store.locateDirectory("nexus")).contains(nexusDir.toAbsolutePath().normalize());
+    }
+
+    @Test
+    void readsCaddySnippetsFromProjectDir() throws Exception {
+        Path projects = tempDir.resolve("srv-projects");
+        Path hostOpt = tempDir.resolve("host-opt");
+        Path nexusDir = hostOpt.resolve("nexus");
+        Path caddyDir = nexusDir.resolve("caddy");
+        Files.createDirectories(projects);
+        Files.createDirectories(caddyDir);
+        Files.writeString(caddyDir.resolve("nexus.caddy"), "0nexus.duckdns.org {\n}\n");
+
+        FileProjectDotEnvStore store = new FileProjectDotEnvStore(
+                new FakeManifestCatalog(),
+                emptyInventory(),
+                projects,
+                List.of(hostOpt.toString()),
+                hostOpt.toString());
+
+        assertThat(store.caddySnippets("nexus")).anyMatch(snippet -> snippet.contains("0nexus.duckdns.org"));
+    }
+
+    @Test
     void readReturnsEmptyWhenPathOutsideAllowedRoots() throws Exception {
         Path projects = tempDir.resolve("projects");
         Path outside = tempDir.resolve("outside").resolve("nexus");

@@ -52,6 +52,10 @@ public class SyncProjectDomainsFromEnv {
         String directoryName = directoryName(projectId);
         Map<String, String> env = dotEnvStore.read(projectId);
         Set<String> fromEnv = DomainHostExtractor.fromEnv(env);
+        LinkedHashSet<String> fromCaddy = new LinkedHashSet<>();
+        for (String snippet : dotEnvStore.caddySnippets(projectId)) {
+            fromCaddy.addAll(DomainHostExtractor.fromCaddy(snippet));
+        }
 
         LinkedHashSet<String> fromLabels = new LinkedHashSet<>();
         String defaultService = "app";
@@ -72,7 +76,7 @@ public class SyncProjectDomainsFromEnv {
             }
         }
 
-        Map<String, String> candidates = DomainHostExtractor.mergePreferFirst(fromEnv, fromLabels);
+        Map<String, String> candidates = DomainHostExtractor.mergePreferFirst(fromEnv, fromCaddy, fromLabels);
         List<SiteDomain> added = new ArrayList<>();
         Instant now = Instant.now();
         for (String hostname : candidates.keySet()) {

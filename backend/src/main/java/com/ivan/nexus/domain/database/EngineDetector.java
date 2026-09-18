@@ -31,4 +31,32 @@ public final class EngineDetector {
         }
         return Optional.empty();
     }
+
+    public static boolean looksLikeImageId(String image) {
+        if (image == null || image.isBlank()) {
+            return true;
+        }
+        String lower = image.toLowerCase(Locale.ROOT).trim();
+        if (lower.startsWith("sha256:")) {
+            return true;
+        }
+        return lower.matches("[0-9a-f]{64}");
+    }
+
+    public static boolean looksLikeDatabaseService(String serviceOrName) {
+        if (serviceOrName == null || serviceOrName.isBlank()) {
+            return false;
+        }
+        String hay = serviceOrName.toLowerCase(Locale.ROOT);
+        return hay.contains("postgres")
+                || hay.contains("mysql")
+                || hay.contains("mariadb")
+                || hay.contains("mongo")
+                || hay.contains("redis")
+                || hay.equals("db")
+                || hay.startsWith("db-")
+                || hay.endsWith("-db")
+                || hay.contains("_db")
+                || hay.contains("-db-");
+    }
 }

@@ -53,7 +53,6 @@ public final class DomainHostExtractor {
             }
             String lower = key.toLowerCase(Locale.ROOT);
             if (lower.startsWith("caddy_") || lower.startsWith("caddy.")) {
-                // caddy_0 / caddy.email etc. — only treat values that look like hostnames
                 addIfValid(hosts, entry.getValue());
             }
             if (lower.startsWith("traefik.http.routers.") && lower.endsWith(".rule")) {
@@ -62,6 +61,29 @@ public final class DomainHostExtractor {
                     addIfValid(hosts, matcher.group(1));
                 }
             }
+        }
+        return hosts;
+    }
+
+    public static Set<String> fromCaddy(String content) {
+        LinkedHashSet<String> hosts = new LinkedHashSet<>();
+        if (content == null || content.isBlank()) {
+            return hosts;
+        }
+        for (String rawLine : content.split("\\R")) {
+            String line = rawLine.trim();
+            if (line.isEmpty() || line.startsWith("#") || line.startsWith("}")) {
+                continue;
+            }
+            int brace = line.indexOf('{');
+            if (brace <= 0) {
+                continue;
+            }
+            String site = line.substring(0, brace).trim();
+            if (site.isEmpty() || site.contains(" ")) {
+                continue;
+            }
+            addIfValid(hosts, site);
         }
         return hosts;
     }

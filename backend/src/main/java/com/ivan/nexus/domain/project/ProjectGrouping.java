@@ -8,6 +8,7 @@ public final class ProjectGrouping {
     private static final String NEXUS_PROJECT = "nexus.project";
     private static final String COMPOSE_PROJECT = "com.docker.compose.project";
     private static final String COMPOSE_WORKING_DIR = "com.docker.compose.project.working_dir";
+    private static final String COMPOSE_CONFIG_FILES = "com.docker.compose.project.config_files";
     private static final String NEXUS_SERVICE = "nexus.service";
     private static final String COMPOSE_SERVICE = "com.docker.compose.service";
 
@@ -44,10 +45,19 @@ public final class ProjectGrouping {
             return null;
         }
         String value = labels.get(COMPOSE_WORKING_DIR);
-        if (value == null || value.isBlank()) {
+        if (value != null && !value.isBlank()) {
+            return value.trim();
+        }
+        String files = labels.get(COMPOSE_CONFIG_FILES);
+        if (files == null || files.isBlank()) {
             return null;
         }
-        return value.trim();
+        String first = files.split(",")[0].trim();
+        int slash = Math.max(first.lastIndexOf('/'), first.lastIndexOf('\\'));
+        if (slash <= 0) {
+            return null;
+        }
+        return first.substring(0, slash);
     }
 
     /** Lowercase and treat {@code -} / {@code _} as equivalent. */

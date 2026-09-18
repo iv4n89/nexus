@@ -27,6 +27,7 @@ import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -94,6 +95,32 @@ public class FileProjectDotEnvStore implements ProjectDotEnvStore {
         }
     }
 
+    @Override
+    public Optional<Path> locateDirectory(String projectId) {
+        return Optional.ofNullable(resolveProjectDir(projectId));
+    }
+
+    @Override
+    public List<String> caddySnippets(String projectId) {
+        Path dir = resolveProjectDir(projectId);
+        if (dir == null || !Files.isDirectory(dir)) {
+            return List.of();
+        }
+        List<Path> files = new ArrayList<>();
+        addCaddyFiles(dir, files);
+        addCaddyFiles(dir.resolve("caddy"), files);
+        addCaddyFiles(dir.resolve("deploy").resolve("caddy-optional"), files);
+        List<String> snippets = new ArrayList<>();
+        for (Path file : files) {
+            try {
+                snippets.add(Files.readString(file, StandardCharsets.UTF_8));
+            } catch (IOException ex) {
+                log.debug("Unable to read {}: {}", file, ex.toString());
+            }
+        }
+        return snippets;
+    }
+
     Path resolveEnvPathRequired(String projectId) {
         Path envFile = resolveEnvPath(projectId);
         if (envFile == null) {
@@ -128,6 +155,12 @@ public class FileProjectDotEnvStore implements ProjectDotEnvStore {
         Path fromCompose = fromComposeWorkingDir(projectId);
         if (fromCompose != null) {
             return fromCompose;
+        }
+        for (int i = 1; i < allowedRoots.size(); i++) {
+            Path candidate = allowedRoots.get(i).resolve(projectId).toAbsolutePath().normalize();
+            if (isUnderAllowedRoot(candidate) && Files.isDirectory(candidate)) {
+                return candidate;
+            }
         }
         Path fallback = allowedRoots.getFirst().resolve(projectId).toAbsolutePath().normalize();
         return isUnderAllowedRoot(fallback) ? fallback : null;
@@ -215,6 +248,20 @@ public class FileProjectDotEnvStore implements ProjectDotEnvStore {
             }
         }
         return List.copyOf(roots);
+    }
+
+    private static void addCaddyFiles(Path dir, List<Path> into) {
+        if (dir == null || !Files.isDirectory(dir)) {
+            return;
+        }
+        try (var stream = Files.list(dir)) {
+            stream.filter(path -> {
+                String name = path.getFileName().toString().toLowerCase();
+                return Files.isRegularFile(path) && (name.endsWith(".caddy") || name.equals("caddyfile"));
+            }).forEach(into::add);
+        } catch (IOException ignored) {
+            // unreadable directory
+        }
     }
 
     private static void trySetOwnerOnly(Path path) {
