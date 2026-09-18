@@ -2,7 +2,10 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.env.ProjectEnvStore;
+import com.ivan.nexus.application.env.StoredProjectEnvVar;
 import com.ivan.nexus.application.manifest.FakeManifestCatalog;
+import com.ivan.nexus.application.secrets.SecretStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -47,6 +50,8 @@ class RollbackProjectTest {
     private final FakeManifestCatalog manifests = new FakeManifestCatalog();
     private final FakeProcessExecutor processExecutor = new FakeProcessExecutor();
     private final FakeHealthChecker healthChecker = new FakeHealthChecker();
+    private final FakeProjectEnvStore projectEnvStore = new FakeProjectEnvStore();
+    private final SecretStore secretStore = new IdentitySecretStore();
     private final RecordAudit recordAudit = mock(RecordAudit.class);
     private final RecordActivity recordActivity = mock(RecordActivity.class);
     private final UserDirectory users = mock(UserDirectory.class);
@@ -160,6 +165,8 @@ class RollbackProjectTest {
                 progress,
                 processExecutor,
                 healthChecker,
+                projectEnvStore,
+                secretStore,
                 recordAudit,
                 recordActivity,
                 users,
@@ -207,10 +214,17 @@ class RollbackProjectTest {
         int exitCode = 0;
         List<String> lines = List.of();
         List<String> lastArgv = List.of();
+        Map<String, String> lastEnvironment = Map.of();
 
         @Override
-        public int run(Path workingDirectory, List<String> argv, Consumer<String> onLine, Duration timeout) {
+        public int run(
+                Path workingDirectory,
+                List<String> argv,
+                Map<String, String> environment,
+                Consumer<String> onLine,
+                Duration timeout) {
             lastArgv = argv;
+            lastEnvironment = environment == null ? Map.of() : Map.copyOf(environment);
             lines.forEach(onLine);
             return exitCode;
         }
@@ -224,6 +238,44 @@ class RollbackProjectTest {
         public boolean check(String url, Duration timeout) {
             called = true;
             return result;
+        }
+    }
+
+    static final class FakeProjectEnvStore implements ProjectEnvStore {
+        @Override
+        public List<StoredProjectEnvVar> listByProject(String projectId) {
+            return List.of();
+        }
+
+        @Override
+        public Optional<StoredProjectEnvVar> findByProjectAndName(String projectId, String name) {
+            return Optional.empty();
+        }
+
+        @Override
+        public Optional<StoredProjectEnvVar> findById(UUID id) {
+            return Optional.empty();
+        }
+
+        @Override
+        public StoredProjectEnvVar upsert(StoredProjectEnvVar envVar) {
+            return envVar;
+        }
+
+        @Override
+        public void delete(String projectId, String name) {
+        }
+    }
+
+    static final class IdentitySecretStore implements SecretStore {
+        @Override
+        public String encrypt(String plaintext) {
+            return plaintext;
+        }
+
+        @Override
+        public String decrypt(String ciphertext) {
+            return ciphertext;
         }
     }
 }

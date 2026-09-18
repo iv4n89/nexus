@@ -83,7 +83,7 @@ public class GlobalExceptionHandler {
     private static HttpStatus statusFor(NexusErrorCode code) {
         return switch (code) {
             case PROJECT_NOT_FOUND, CONTAINER_NOT_FOUND, DEPLOYMENT_NOT_FOUND, ALERT_NOT_FOUND, MANIFEST_NOT_FOUND,
-                    DATABASE_NOT_FOUND, GITHUB_NOT_CONNECTED -> HttpStatus.NOT_FOUND;
+                    DATABASE_NOT_FOUND, GITHUB_NOT_CONNECTED, ENV_VAR_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case DEPLOYMENT_IN_PROGRESS, INVALID_TRANSITION, CONFIRMATION_REQUIRED -> HttpStatus.CONFLICT;
             case MANIFEST_INVALID, OPERATION_NOT_ALLOWED, AUTH_INVALID, QUERY_FAILED,
                     GITHUB_OAUTH_FAILED, GITHUB_OAUTH_STATE_INVALID -> HttpStatus.BAD_REQUEST;
