@@ -75,3 +75,11 @@ Session cookie + CSRF cookie (`XSRF-TOKEN` sent back as `X-XSRF-TOKEN`). `GET /a
 ## Limits
 
 Nexus shares the host with the apps it manages. If Nexus is down, Nexus cannot report that it is down. V1 accepts that and relies on Compose healthchecks plus an external watchdog later.
+
+## V1 product surface vs roadmap
+
+V1 is the **operations** control plane: Docker discovery, allowlisted deploy/rollback, logs, fingerprints, alerts, activity/audit, metrics, and the database manager. The hexagonal packages and `HexagonalArchitectureTest` allowlist must remain intact as later roadmap modules land (`github`, `secrets`, `domain`, `traffic`, `security`, `backup`, `terminal`).
+
+Caddy in `deployment/caddy/nexus.caddy` terminates TLS for Nexus itself. Per-project `domain → service` management, traffic aggregation, and certificate health checks are roadmap V1.6–V1.7 — not part of the V1 application ports yet.
+
+See [Nexus_Product_Roadmapnew.md](../Nexus_Product_Roadmapnew.md) for the full Personal VPS Control Plane sequence and [README.md](../README.md) for the V1 readiness table and smoke checklist.
