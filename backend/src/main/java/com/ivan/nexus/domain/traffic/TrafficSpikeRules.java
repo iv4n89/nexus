@@ -27,7 +27,8 @@ public final class TrafficSpikeRules {
     }
 
     public static boolean volumeResolved(long requests, List<Long> baseline) {
-        return requests < VOLUME_RESOLVE_MULTIPLIER * median(baseline);
+        return requests < MIN_VOLUME_REQUESTS
+                || requests < VOLUME_RESOLVE_MULTIPLIER * median(baseline);
     }
 
     public static boolean fiveXxSpike(long requests, long fiveXx) {
@@ -36,6 +37,9 @@ public final class TrafficSpikeRules {
     }
 
     public static boolean fiveXxResolved(long requests, long fiveXx) {
+        if (requests <= 0) {
+            return fiveXx == 0;
+        }
         return (double) fiveXx / requests < FIVE_XX_RESOLVE_RATE && fiveXx < FIVE_XX_ABSOLUTE;
     }
 

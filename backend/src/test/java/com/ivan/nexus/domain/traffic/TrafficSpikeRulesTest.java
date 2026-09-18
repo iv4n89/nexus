@@ -29,6 +29,11 @@ class TrafficSpikeRulesTest {
     }
 
     @Test
+    void volumeResolvesBelowMinVolumeRequests() {
+        assertThat(TrafficSpikeRules.volumeResolved(29, baselineOf(1, 12))).isTrue();
+    }
+
+    @Test
     void fiveXxFiresOnRateOrAbsolute() {
         assertThat(TrafficSpikeRules.fiveXxSpike(10, 1)).isTrue();
         assertThat(TrafficSpikeRules.fiveXxSpike(100, 10)).isTrue();
@@ -39,6 +44,12 @@ class TrafficSpikeRulesTest {
     void fiveXxResolvesUnderTwoPercentAndUnder10() {
         assertThat(TrafficSpikeRules.fiveXxResolved(100, 1)).isTrue();
         assertThat(TrafficSpikeRules.fiveXxResolved(100, 3)).isFalse();
+    }
+
+    @Test
+    void fiveXxResolvedWithZeroRequests() {
+        assertThat(TrafficSpikeRules.fiveXxResolved(0, 0)).isTrue();
+        assertThat(TrafficSpikeRules.fiveXxResolved(0, 1)).isFalse();
     }
 
     private static List<Long> baselineOf(long value, int n) {
