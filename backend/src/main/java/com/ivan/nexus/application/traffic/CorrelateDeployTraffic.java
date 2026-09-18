@@ -5,12 +5,12 @@ import com.ivan.nexus.application.deployment.DeploymentStore;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
+import com.ivan.nexus.domain.shared.DomainException;
+import com.ivan.nexus.domain.shared.NexusErrorCode;
 import com.ivan.nexus.domain.traffic.DeployTrafficDelta;
 import com.ivan.nexus.domain.traffic.TrafficSnapshot;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -85,17 +85,17 @@ public class CorrelateDeployTraffic {
         if (deploymentId != null) {
             Deployment deployment = deployments
                     .findById(deploymentId)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND, "Deployment not found"));
+                    .orElseThrow(() -> new DomainException(
+                            NexusErrorCode.DEPLOYMENT_NOT_FOUND, "Deployment not found"));
             if (!projectId.equals(deployment.projectId())) {
-                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Deployment not found");
+                throw new DomainException(NexusErrorCode.DEPLOYMENT_NOT_FOUND, "Deployment not found");
             }
             return deployment;
         }
         return deployments.findProjectHistoryNewestFirst(projectId).stream()
                 .filter(d -> d.status() == DeploymentStatus.SUCCESS)
                 .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "No successful deployment found"));
+                .orElseThrow(() -> new DomainException(
+                        NexusErrorCode.DEPLOYMENT_NOT_FOUND, "No successful deployment found"));
     }
 }
