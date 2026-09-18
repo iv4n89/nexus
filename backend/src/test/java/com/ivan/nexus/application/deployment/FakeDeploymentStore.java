@@ -6,7 +6,6 @@ import com.ivan.nexus.domain.deployment.DeploymentTransitions;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,11 +76,11 @@ final class FakeDeploymentStore implements DeploymentStore {
 
     @Override
     public List<Deployment> findProjectHistoryNewestFirst(String projectId) {
-        return deployments.values().stream()
+        List<Deployment> history = new ArrayList<>();
+        deployments.values().stream()
                 .filter(deployment -> deployment.projectId().equals(projectId))
-                .sorted(Comparator.comparing(Deployment::startedAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
+                .forEach(history::add);
+        return history.reversed();
     }
 
     private Deployment required(UUID id) {
