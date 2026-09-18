@@ -152,6 +152,11 @@ export type AlertType =
   | 'ERROR_RATE'
   | 'DOCKER_HEALTH'
   | 'HTTP_HEALTH'
+  | 'BACKUP_FAILED'
+  | 'BACKUP_STALE'
+  | 'SECURITY_FINDING'
+  | 'TRAFFIC_SPIKE'
+  | 'TRAFFIC_5XX_SPIKE'
 
 export type Alert = {
   id: string
@@ -164,6 +169,63 @@ export type Alert = {
   acknowledgedAt: string | null
   resolvedAt: string | null
   type: AlertType
+}
+
+export type TrafficSeriesPoint = {
+  t: string
+  requests: number
+  status5xx: number
+  latencyAvgMs: number
+  latencyMaxMs: number | null
+}
+
+export type TrafficProjectRanking = {
+  projectId: string
+  requests: number
+  status5xx: number
+  latencyAvgMs: number
+}
+
+export type TrafficOverview = {
+  from: string
+  to: string
+  hours: number
+  requests: number
+  bytesOut: number
+  status2xx: number
+  status4xx: number
+  status5xx: number
+  latencyAvgMs: number
+  latencyMaxMs: number | null
+  series: TrafficSeriesPoint[]
+  projects: TrafficProjectRanking[]
+}
+
+export type TrafficServiceBreakdown = {
+  serviceId: string
+  requests: number
+  status5xx: number
+  latencyAvgMs: number
+  latencyMaxMs: number | null
+}
+
+export type ProjectTraffic = {
+  projectId: string
+  from: string
+  to: string
+  requests: number
+  bytesIn: number
+  bytesOut: number
+  status2xx: number
+  status3xx: number
+  status4xx: number
+  status5xx: number
+  latencyAvgMs: number
+  latencyP95Ms: number | null
+  latencyMaxMs: number | null
+  topEndpoints: { path: string; requests: number; latencyAvgMs: number }[]
+  series: TrafficSeriesPoint[]
+  services: TrafficServiceBreakdown[]
 }
 
 export type ActivityType =
