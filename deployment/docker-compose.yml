@@ -54,11 +54,15 @@ services:
       NEXUS_ADMIN_USERNAME: ${NEXUS_ADMIN_USERNAME:-admin}
       NEXUS_ADMIN_PASSWORD: ${NEXUS_ADMIN_PASSWORD:-}
       NEXUS_MANIFEST_ROOT: /srv/projects
+      # Compose projects (e.g. nexus) keep .env under /opt/<name>; allow reading those paths.
+      NEXUS_DOTENV_EXTRA_ROOTS: /opt
       NEXUS_VERSION: ${NEXUS_VERSION:-0.0.1-SNAPSHOT}
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /srv/projects:/srv/projects
+      # Read-only: project install dirs (/opt/nexus/.env, /opt/ava-assistant/.env, …)
+      - /opt:/opt:ro
     group_add:
       - "${DOCKER_GID:?set DOCKER_GID from the host docker socket gid}"
     depends_on:

@@ -46,5 +46,9 @@ class ProjectGroupingTest {
                 Map.of("com.docker.compose.project", "lab_dir"),
                 "other-id",
                 "lab-dir"));
+        assertEquals(
+                "/opt/nexus",
+                ProjectGrouping.composeWorkingDir(Map.of(
+                        "com.docker.compose.project.working_dir", "/opt/nexus")));
     }
 }
