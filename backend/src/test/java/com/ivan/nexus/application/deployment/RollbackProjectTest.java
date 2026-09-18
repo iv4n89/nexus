@@ -2,10 +2,8 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
-import com.ivan.nexus.application.env.ProjectEnvStore;
-import com.ivan.nexus.application.env.StoredProjectEnvVar;
+import com.ivan.nexus.application.env.ProjectDotEnvStore;
 import com.ivan.nexus.application.manifest.FakeManifestCatalog;
-import com.ivan.nexus.application.secrets.SecretStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -50,8 +48,7 @@ class RollbackProjectTest {
     private final FakeManifestCatalog manifests = new FakeManifestCatalog();
     private final FakeProcessExecutor processExecutor = new FakeProcessExecutor();
     private final FakeHealthChecker healthChecker = new FakeHealthChecker();
-    private final FakeProjectEnvStore projectEnvStore = new FakeProjectEnvStore();
-    private final SecretStore secretStore = new IdentitySecretStore();
+    private final FakeProjectDotEnvStore projectDotEnvStore = new FakeProjectDotEnvStore();
     private final RecordAudit recordAudit = mock(RecordAudit.class);
     private final RecordActivity recordActivity = mock(RecordActivity.class);
     private final UserDirectory users = mock(UserDirectory.class);
@@ -165,8 +162,7 @@ class RollbackProjectTest {
                 progress,
                 processExecutor,
                 healthChecker,
-                projectEnvStore,
-                secretStore,
+                projectDotEnvStore,
                 recordAudit,
                 recordActivity,
                 users,
@@ -241,41 +237,14 @@ class RollbackProjectTest {
         }
     }
 
-    static final class FakeProjectEnvStore implements ProjectEnvStore {
+    static final class FakeProjectDotEnvStore implements ProjectDotEnvStore {
         @Override
-        public List<StoredProjectEnvVar> listByProject(String projectId) {
-            return List.of();
+        public Map<String, String> read(String projectId) {
+            return Map.of();
         }
 
         @Override
-        public Optional<StoredProjectEnvVar> findByProjectAndName(String projectId, String name) {
-            return Optional.empty();
-        }
-
-        @Override
-        public Optional<StoredProjectEnvVar> findById(UUID id) {
-            return Optional.empty();
-        }
-
-        @Override
-        public StoredProjectEnvVar upsert(StoredProjectEnvVar envVar) {
-            return envVar;
-        }
-
-        @Override
-        public void delete(String projectId, String name) {
-        }
-    }
-
-    static final class IdentitySecretStore implements SecretStore {
-        @Override
-        public String encrypt(String plaintext) {
-            return plaintext;
-        }
-
-        @Override
-        public String decrypt(String ciphertext) {
-            return ciphertext;
+        public void write(String projectId, Map<String, String> values) {
         }
     }
 }

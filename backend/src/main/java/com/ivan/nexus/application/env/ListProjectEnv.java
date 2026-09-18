@@ -1,37 +1,46 @@
 package com.ivan.nexus.application.env;
 
-import com.ivan.nexus.application.secrets.SecretStore;
+import com.ivan.nexus.domain.env.DotEnvParser;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class ListProjectEnv {
-    private final ProjectEnvStore store;
-    private final SecretStore secretStore;
+    private final ProjectDotEnvStore dotEnvStore;
 
-    public ListProjectEnv(ProjectEnvStore store, SecretStore secretStore) {
-        this.store = store;
-        this.secretStore = secretStore;
+    public ListProjectEnv(ProjectDotEnvStore dotEnvStore) {
+        this.dotEnvStore = dotEnvStore;
     }
 
-    @Transactional(readOnly = true)
     public List<ProjectEnvVarView> execute(String projectId) {
-        return store.listByProject(projectId).stream()
-                .map(this::toMaskedView)
+        Instant now = Instant.now();
+        return dotEnvStore.read(projectId).entrySet().stream()
+                .map(entry -> toView(projectId, entry.getKey(), entry.getValue(), now))
                 .toList();
     }
 
-    private ProjectEnvVarView toMaskedView(StoredProjectEnvVar stored) {
-        String value = stored.secret() ? null : secretStore.decrypt(stored.encryptedValue());
+    static ProjectEnvVarView toView(String projectId, String name, String value, Instant at) {
+        boolean secret = DotEnvParser.looksSecret(name);
         return new ProjectEnvVarView(
-                stored.id(),
-                stored.projectId(),
-                stored.name(),
-                stored.secret(),
-                value,
-                stored.createdAt(),
-                stored.updatedAt());
+                stableId(projectId, name),
+                projectId,
+                name,
+                secret,
+                secret ? null : value,
+                at,
+                at);
+    }
+
+    static UUID stableId(String projectId, String name) {
+        return UUID.nameUUIDFromBytes((projectId + ":" + name).getBytes(StandardCharsets.UTF_8));
+    }
+
+    static Map<String, String> readMutable(ProjectDotEnvStore store, String projectId) {
+        return new java.util.LinkedHashMap<>(store.read(projectId));
     }
 }

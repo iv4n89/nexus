@@ -1,5 +1,6 @@
 package com.ivan.nexus.domain.project;
 
+import java.util.Locale;
 import java.util.Map;
 
 public final class ProjectGrouping {
@@ -34,6 +35,38 @@ public final class ProjectGrouping {
             return composeService;
         }
         return stripLeadingSlash(containerName);
+    }
+
+    /** Lowercase and treat {@code -} / {@code _} as equivalent. */
+    public static String normalize(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.trim().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+
+    public static boolean matches(String left, String right) {
+        if (left == null || right == null) {
+            return false;
+        }
+        if (left.equals(right)) {
+            return true;
+        }
+        String a = normalize(left);
+        String b = normalize(right);
+        return !a.isEmpty() && a.equals(b);
+    }
+
+    public static boolean belongsTo(
+            String containerName,
+            Map<String, String> labels,
+            String projectId,
+            String directoryName) {
+        String grouped = projectId(containerName, labels);
+        if (matches(grouped, projectId)) {
+            return true;
+        }
+        return directoryName != null && !directoryName.isBlank() && matches(grouped, directoryName);
     }
 
     private static String stripLeadingSlash(String name) {

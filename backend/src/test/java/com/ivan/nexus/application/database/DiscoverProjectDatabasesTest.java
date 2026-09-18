@@ -1,5 +1,7 @@
 package com.ivan.nexus.application.database;
 
+import com.ivan.nexus.application.env.ProjectDotEnvStore;
+import com.ivan.nexus.application.manifest.FakeManifestCatalog;
 import com.ivan.nexus.application.project.ContainerInspect;
 import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.application.project.PublishedPort;
@@ -7,12 +9,16 @@ import com.ivan.nexus.domain.container.ContainerSnapshot;
 import com.ivan.nexus.domain.database.DatabaseEngine;
 import com.ivan.nexus.domain.database.DatabaseInstance;
 import com.ivan.nexus.domain.database.DatabaseStatus;
+import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,13 +28,15 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DiscoverProjectDatabasesTest {
 
+    @TempDir
+    Path tempDir;
+
     @Test
     void discoversReadyLabPostgresAndNexusComposePostgres() {
-        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory(
+        DiscoverProjectDatabases discover = discover(inventory(
                 inspect(
                         "aaaaaaaaaaaa0000",
                         "lab-db-1",
@@ -75,8 +83,78 @@ class DiscoverProjectDatabasesTest {
     }
 
     @Test
+    void matchesNormalizedComposeProjectId() {
+        Path projectDir = tempDir.resolve("foo-bar");
+        FakeManifestCatalog manifests = new FakeManifestCatalog()
+                .add("foo-bar", manifest("foo-bar", projectDir), projectDir.resolve("nexus.yml"));
+        FakeDotEnvStore env = new FakeDotEnvStore();
+        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(
+                inventory(inspect(
+                        "aaaaaaaaaaaa0000",
+                        "foo_bar-db-1",
+                        "postgres:16-alpine",
+                        Map.of(
+                                "com.docker.compose.project", "foo_bar",
+                                "com.docker.compose.service", "db"),
+                        Map.of("POSTGRES_PASSWORD", "secret", "POSTGRES_DB", "app"),
+                        List.of(new PublishedPort(5432, 15432, "0.0.0.0")),
+                        List.of())),
+                env,
+                manifests);
+
+        List<DatabaseInstance> instances = discover.execute("foo-bar");
+        assertEquals(1, instances.size());
+        assertEquals(DatabaseStatus.READY, instances.getFirst().status());
+    }
+
+    @Test
+    void fillsPasswordFromProjectDotEnv() {
+        FakeDotEnvStore env = new FakeDotEnvStore();
+        env.write("lab", Map.of("POSTGRES_PASSWORD", "from-dotenv", "POSTGRES_DB", "lab"));
+        DiscoverProjectDatabases discover = discover(
+                inventory(inspect(
+                        "aaaaaaaaaaaa0000",
+                        "lab-db-1",
+                        "postgres:16-alpine",
+                        Map.of("nexus.project", "lab", "nexus.service", "db"),
+                        Map.of("POSTGRES_USER", "lab", "POSTGRES_DB", "lab"),
+                        List.of(new PublishedPort(5432, 15432, "0.0.0.0")),
+                        List.of())),
+                env);
+
+        InstanceResolution resolution = discover.resolve("lab", "lab:aaaaaaaaaaaa");
+        assertEquals(DatabaseStatus.READY, resolution.instance().status());
+        assertEquals("from-dotenv", resolution.target().password());
+    }
+
+    @Test
+    void parsesDatabaseUrlFromDotEnv() {
+        FakeDotEnvStore env = new FakeDotEnvStore();
+        env.write("lab", Map.of(
+                "DATABASE_URL", "postgres://app:s3cret@db.internal:5432/appdb"));
+        DiscoverProjectDatabases discover = discover(
+                inventory(inspect(
+                        "aaaaaaaaaaaa0000",
+                        "lab-db-1",
+                        "postgres:16-alpine",
+                        Map.of("nexus.project", "lab", "nexus.service", "db"),
+                        Map.of(),
+                        List.of(),
+                        List.of())),
+                env);
+
+        InstanceResolution resolution = discover.resolve("lab", "lab:aaaaaaaaaaaa");
+        assertEquals(DatabaseStatus.READY, resolution.instance().status());
+        assertEquals("db.internal", resolution.target().host());
+        assertEquals(5432, resolution.target().port());
+        assertEquals("app", resolution.target().username());
+        assertEquals("s3cret", resolution.target().password());
+        assertEquals("appdb", resolution.target().defaultDatabase());
+    }
+
+    @Test
     void resolveReturnsTargetForReadyInstance() {
-        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory(
+        DiscoverProjectDatabases discover = discover(inventory(
                 inspect(
                         "aaaaaaaaaaaa0000",
                         "lab-db-1",
@@ -94,7 +172,7 @@ class DiscoverProjectDatabasesTest {
 
     @Test
     void missingPasswordIsUnreachableWithNullTarget() {
-        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory(
+        DiscoverProjectDatabases discover = discover(inventory(
                 inspect(
                         "aaaaaaaaaaaa0000",
                         "lab-db-1",
@@ -111,7 +189,7 @@ class DiscoverProjectDatabasesTest {
 
     @Test
     void unknownDatabaseThrowsNotFound() {
-        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory());
+        DiscoverProjectDatabases discover = discover(inventory());
         DomainException ex = assertThrows(DomainException.class, () -> discover.resolve("lab", "lab:missing"));
         assertEquals(NexusErrorCode.DATABASE_NOT_FOUND, ex.getCode());
     }
@@ -136,7 +214,7 @@ class DiscoverProjectDatabasesTest {
                         List.of(new PublishedPort(80, 18081, "0.0.0.0")),
                         List.of()));
 
-        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory);
+        DiscoverProjectDatabases discover = discover(inventory);
         List<DatabaseInstance> instances = discover.execute("lab");
 
         assertEquals(1, instances.size());
@@ -155,7 +233,7 @@ class DiscoverProjectDatabasesTest {
                         Map.of("POSTGRES_PASSWORD", "p", "POSTGRES_DB", "lab"),
                         List.of(new PublishedPort(5432, 15432, "0.0.0.0")),
                         List.of()));
-        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory);
+        DiscoverProjectDatabases discover = discover(inventory);
 
         discover.resolve("lab", "lab:aaaaaaaaaaaa");
         discover.resolve("lab", "lab:aaaaaaaaaaaa");
@@ -166,7 +244,7 @@ class DiscoverProjectDatabasesTest {
 
     @Test
     void usesContainerIpWhenNoPublishedPort() {
-        DiscoverProjectDatabases discover = new DiscoverProjectDatabases(inventory(
+        DiscoverProjectDatabases discover = discover(inventory(
                 inspect(
                         "aaaaaaaaaaaa0000",
                         "lab-db-1",
@@ -180,6 +258,47 @@ class DiscoverProjectDatabasesTest {
         assertEquals("172.18.0.2", resolution.target().host());
         assertEquals(5432, resolution.target().port());
         assertEquals(DatabaseStatus.READY, resolution.instance().status());
+    }
+
+    @Test
+    void prefersPublishedLocalhostOverDotEnvHost() {
+        FakeDotEnvStore env = new FakeDotEnvStore();
+        env.write("lab", Map.of(
+                "POSTGRES_PASSWORD", "p",
+                "DB_HOST", "db.example.com"));
+        DiscoverProjectDatabases discover = discover(
+                inventory(inspect(
+                        "aaaaaaaaaaaa0000",
+                        "lab-db-1",
+                        "postgres:16-alpine",
+                        Map.of("nexus.project", "lab", "nexus.service", "db"),
+                        Map.of(),
+                        List.of(new PublishedPort(5432, 15432, "0.0.0.0")),
+                        List.of())),
+                env);
+
+        InstanceResolution resolution = discover.resolve("lab", "lab:aaaaaaaaaaaa");
+        assertEquals("127.0.0.1", resolution.target().host());
+        assertEquals(15432, resolution.target().port());
+    }
+
+    private DiscoverProjectDatabases discover(ContainerInventory inventory) {
+        return discover(inventory, new FakeDotEnvStore());
+    }
+
+    private DiscoverProjectDatabases discover(ContainerInventory inventory, ProjectDotEnvStore env) {
+        return new DiscoverProjectDatabases(inventory, env, new FakeManifestCatalog());
+    }
+
+    private static ProjectManifest manifest(String id, Path workingDirectory) {
+        return new ProjectManifest(
+                new ProjectManifest.ProjectBlock(
+                        id, id, null, workingDirectory.toAbsolutePath().toString()),
+                List.of(),
+                new ProjectManifest.CommandBlock("./deploy.sh"),
+                null,
+                null,
+                null);
     }
 
     private static CountingInventory countingInventory(ContainerInspect... inspects) {
@@ -260,5 +379,19 @@ class DiscoverProjectDatabasesTest {
                 List.of(),
                 0,
                 Instant.parse("2026-01-01T00:00:01Z"));
+    }
+
+    static final class FakeDotEnvStore implements ProjectDotEnvStore {
+        private final Map<String, Map<String, String>> byProject = new LinkedHashMap<>();
+
+        @Override
+        public Map<String, String> read(String projectId) {
+            return Map.copyOf(byProject.getOrDefault(projectId, Map.of()));
+        }
+
+        @Override
+        public void write(String projectId, Map<String, String> values) {
+            byProject.put(projectId, Map.copyOf(values));
+        }
     }
 }

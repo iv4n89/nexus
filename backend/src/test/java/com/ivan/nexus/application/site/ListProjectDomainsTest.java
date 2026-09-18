@@ -19,16 +19,16 @@ import static org.mockito.Mockito.verify;
 class ListProjectDomainsTest {
 
     @Mock
-    DomainStore domains;
+    SyncProjectDomainsFromEnv sync;
 
     @Test
-    void delegatesToStore() {
+    void delegatesToSync() {
         Instant now = Instant.parse("2026-01-01T00:00:00Z");
         SiteDomain domain = new SiteDomain(
                 UUID.randomUUID(), "lab", "app.example.com", "api", 8080, now, now, CertStatus.PENDING);
-        given(domains.findByProjectId("lab")).willReturn(List.of(domain));
+        given(sync.execute("lab")).willReturn(List.of(domain));
 
-        assertThat(new ListProjectDomains(domains).execute("lab")).containsExactly(domain);
-        verify(domains).findByProjectId("lab");
+        assertThat(new ListProjectDomains(sync).execute("lab")).containsExactly(domain);
+        verify(sync).execute("lab");
     }
 }

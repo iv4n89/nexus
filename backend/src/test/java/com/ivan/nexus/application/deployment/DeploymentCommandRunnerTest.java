@@ -2,8 +2,7 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
-import com.ivan.nexus.application.env.ProjectEnvStore;
-import com.ivan.nexus.application.secrets.SecretStore;
+import com.ivan.nexus.application.env.ProjectDotEnvStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -18,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executor;
@@ -65,12 +65,11 @@ class DeploymentCommandRunnerTest {
         when(process.run(any(), any(), any(), any(), any())).thenReturn(0);
         when(users.findIdByUsername("admin")).thenReturn(Optional.of(userId));
 
-        ProjectEnvStore projectEnvStore = mock(ProjectEnvStore.class);
-        SecretStore secretStore = mock(SecretStore.class);
-        when(projectEnvStore.listByProject("lab")).thenReturn(List.of());
+        ProjectDotEnvStore projectDotEnvStore = mock(ProjectDotEnvStore.class);
+        when(projectDotEnvStore.read("lab")).thenReturn(Map.of());
 
         DeploymentCommandRunner runner = new DeploymentCommandRunner(
-                projects, deployments, progress, process, health, projectEnvStore, secretStore,
+                projects, deployments, progress, process, health, projectDotEnvStore,
                 audit, activity, users, executor);
 
         Deployment started = runner.start(

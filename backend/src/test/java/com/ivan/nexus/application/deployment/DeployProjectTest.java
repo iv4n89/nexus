@@ -2,10 +2,8 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
-import com.ivan.nexus.application.env.ProjectEnvStore;
-import com.ivan.nexus.application.env.StoredProjectEnvVar;
+import com.ivan.nexus.application.env.ProjectDotEnvStore;
 import com.ivan.nexus.application.manifest.FakeManifestCatalog;
-import com.ivan.nexus.application.secrets.SecretStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -21,7 +19,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,8 +47,7 @@ class DeployProjectTest {
     private final FakeManifestCatalog manifests = new FakeManifestCatalog();
     private final FakeProcessExecutor processExecutor = new FakeProcessExecutor();
     private final FakeHealthChecker healthChecker = new FakeHealthChecker();
-    private final FakeProjectEnvStore projectEnvStore = new FakeProjectEnvStore();
-    private final SecretStore secretStore = new IdentitySecretStore();
+    private final FakeProjectDotEnvStore projectDotEnvStore = new FakeProjectDotEnvStore();
     private final RecordAudit recordAudit = mock(RecordAudit.class);
     private final RecordActivity recordActivity = mock(RecordActivity.class);
     private final UserDirectory users = mock(UserDirectory.class);
@@ -249,8 +245,7 @@ void recordsCommitShaFromGitHubBranchHeadWhenLinked() throws Exception {
                 progress,
                 processExecutor,
                 healthChecker,
-                projectEnvStore,
-                secretStore,
+                projectDotEnvStore,
                 recordAudit,
                 recordActivity,
                 users,
@@ -266,11 +261,9 @@ void recordsCommitShaFromGitHubBranchHeadWhenLinked() throws Exception {
     @Test
     void injectsProjectEnvIntoProcessAndRedactsSecretFromLogs() throws Exception {
         writeLabManifest(null);
-        Instant now = Instant.parse("2026-09-18T10:00:00Z");
-        projectEnvStore.put("lab", new StoredProjectEnvVar(
-                UUID.randomUUID(), "lab", "API_KEY", "super-secret", true, now, now));
-        projectEnvStore.put("lab", new StoredProjectEnvVar(
-                UUID.randomUUID(), "lab", "NODE_ENV", "production", false, now, now));
+        projectDotEnvStore.write("lab", Map.of(
+                "API_KEY", "super-secret",
+                "NODE_ENV", "production"));
         processExecutor.exitCode = 0;
         processExecutor.lines = List.of("using API_KEY=super-secret");
 
@@ -291,8 +284,7 @@ void recordsCommitShaFromGitHubBranchHeadWhenLinked() throws Exception {
                 progress,
                 processExecutor,
                 healthChecker,
-                projectEnvStore,
-                secretStore,
+                projectDotEnvStore,
                 recordAudit,
                 recordActivity,
                 users,
@@ -364,52 +356,17 @@ void recordsCommitShaFromGitHubBranchHeadWhenLinked() throws Exception {
         }
     }
 
-    static final class FakeProjectEnvStore implements ProjectEnvStore {
-        private final Map<String, List<StoredProjectEnvVar>> byProject = new ConcurrentHashMap<>();
+    static final class FakeProjectDotEnvStore implements ProjectDotEnvStore {
+        private final Map<String, Map<String, String>> byProject = new ConcurrentHashMap<>();
 
-        void put(String projectId, StoredProjectEnvVar envVar) {
-            byProject.computeIfAbsent(projectId, key -> new CopyOnWriteArrayList<>()).add(envVar);
+        @Override
+        public Map<String, String> read(String projectId) {
+            return Map.copyOf(byProject.getOrDefault(projectId, Map.of()));
         }
 
         @Override
-        public List<StoredProjectEnvVar> listByProject(String projectId) {
-            return List.copyOf(byProject.getOrDefault(projectId, List.of()));
-        }
-
-        @Override
-        public Optional<StoredProjectEnvVar> findByProjectAndName(String projectId, String name) {
-            return listByProject(projectId).stream().filter(v -> v.name().equals(name)).findFirst();
-        }
-
-        @Override
-        public Optional<StoredProjectEnvVar> findById(UUID id) {
-            return byProject.values().stream().flatMap(List::stream).filter(v -> v.id().equals(id)).findFirst();
-        }
-
-        @Override
-        public StoredProjectEnvVar upsert(StoredProjectEnvVar envVar) {
-            put(envVar.projectId(), envVar);
-            return envVar;
-        }
-
-        @Override
-        public void delete(String projectId, String name) {
-            byProject.computeIfPresent(projectId, (key, list) -> {
-                list.removeIf(v -> v.name().equals(name));
-                return list;
-            });
-        }
-    }
-
-    static final class IdentitySecretStore implements SecretStore {
-        @Override
-        public String encrypt(String plaintext) {
-            return plaintext;
-        }
-
-        @Override
-        public String decrypt(String ciphertext) {
-            return ciphertext;
+        public void write(String projectId, Map<String, String> values) {
+            byProject.put(projectId, Map.copyOf(values));
         }
     }
 }

@@ -3,6 +3,7 @@ package com.ivan.nexus.interfaces.site;
 import com.ivan.nexus.application.site.AddDomain;
 import com.ivan.nexus.application.site.ListProjectDomains;
 import com.ivan.nexus.application.site.RemoveDomain;
+import com.ivan.nexus.application.site.SyncProjectDomainsFromEnv;
 import com.ivan.nexus.domain.site.CertStatus;
 import com.ivan.nexus.domain.site.SiteDomain;
 import com.ivan.nexus.infrastructure.security.ClientIp;
@@ -28,19 +29,29 @@ public class DomainController {
     private final ListProjectDomains listProjectDomains;
     private final AddDomain addDomain;
     private final RemoveDomain removeDomain;
+    private final SyncProjectDomainsFromEnv syncProjectDomainsFromEnv;
 
     public DomainController(
             ListProjectDomains listProjectDomains,
             AddDomain addDomain,
-            RemoveDomain removeDomain) {
+            RemoveDomain removeDomain,
+            SyncProjectDomainsFromEnv syncProjectDomainsFromEnv) {
         this.listProjectDomains = listProjectDomains;
         this.addDomain = addDomain;
         this.removeDomain = removeDomain;
+        this.syncProjectDomainsFromEnv = syncProjectDomainsFromEnv;
     }
 
     @GetMapping
     public List<DomainResponse> list(@PathVariable String projectId) {
         return listProjectDomains.execute(projectId).stream()
+                .map(DomainResponse::from)
+                .toList();
+    }
+
+    @PostMapping("/sync")
+    public List<DomainResponse> sync(@PathVariable String projectId) {
+        return syncProjectDomainsFromEnv.execute(projectId).stream()
                 .map(DomainResponse::from)
                 .toList();
     }

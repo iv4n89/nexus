@@ -3,6 +3,7 @@ package com.ivan.nexus.interfaces.site;
 import com.ivan.nexus.application.site.AddDomain;
 import com.ivan.nexus.application.site.ListProjectDomains;
 import com.ivan.nexus.application.site.RemoveDomain;
+import com.ivan.nexus.application.site.SyncProjectDomainsFromEnv;
 import com.ivan.nexus.domain.site.CertStatus;
 import com.ivan.nexus.domain.site.SiteDomain;
 import com.ivan.nexus.infrastructure.security.SecurityConfig;
@@ -47,6 +48,9 @@ class DomainControllerTest {
 
     @MockitoBean
     RemoveDomain removeDomain;
+
+    @MockitoBean
+    SyncProjectDomainsFromEnv syncProjectDomainsFromEnv;
 
     @Test
     @WithMockUser(username = "viewer", roles = "VIEWER")
@@ -103,5 +107,26 @@ class DomainControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(removeDomain).execute(eq("lab"), eq(id), eq("admin"), any());
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminPostSyncReturns200() throws Exception {
+        UUID id = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        Instant now = Instant.parse("2026-09-18T10:00:00Z");
+        given(syncProjectDomainsFromEnv.execute("lab")).willReturn(List.of(
+                new SiteDomain(id, "lab", "app.example.com", "app", 80, now, now, CertStatus.PENDING)));
+
+        mockMvc.perform(post("/api/projects/lab/domains/sync").with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].hostname").value("app.example.com"));
+    }
+
+    @Test
+    @WithMockUser(username = "viewer", roles = "VIEWER")
+    void viewerPostSyncReturns403() throws Exception {
+        mockMvc.perform(post("/api/projects/lab/domains/sync").with(csrf()))
+                .andExpect(status().isForbidden());
+        verify(syncProjectDomainsFromEnv, never()).execute(any());
     }
 }

@@ -8,39 +8,39 @@ import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.UUID;
 
 @Service
 public class DeleteProjectEnv {
-    private final ProjectEnvStore store;
+    private final ProjectDotEnvStore dotEnvStore;
     private final RecordAudit recordAudit;
     private final RecordActivity recordActivity;
     private final UserDirectory users;
 
     public DeleteProjectEnv(
-            ProjectEnvStore store,
+            ProjectDotEnvStore dotEnvStore,
             RecordAudit recordAudit,
             RecordActivity recordActivity,
             UserDirectory users) {
-        this.store = store;
+        this.dotEnvStore = dotEnvStore;
         this.recordAudit = recordAudit;
         this.recordActivity = recordActivity;
         this.users = users;
     }
 
-    @Transactional
     public void execute(String projectId, String name, String username, String ip) {
         String normalizedName = UpsertProjectEnv.requireName(name);
-        if (store.findByProjectAndName(projectId, normalizedName).isEmpty()) {
+        Map<String, String> values = ListProjectEnv.readMutable(dotEnvStore, projectId);
+        if (!values.containsKey(normalizedName)) {
             throw new DomainException(NexusErrorCode.ENV_VAR_NOT_FOUND, "Environment variable not found");
         }
-        store.delete(projectId, normalizedName);
+        values.remove(normalizedName);
+        dotEnvStore.write(projectId, values);
 
         UUID userId = users.findIdByUsername(username).orElse(null);
-        Map<String, Object> metadata = Map.of("name", normalizedName, "operation", "delete");
+        Map<String, Object> metadata = Map.of("name", normalizedName, "operation", "delete", "source", "dotenv");
         recordAudit.execute(userId, AuditAction.CONFIG_CHANGE, projectId, null, ip, metadata);
         recordActivity.execute(
                 ActivityType.CONFIG_CHANGED,

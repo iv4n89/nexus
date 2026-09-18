@@ -2,9 +2,7 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
-import com.ivan.nexus.application.env.ProjectEnvStore;
-import com.ivan.nexus.application.env.StoredProjectEnvVar;
-import com.ivan.nexus.application.secrets.SecretStore;
+import com.ivan.nexus.application.env.ProjectDotEnvStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -35,8 +33,7 @@ final class DeploymentCommandRunner {
     private final DeploymentProgress progress;
     private final ProcessExecutor processExecutor;
     private final HealthChecker healthChecker;
-    private final ProjectEnvStore projectEnvStore;
-    private final SecretStore secretStore;
+    private final ProjectDotEnvStore projectDotEnvStore;
     private final RecordAudit recordAudit;
     private final RecordActivity recordActivity;
     private final UserDirectory users;
@@ -48,8 +45,7 @@ final class DeploymentCommandRunner {
             DeploymentProgress progress,
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
-            ProjectEnvStore projectEnvStore,
-            SecretStore secretStore,
+            ProjectDotEnvStore projectDotEnvStore,
             RecordAudit recordAudit,
             RecordActivity recordActivity,
             UserDirectory users,
@@ -59,8 +55,7 @@ final class DeploymentCommandRunner {
         this.progress = progress;
         this.processExecutor = processExecutor;
         this.healthChecker = healthChecker;
-        this.projectEnvStore = projectEnvStore;
-        this.secretStore = secretStore;
+        this.projectDotEnvStore = projectDotEnvStore;
         this.recordAudit = recordAudit;
         this.recordActivity = recordActivity;
         this.users = users;
@@ -172,11 +167,7 @@ final class DeploymentCommandRunner {
     }
 
     private Map<String, String> loadEnvironment(String projectId) {
-        Map<String, String> environment = new LinkedHashMap<>();
-        for (StoredProjectEnvVar envVar : projectEnvStore.listByProject(projectId)) {
-            environment.put(envVar.name(), secretStore.decrypt(envVar.encryptedValue()));
-        }
-        return environment;
+        return new LinkedHashMap<>(projectDotEnvStore.read(projectId));
     }
 
     private void finish(
