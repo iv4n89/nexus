@@ -64,7 +64,12 @@ public class DiscoverProjectDatabases {
         if (cached != null && cached.fresh()) {
             return cached.items();
         }
-        Map<String, String> projectEnv = dotEnvStore.read(projectId);
+        Map<String, String> projectEnv;
+        try {
+            projectEnv = dotEnvStore.read(projectId);
+        } catch (RuntimeException ex) {
+            projectEnv = Map.of();
+        }
         String directoryName = directoryName(projectId);
         List<InstanceResolution> found = new ArrayList<>();
         for (ContainerSnapshot snapshot : inventory.listAll()) {

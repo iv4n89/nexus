@@ -7,6 +7,7 @@ public final class ProjectGrouping {
 
     private static final String NEXUS_PROJECT = "nexus.project";
     private static final String COMPOSE_PROJECT = "com.docker.compose.project";
+    private static final String COMPOSE_WORKING_DIR = "com.docker.compose.project.working_dir";
     private static final String NEXUS_SERVICE = "nexus.service";
     private static final String COMPOSE_SERVICE = "com.docker.compose.service";
 
@@ -35,6 +36,18 @@ public final class ProjectGrouping {
             return composeService;
         }
         return stripLeadingSlash(containerName);
+    }
+
+    /** Compose project directory on the host (where {@code .env} usually lives). */
+    public static String composeWorkingDir(Map<String, String> labels) {
+        if (labels == null) {
+            return null;
+        }
+        String value = labels.get(COMPOSE_WORKING_DIR);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     /** Lowercase and treat {@code -} / {@code _} as equivalent. */
