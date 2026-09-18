@@ -9,6 +9,7 @@ public class NexusProperties {
     private final Retention retention = new Retention();
     private final GitHub github = new GitHub();
     private final Secrets secrets = new Secrets();
+    private final Terminal terminal = new Terminal();
 
     public Docker getDocker() {
         return docker;
@@ -28,6 +29,10 @@ public class NexusProperties {
 
     public Secrets getSecrets() {
         return secrets;
+    }
+
+    public Terminal getTerminal() {
+        return terminal;
     }
 
     public static class Docker {
@@ -132,6 +137,27 @@ public class NexusProperties {
 
         public void setKey(String key) {
             this.key = key;
+        }
+    }
+
+    public static class Terminal {
+        private boolean enabled = false;
+        private int sessionTimeoutMinutes = 15;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getSessionTimeoutMinutes() {
+            return sessionTimeoutMinutes;
+        }
+
+        public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) {
+            this.sessionTimeoutMinutes = sessionTimeoutMinutes;
         }
     }
 }
