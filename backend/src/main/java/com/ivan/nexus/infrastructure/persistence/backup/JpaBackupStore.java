@@ -5,6 +5,8 @@ import com.ivan.nexus.domain.backup.Backup;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 @Component
 public class JpaBackupStore implements BackupStore {
@@ -22,8 +24,18 @@ public class JpaBackupStore implements BackupStore {
     }
 
     @Override
+    public Optional<Backup> findById(UUID id) {
+        return repository.findById(id).map(JpaBackupStore::toDomain);
+    }
+
+    @Override
     public Backup save(Backup backup) {
         return toDomain(repository.save(toEntity(backup)));
+    }
+
+    @Override
+    public void delete(UUID id) {
+        repository.deleteById(id);
     }
 
     private static BackupEntity toEntity(Backup backup) {

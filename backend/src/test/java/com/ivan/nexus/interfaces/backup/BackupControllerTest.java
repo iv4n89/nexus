@@ -2,6 +2,7 @@ package com.ivan.nexus.interfaces.backup;
 
 import com.ivan.nexus.application.backup.GetBackupPolicy;
 import com.ivan.nexus.application.backup.ListBackups;
+import com.ivan.nexus.application.backup.RestoreBackup;
 import com.ivan.nexus.application.backup.UpsertBackupPolicy;
 import com.ivan.nexus.domain.backup.Backup;
 import com.ivan.nexus.domain.backup.BackupKind;
@@ -25,11 +26,13 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -49,6 +52,9 @@ class BackupControllerTest {
 
     @MockitoBean
     ListBackups listBackups;
+
+    @MockitoBean
+    RestoreBackup restoreBackup;
 
     @Test
     @WithMockUser(roles = "VIEWER")
@@ -152,5 +158,46 @@ class BackupControllerTest {
                 .andExpect(jsonPath("$[0].kind").value("SCHEDULED"))
                 .andExpect(jsonPath("$[0].includesDb").value(true))
                 .andExpect(jsonPath("$[0].includesVolumes").value(false));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminRestoresBackupWithConfirmation() throws Exception {
+        UUID backupId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        UUID safetyId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        Backup restored = new Backup(
+                backupId, "lab", BackupStatus.SUCCESS, BackupKind.SCHEDULED,
+                Instant.parse("2026-09-18T03:00:00Z"), Instant.parse("2026-09-18T03:05:00Z"),
+                "file:///tmp/a.dump", "ok", true, false);
+        Backup safety = new Backup(
+                safetyId, "lab", BackupStatus.SUCCESS, BackupKind.SAFETY,
+                Instant.parse("2026-09-18T12:00:00Z"), Instant.parse("2026-09-18T12:01:00Z"),
+                "file:///tmp/s.dump", "safety", true, false);
+        given(restoreBackup.execute(eq("lab"), eq(backupId), eq(true), eq("user"), any()))
+                .willReturn(new RestoreBackup.RestoreResult(restored, safety, true));
+
+        mockMvc.perform(post("/api/projects/lab/backups/{backupId}/restore", backupId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"confirm\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.backupId").value(backupId.toString()))
+                .andExpect(jsonPath("$.safetyBackupId").value(safetyId.toString()))
+                .andExpect(jsonPath("$.healthy").value(true));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void restoreWithoutConfirmReturnsConflict() throws Exception {
+        UUID backupId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        given(restoreBackup.execute(eq("lab"), eq(backupId), eq(false), eq("user"), any()))
+                .willThrow(new DomainException(NexusErrorCode.CONFIRMATION_REQUIRED, "Confirmation required"));
+
+        mockMvc.perform(post("/api/projects/lab/backups/{backupId}/restore", backupId)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"confirm\":false}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("CONFIRMATION_REQUIRED"));
     }
 }

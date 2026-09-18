@@ -8,5 +8,7 @@ public enum AlertType {
     ERROR_RATE,
     DOCKER_HEALTH,
     HTTP_HEALTH,
+    BACKUP_FAILED,
+    BACKUP_STALE,
     SECURITY_FINDING
 }

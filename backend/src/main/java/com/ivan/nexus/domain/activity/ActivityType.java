@@ -20,5 +20,6 @@ public enum ActivityType {
     DOMAIN_REMOVED,
     BACKUP_COMPLETED,
     BACKUP_FAILED,
+    BACKUP_RESTORED,
     TRAFFIC_DEPLOY_DELTA
 }

@@ -123,10 +123,6 @@ public class NexusProperties {
         private String clientSecret = "";
         private String redirectUri = "";
         private String webhookSecret = "";
-        /** When true, runs {@link com.ivan.nexus.application.github.ScheduledGitHubSync}. */
-        private boolean syncEnabled;
-        /** Every 15 minutes by default (Spring 6-field cron). */
-        private String syncCron = "0 */15 * * * *";
 
         public String getClientId() {
             return clientId;
@@ -159,22 +155,6 @@ public class NexusProperties {
         public void setWebhookSecret(String webhookSecret) {
             this.webhookSecret = webhookSecret;
         }
-
-        public boolean isSyncEnabled() {
-            return syncEnabled;
-        }
-
-        public void setSyncEnabled(boolean syncEnabled) {
-            this.syncEnabled = syncEnabled;
-        }
-
-        public String getSyncCron() {
-            return syncCron;
-        }
-
-        public void setSyncCron(String syncCron) {
-            this.syncCron = syncCron;
-        }
     }
 
     public static class Secrets {
@@ -194,7 +174,11 @@ public class NexusProperties {
         private boolean schedulerEnabled;
         private String localPath = "/var/lib/nexus/backups";
         private String pgDumpExecutable = "pg_dump";
+        private String pgRestoreExecutable = "pg_restore";
+        /** Daily backup at 03:00 UTC by default. */
         private String cron = "0 0 3 * * *";
+        private String retentionCron = "0 30 3 * * *";
+        private final S3 s3 = new S3();
 
         public boolean isEnabled() {
             return enabled;
@@ -228,12 +212,62 @@ public class NexusProperties {
             this.pgDumpExecutable = pgDumpExecutable;
         }
 
+        public String getPgRestoreExecutable() {
+            return pgRestoreExecutable;
+        }
+
+        public void setPgRestoreExecutable(String pgRestoreExecutable) {
+            this.pgRestoreExecutable = pgRestoreExecutable;
+        }
+
         public String getCron() {
             return cron;
         }
 
         public void setCron(String cron) {
             this.cron = cron;
+        }
+
+        public String getRetentionCron() {
+            return retentionCron;
+        }
+
+        public void setRetentionCron(String retentionCron) {
+            this.retentionCron = retentionCron;
+        }
+
+        public S3 getS3() {
+            return s3;
+        }
+
+        public static class S3 {
+            private boolean enabled;
+            private String endpoint = "";
+            private String bucket = "";
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public String getEndpoint() {
+                return endpoint;
+            }
+
+            public void setEndpoint(String endpoint) {
+                this.endpoint = endpoint;
+            }
+
+            public String getBucket() {
+                return bucket;
+            }
+
+            public void setBucket(String bucket) {
+                this.bucket = bucket;
+            }
         }
     }
 
@@ -426,9 +460,7 @@ public class NexusProperties {
         }
     }
 
-    /**
-     * Deploy pipeline orchestration flags (H1). All default OFF.
-     */
+
     public static class Automation {
         private boolean securityGateEnabled;
         private boolean trafficWatchEnabled;
