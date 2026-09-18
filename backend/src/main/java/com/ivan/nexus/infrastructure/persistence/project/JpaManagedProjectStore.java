@@ -8,6 +8,7 @@ import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -42,11 +43,40 @@ public class JpaManagedProjectStore implements ManagedProjectStore {
                 .filter(entity -> entity.getGithubOwner() != null
                         && entity.getGithubRepo() != null
                         && entity.getGithubBranch() != null)
-                .map(entity -> new ProjectGitHubLink(
-                        entity.getId(),
-                        entity.getGithubOwner(),
-                        entity.getGithubRepo(),
-                        entity.getGithubBranch()));
+                .map(JpaManagedProjectStore::toLink);
+    }
+
+    @Override
+    public List<ProjectGitHubLink> findByGitHubRepository(String owner, String repo, String branch) {
+        return repository.findByGithubOwnerAndGithubRepoAndGithubBranch(owner, repo, branch).stream()
+                .map(JpaManagedProjectStore::toLink)
+                .toList();
+    }
+
+    @Override
+    public void updateLastRemoteSha(String projectId, String sha) {
+        int updated = repository.updateLastRemoteSha(projectId, sha);
+        if (updated == 0) {
+            throw new DomainException(NexusErrorCode.PROJECT_NOT_FOUND, "Project not found");
+        }
+    }
+
+    @Override
+    public void setAutodeployEnabled(String projectId, boolean enabled) {
+        int updated = repository.setAutodeployEnabled(projectId, enabled);
+        if (updated == 0) {
+            throw new DomainException(NexusErrorCode.PROJECT_NOT_FOUND, "Project not found");
+        }
+    }
+
+    private static ProjectGitHubLink toLink(ManagedProjectEntity entity) {
+        return new ProjectGitHubLink(
+                entity.getId(),
+                entity.getGithubOwner(),
+                entity.getGithubRepo(),
+                entity.getGithubBranch(),
+                entity.isAutodeployEnabled(),
+                entity.getGithubLastRemoteSha());
     }
 
     static String blankToId(String name, String id) {

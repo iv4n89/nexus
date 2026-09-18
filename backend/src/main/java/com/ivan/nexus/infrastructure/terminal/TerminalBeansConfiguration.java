@@ -1,6 +1,7 @@
 package com.ivan.nexus.infrastructure.terminal;
 
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.project.ContainerInventory;
 import com.ivan.nexus.application.terminal.TerminalSessionManager;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.infrastructure.config.NexusProperties;
@@ -20,8 +21,10 @@ public class TerminalBeansConfiguration {
     TerminalSessionManager terminalSessionManager(
             RecordAudit recordAudit,
             UserDirectory users,
+            ContainerInventory inventory,
             NexusProperties properties) {
         int minutes = Math.max(1, properties.getTerminal().getSessionTimeoutMinutes());
-        return ProcessTerminalSessionManager.createDefault(recordAudit, users, Duration.ofMinutes(minutes));
+        return ProcessTerminalSessionManager.createDefault(
+                recordAudit, users, inventory, Duration.ofMinutes(minutes));
     }
 }
