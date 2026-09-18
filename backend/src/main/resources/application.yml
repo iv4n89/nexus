@@ -55,6 +55,9 @@ nexus:
     client-id: ${NEXUS_GITHUB_CLIENT_ID:}
     client-secret: ${NEXUS_GITHUB_CLIENT_SECRET:}
     redirect-uri: ${NEXUS_GITHUB_REDIRECT_URI:}
+    # H4: optional stub sync every 15 minutes (disabled by default)
+    sync-enabled: ${NEXUS_GITHUB_SYNC_ENABLED:false}
+    sync-cron: ${NEXUS_GITHUB_SYNC_CRON:0 */15 * * * *}
   secrets:
     key: ${NEXUS_SECRETS_KEY:}
   backup:
@@ -62,7 +65,8 @@ nexus:
     scheduler-enabled: ${NEXUS_BACKUP_SCHEDULER_ENABLED:false}
     local-path: ${NEXUS_BACKUP_LOCAL_PATH:/var/lib/nexus/backups}
     pg-dump-executable: ${NEXUS_PG_DUMP_EXECUTABLE:pg_dump}
-    cron: ${NEXUS_BACKUP_CRON:0 0 2 * * *}
+    # H4: daily backups at 03:00 UTC
+    cron: ${NEXUS_BACKUP_CRON:0 0 3 * * *}
   security:
     trivy:
       enabled: ${NEXUS_TRIVY_ENABLED:false}
@@ -70,7 +74,13 @@ nexus:
       executable: ${NEXUS_TRIVY_EXECUTABLE:trivy}
       mode: ${NEXUS_TRIVY_MODE:fs}
       image-ref: ${NEXUS_TRIVY_IMAGE_REF:}
+      # H4: security scans at 04:00 UTC
       cron: ${NEXUS_TRIVY_CRON:0 0 4 * * *}
+  # H1: deploy pipeline orchestration — all flags OFF by default
+  automation:
+    security-gate-enabled: ${NEXUS_AUTOMATION_SECURITY_GATE:false}
+    traffic-watch-enabled: ${NEXUS_AUTOMATION_TRAFFIC_WATCH:false}
+    post-deploy-backup-enabled: ${NEXUS_AUTOMATION_POST_DEPLOY_BACKUP:false}
   terminal:
     enabled: ${NEXUS_TERMINAL_ENABLED:false}
     session-timeout-minutes: ${NEXUS_TERMINAL_TIMEOUT_MINUTES:15}

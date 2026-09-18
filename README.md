@@ -81,6 +81,19 @@ npm run dev
 
 Open http://localhost:3000 and sign in as `admin` / `changeme`. Copy `.env.example` for the local variable set. Tests: `cd backend && ./mvnw test`.
 
+## Schedulers (H4)
+
+Spring 6-field crons (seconds first). Defaults:
+
+| Job | Property | Default | Flag |
+|-----|----------|---------|------|
+| Retention cleanup | `nexus.retention.cron` | `0 0 3 * * *` (03:00) | always on |
+| Backups | `nexus.backup.cron` | `0 0 3 * * *` (03:00) | `nexus.backup.scheduler-enabled` |
+| Security (Trivy) | `nexus.security.trivy.cron` | `0 0 4 * * *` (04:00) | `nexus.security.trivy.scheduler-enabled` |
+| GitHub sync stub | `nexus.github.sync-cron` | `0 */15 * * * *` (every 15m) | `nexus.github.sync-enabled` |
+
+Deploy pipeline orchestration (`RunDeployPipeline`) is controlled by `nexus.automation.*` flags (security gate, traffic watch stub, post-deploy backup) — all **OFF** by default.
+
 ## Deployment
 
 Production stack: Nginx + Next.js standalone + Spring Boot + PostgreSQL. The backend mounts the **Docker socket** (host-root equivalent) and bind-mounts `/srv/projects` at the **same host path** so deploy scripts see the paths in `nexus.yml`.

@@ -13,6 +13,7 @@ public class NexusProperties {
     private final Security security = new Security();
     private final Terminal terminal = new Terminal();
     private final Caddy caddy = new Caddy();
+    private final Automation automation = new Automation();
 
     public Docker getDocker() {
         return docker;
@@ -48,6 +49,10 @@ public class NexusProperties {
 
     public Caddy getCaddy() {
         return caddy;
+    }
+
+    public Automation getAutomation() {
+        return automation;
     }
 
     public static class Docker {
@@ -117,6 +122,10 @@ public class NexusProperties {
         private String clientId = "";
         private String clientSecret = "";
         private String redirectUri = "";
+        /** When true, runs {@link com.ivan.nexus.application.github.ScheduledGitHubSync}. */
+        private boolean syncEnabled;
+        /** Every 15 minutes by default (Spring 6-field cron). */
+        private String syncCron = "0 */15 * * * *";
 
         public String getClientId() {
             return clientId;
@@ -141,6 +150,22 @@ public class NexusProperties {
         public void setRedirectUri(String redirectUri) {
             this.redirectUri = redirectUri;
         }
+
+        public boolean isSyncEnabled() {
+            return syncEnabled;
+        }
+
+        public void setSyncEnabled(boolean syncEnabled) {
+            this.syncEnabled = syncEnabled;
+        }
+
+        public String getSyncCron() {
+            return syncCron;
+        }
+
+        public void setSyncCron(String syncCron) {
+            this.syncCron = syncCron;
+        }
     }
 
     public static class Secrets {
@@ -160,7 +185,7 @@ public class NexusProperties {
         private boolean schedulerEnabled;
         private String localPath = "/var/lib/nexus/backups";
         private String pgDumpExecutable = "pg_dump";
-        private String cron = "0 0 2 * * *";
+        private String cron = "0 0 3 * * *";
 
         public boolean isEnabled() {
             return enabled;
@@ -309,6 +334,39 @@ public class NexusProperties {
 
         public void setSitesPath(String sitesPath) {
             this.sitesPath = sitesPath;
+        }
+    }
+
+    /**
+     * Deploy pipeline orchestration flags (H1). All default OFF.
+     */
+    public static class Automation {
+        private boolean securityGateEnabled;
+        private boolean trafficWatchEnabled;
+        private boolean postDeployBackupEnabled;
+
+        public boolean isSecurityGateEnabled() {
+            return securityGateEnabled;
+        }
+
+        public void setSecurityGateEnabled(boolean securityGateEnabled) {
+            this.securityGateEnabled = securityGateEnabled;
+        }
+
+        public boolean isTrafficWatchEnabled() {
+            return trafficWatchEnabled;
+        }
+
+        public void setTrafficWatchEnabled(boolean trafficWatchEnabled) {
+            this.trafficWatchEnabled = trafficWatchEnabled;
+        }
+
+        public boolean isPostDeployBackupEnabled() {
+            return postDeployBackupEnabled;
+        }
+
+        public void setPostDeployBackupEnabled(boolean postDeployBackupEnabled) {
+            this.postDeployBackupEnabled = postDeployBackupEnabled;
         }
     }
 }

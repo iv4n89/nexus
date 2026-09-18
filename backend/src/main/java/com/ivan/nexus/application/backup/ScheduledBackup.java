@@ -28,7 +28,7 @@ public class ScheduledBackup {
         this.runBackup = runBackup;
     }
 
-    @Scheduled(cron = "${nexus.backup.cron:0 0 2 * * *}")
+    @Scheduled(cron = "${nexus.backup.cron:0 0 3 * * *}")
     public void execute() {
         for (String projectId : manifests.discoverProjectIds()) {
             BackupPolicy policy = policies.findByProjectId(projectId).orElse(null);
