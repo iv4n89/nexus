@@ -125,11 +125,11 @@ class DeploymentPersistenceIT {
                 Path.of("/tmp/store-race"),
                 Path.of("/tmp/store-race/nexus.yml"));
         UUID firstId = UUID.randomUUID();
-        deploymentStore.createPending(firstId, projectId, "admin", "deploy");
+        deploymentStore.createPending(firstId, projectId, "admin", "deploy", null);
         deploymentStore.markRunning(firstId, java.time.Instant.now());
 
         assertThatThrownBy(() ->
-                deploymentStore.createPending(UUID.randomUUID(), projectId, "admin", "rollback"))
+                deploymentStore.createPending(UUID.randomUUID(), projectId, "admin", "rollback", null))
                 .isInstanceOf(DomainException.class)
                 .hasMessage("Deployment already in progress")
                 .extracting(ex -> ((DomainException) ex).getCode())

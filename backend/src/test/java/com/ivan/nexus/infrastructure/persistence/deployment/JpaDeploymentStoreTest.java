@@ -38,7 +38,7 @@ class JpaDeploymentStoreTest {
         when(repository.saveAndFlush(org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Deployment result = store.createPending(id, "lab", "admin", "rollback");
+        Deployment result = store.createPending(id, "lab", "admin", "rollback", null);
 
         ArgumentCaptor<DeploymentEntity> captor = ArgumentCaptor.forClass(DeploymentEntity.class);
         verify(repository).saveAndFlush(captor.capture());
@@ -54,7 +54,7 @@ class JpaDeploymentStoreTest {
                 .thenThrow(new DataIntegrityViolationException(
                         "duplicate key value violates unique constraint \"uq_deployments_running\""));
 
-        assertThatThrownBy(() -> store.createPending(UUID.randomUUID(), "lab", "admin", "deploy"))
+        assertThatThrownBy(() -> store.createPending(UUID.randomUUID(), "lab", "admin", "deploy", null))
                 .isInstanceOf(DomainException.class)
                 .hasMessage("Deployment already in progress")
                 .extracting(ex -> ((DomainException) ex).getCode())
@@ -66,8 +66,22 @@ class JpaDeploymentStoreTest {
         DataIntegrityViolationException failure = new DataIntegrityViolationException("projects_fk");
         when(repository.saveAndFlush(org.mockito.ArgumentMatchers.any())).thenThrow(failure);
 
-        assertThatThrownBy(() -> store.createPending(UUID.randomUUID(), "missing", "admin", "deploy"))
+        assertThatThrownBy(() -> store.createPending(UUID.randomUUID(), "missing", "admin", "deploy", null))
                 .isSameAs(failure);
+    }
+
+    @Test
+    void storesCommitShaOnCreatePending() {
+        UUID id = UUID.randomUUID();
+        when(repository.saveAndFlush(org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Deployment result = store.createPending(id, "lab", "admin", "deploy", "abc123");
+
+        assertThat(result.commitSha()).isEqualTo("abc123");
+        ArgumentCaptor<DeploymentEntity> captor = ArgumentCaptor.forClass(DeploymentEntity.class);
+        verify(repository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getCommitSha()).isEqualTo("abc123");
     }
 
     @Test

@@ -15,4 +15,9 @@ public interface GitHubClient {
     List<GitHubRepositorySummary> listRepositories(String accessToken);
 
     List<GitHubBranchSummary> listBranches(String accessToken, String owner, String repo);
+
+    /**
+     * Returns the commit SHA at the tip of {@code branch}.
+     */
+    String getBranchHead(String accessToken, String owner, String repo, String branch);
 }

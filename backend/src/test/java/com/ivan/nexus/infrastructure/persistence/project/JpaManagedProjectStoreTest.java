@@ -10,6 +10,7 @@ import java.util.List;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class JpaManagedProjectStoreTest {
     private ManagedProjectJpaRepository repository;
@@ -49,6 +50,15 @@ class JpaManagedProjectStoreTest {
                 "second",
                 "/srv/lab",
                 "/srv/lab/custom.yml");
+    }
+
+    @Test
+    void linksGitHubCoordinates() {
+        when(repository.linkGitHub("lab", "octo", "lab-repo", "main")).thenReturn(1);
+
+        store.linkGitHub("lab", "octo", "lab-repo", "main");
+
+        verify(repository).linkGitHub("lab", "octo", "lab-repo", "main");
     }
 
     private static ProjectManifest manifest(String name, String description) {

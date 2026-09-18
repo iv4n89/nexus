@@ -33,6 +33,15 @@ public class ManagedProjectEntity {
     @Column(name = "manifest_path", nullable = false)
     private String manifestPath;
 
+    @Column(name = "github_owner", length = 255)
+    private String githubOwner;
+
+    @Column(name = "github_repo", length = 255)
+    private String githubRepo;
+
+    @Column(name = "github_branch", length = 255)
+    private String githubBranch;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -96,6 +105,18 @@ public class ManagedProjectEntity {
 
     public String getManifestPath() {
         return manifestPath;
+    }
+
+    public String getGithubOwner() {
+        return githubOwner;
+    }
+
+    public String getGithubRepo() {
+        return githubRepo;
+    }
+
+    public String getGithubBranch() {
+        return githubBranch;
     }
 
     public Instant getCreatedAt() {

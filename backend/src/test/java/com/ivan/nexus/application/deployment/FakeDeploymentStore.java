@@ -26,11 +26,11 @@ final class FakeDeploymentStore implements DeploymentStore {
     }
 
     @Override
-    public Deployment createPending(UUID id, String projectId, String triggeredBy, String kind) {
+    public Deployment createPending(UUID id, String projectId, String triggeredBy, String kind, String commitSha) {
         calls.add("pending:" + id);
         Deployment deployment = new Deployment(
                 id, projectId, DeploymentStatus.PENDING, null, null, triggeredBy,
-                null, null, null, null, kind);
+                commitSha, null, null, null, kind);
         deployments.put(id, deployment);
         return deployment;
     }

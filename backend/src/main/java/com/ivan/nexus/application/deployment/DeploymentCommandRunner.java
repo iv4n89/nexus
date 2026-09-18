@@ -74,7 +74,8 @@ final class DeploymentCommandRunner {
             Path manifestPath,
             String command,
             String kind,
-            AuditAction auditAction) {
+            AuditAction auditAction,
+            String commitSha) {
         if (deployments.hasActiveDeployment(projectId)) {
             throw new DomainException(NexusErrorCode.DEPLOYMENT_IN_PROGRESS, "Deployment already in progress");
         }
@@ -84,7 +85,7 @@ final class DeploymentCommandRunner {
         projects.upsert(manifest, workingDirectory, normalizedManifestPath);
 
         UUID id = UUID.randomUUID();
-        deployments.createPending(id, projectId, username, kind);
+        deployments.createPending(id, projectId, username, kind, commitSha);
         Deployment snapshot = deployments.markRunning(id, Instant.now());
 
         sseExecutor.execute(() -> runAsync(id, manifest, workingDirectory, command, kind, auditAction, username));

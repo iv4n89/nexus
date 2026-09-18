@@ -1,5 +1,7 @@
 package com.ivan.nexus.interfaces.project;
 
+import com.ivan.nexus.application.github.GetProjectGitHubStatus;
+import com.ivan.nexus.application.github.ProjectGitHubStatusView;
 import com.ivan.nexus.application.log.GetRecentErrors;
 import com.ivan.nexus.application.project.DiscoverProjects;
 import com.ivan.nexus.application.project.GetProject;
@@ -21,16 +23,19 @@ public class ProjectController {
     private final GetProject getProject;
     private final GetProjectServices getProjectServices;
     private final GetRecentErrors getRecentErrors;
+    private final GetProjectGitHubStatus getProjectGitHubStatus;
 
     public ProjectController(
             DiscoverProjects discoverProjects,
             GetProject getProject,
             GetProjectServices getProjectServices,
-            GetRecentErrors getRecentErrors) {
+            GetRecentErrors getRecentErrors,
+            GetProjectGitHubStatus getProjectGitHubStatus) {
         this.discoverProjects = discoverProjects;
         this.getProject = getProject;
         this.getProjectServices = getProjectServices;
         this.getRecentErrors = getRecentErrors;
+        this.getProjectGitHubStatus = getProjectGitHubStatus;
     }
 
     @GetMapping
@@ -45,6 +50,11 @@ public class ProjectController {
                 result.project(),
                 result.containers().stream().map(GetProjectServices::toService).toList(),
                 getRecentErrors.execute(id));
+    }
+
+    @GetMapping("/{id}/github-status")
+    public GitHubStatusResponse githubStatus(@PathVariable String id) {
+        return GitHubStatusResponse.from(getProjectGitHubStatus.execute(id));
     }
 
     @GetMapping("/{id}/errors")
@@ -127,6 +137,26 @@ public class ProjectController {
                     service.state(),
                     service.status(),
                     service.health());
+        }
+    }
+
+    public record GitHubStatusResponse(
+            String projectId,
+            String owner,
+            String repo,
+            String branch,
+            String remoteHeadSha,
+            String deployedCommitSha,
+            boolean upToDate) {
+        static GitHubStatusResponse from(ProjectGitHubStatusView view) {
+            return new GitHubStatusResponse(
+                    view.projectId(),
+                    view.owner(),
+                    view.repo(),
+                    view.branch(),
+                    view.remoteHeadSha(),
+                    view.deployedCommitSha(),
+                    view.upToDate());
         }
     }
 }

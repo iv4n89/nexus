@@ -31,4 +31,20 @@ interface ManagedProjectJpaRepository extends JpaRepository<ManagedProjectEntity
             @Param("description") String description,
             @Param("workingDirectory") String workingDirectory,
             @Param("manifestPath") String manifestPath);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query(value = """
+            UPDATE projects
+            SET github_owner = :owner,
+                github_repo = :repo,
+                github_branch = :branch,
+                updated_at = clock_timestamp()
+            WHERE id = :projectId
+            """, nativeQuery = true)
+    int linkGitHub(
+            @Param("projectId") String projectId,
+            @Param("owner") String owner,
+            @Param("repo") String repo,
+            @Param("branch") String branch);
 }
