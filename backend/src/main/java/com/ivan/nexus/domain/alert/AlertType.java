@@ -7,5 +7,6 @@ public enum AlertType {
     DISK,
     ERROR_RATE,
     DOCKER_HEALTH,
-    HTTP_HEALTH
+    HTTP_HEALTH,
+    SECURITY_FINDING
 }

@@ -71,6 +71,11 @@ nexus:
       mode: ${NEXUS_TRIVY_MODE:fs}
       image-ref: ${NEXUS_TRIVY_IMAGE_REF:}
       cron: ${NEXUS_TRIVY_CRON:0 0 4 * * *}
+    npm-audit:
+      enabled: ${NEXUS_NPM_AUDIT_ENABLED:false}
+      executable: ${NEXUS_NPM_EXECUTABLE:npm}
+    llm:
+      enabled: ${NEXUS_SECURITY_LLM_ENABLED:false}
   terminal:
     enabled: ${NEXUS_TERMINAL_ENABLED:false}
     session-timeout-minutes: ${NEXUS_TERMINAL_TIMEOUT_MINUTES:15}
