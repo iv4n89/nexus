@@ -142,6 +142,8 @@ export type ActivityType =
   | 'ALERT_CREATED'
   | 'ALERT_RESOLVED'
   | 'HEALTH_CHECK_FAILED'
+  | 'BACKUP_COMPLETED'
+  | 'BACKUP_FAILED'
 
 export type ActivityEvent = {
   id: string
