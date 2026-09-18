@@ -45,6 +45,16 @@ export type SiteDomain = {
   certStatus: 'PENDING' | 'ACTIVE' | 'ERROR' | 'UNKNOWN'
 }
 
+export type ProjectEnvVar = {
+  id: string
+  projectId: string
+  name: string
+  secret: boolean
+  value: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type RecentError = {
   serviceId: string
   sampleMessage: string
@@ -174,6 +184,7 @@ export type ActivityType =
   | 'DOMAIN_REMOVED'
   | 'BACKUP_COMPLETED'
   | 'BACKUP_FAILED'
+  | 'CONFIG_CHANGED'
 
 export type ActivityEvent = {
   id: string

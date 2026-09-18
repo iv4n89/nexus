@@ -10,6 +10,7 @@ import { me } from '@/features/auth/api'
 import { RollbackDialog } from '@/features/deployments/rollback-dialog'
 import { ErrorList, logsHref } from '@/features/logs/error-list'
 import { ProjectDomainsSection } from '@/features/projects/project-domains-section'
+import { ProjectEnvSection } from '@/features/projects/project-env-section'
 import { api } from '@/lib/api'
 import { containersForProject, displayName, projectLabel, serviceLabel } from '@/lib/docker'
 import { formatBytes, formatClock, formatElapsed, formatPercent, healthOkLabel } from '@/lib/format'
@@ -133,6 +134,7 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
   const canRollback = canDeploy
   const canAcknowledge = auth.data?.role === 'ADMIN'
   const canEditDomains = auth.data?.role === 'ADMIN'
+  const canEditEnv = auth.data?.role === 'ADMIN'
   const recentErrors = errors.data ?? project.data.recentErrors ?? []
   const projectAlerts = (alerts.data ?? []).filter((alert) => alert.projectId === projectId)
   const currentDeployment = history.data?.[0]
@@ -290,6 +292,8 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
           <p className="text-sm text-[#888]">No health data</p>
         )}
       </section>
+
+      <ProjectEnvSection projectId={projectId} canEdit={canEditEnv} />
 
       <ProjectDomainsSection projectId={projectId} canEdit={canEditDomains} />
 

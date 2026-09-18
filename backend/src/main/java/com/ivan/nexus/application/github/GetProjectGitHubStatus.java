@@ -33,11 +33,7 @@ public class GetProjectGitHubStatus {
                 .orElseThrow(() -> new DomainException(
                         NexusErrorCode.PROJECT_GITHUB_NOT_LINKED,
                         "Project is not linked to a GitHub repository"));
-        String remoteHeadSha = gitHubClient.getBranchHead(
-                accessToken.execute(),
-                link.owner(),
-                link.repo(),
-                link.branch());
+        String remoteHeadSha = resolveRemoteHeadSha(link);
         String deployedCommitSha = deployments.findProjectHistoryNewestFirst(projectId).stream()
                 .filter(deployment -> deployment.status() == DeploymentStatus.SUCCESS)
                 .map(Deployment::commitSha)
@@ -52,6 +48,18 @@ public class GetProjectGitHubStatus {
                 link.branch(),
                 remoteHeadSha,
                 deployedCommitSha,
-                upToDate);
+                upToDate,
+                link.autodeployEnabled());
+    }
+
+    private String resolveRemoteHeadSha(ProjectGitHubLink link) {
+        if (link.lastRemoteSha() != null && !link.lastRemoteSha().isBlank()) {
+            return link.lastRemoteSha();
+        }
+        return gitHubClient.getBranchHead(
+                accessToken.execute(),
+                link.owner(),
+                link.repo(),
+                link.branch());
     }
 }
