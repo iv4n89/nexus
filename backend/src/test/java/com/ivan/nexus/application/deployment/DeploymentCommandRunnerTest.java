@@ -2,6 +2,8 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.env.ProjectEnvStore;
+import com.ivan.nexus.application.secrets.SecretStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -60,11 +62,16 @@ class DeploymentCommandRunnerTest {
         when(deployments.findById(any()))
                 .thenAnswer(invocation -> Optional.of(deployment(
                         invocation.getArgument(0), DeploymentStatus.RUNNING, Instant.now())));
-        when(process.run(any(), any(), any(), any())).thenReturn(0);
+        when(process.run(any(), any(), any(), any(), any())).thenReturn(0);
         when(users.findIdByUsername("admin")).thenReturn(Optional.of(userId));
 
+        ProjectEnvStore projectEnvStore = mock(ProjectEnvStore.class);
+        SecretStore secretStore = mock(SecretStore.class);
+        when(projectEnvStore.listByProject("lab")).thenReturn(List.of());
+
         DeploymentCommandRunner runner = new DeploymentCommandRunner(
-                projects, deployments, progress, process, health, audit, activity, users, executor);
+                projects, deployments, progress, process, health, projectEnvStore, secretStore,
+                audit, activity, users, executor);
 
         Deployment started = runner.start(
                 "lab",
@@ -91,7 +98,7 @@ class DeploymentCommandRunnerTest {
                 eq(ActivityType.DEPLOYMENT_STARTED), eq("lab"), isNull(),
                 eq("deployment started"), any());
         order.verify(process).run(
-                eq(tempDir.toAbsolutePath().normalize()), any(), any(),
+                eq(tempDir.toAbsolutePath().normalize()), any(), any(), any(),
                 eq(DeploymentCommandRunner.SCRIPT_TIMEOUT));
         order.verify(deployments).recordExitCode(started.id(), 0);
         order.verify(progress).append(started.id(), "DEPLOYMENT SUCCESS");

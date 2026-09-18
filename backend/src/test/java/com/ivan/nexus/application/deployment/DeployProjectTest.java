@@ -2,7 +2,10 @@ package com.ivan.nexus.application.deployment;
 
 import com.ivan.nexus.application.activity.RecordActivity;
 import com.ivan.nexus.application.audit.RecordAudit;
+import com.ivan.nexus.application.env.ProjectEnvStore;
+import com.ivan.nexus.application.env.StoredProjectEnvVar;
 import com.ivan.nexus.application.manifest.FakeManifestCatalog;
+import com.ivan.nexus.application.secrets.SecretStore;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
@@ -18,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -46,6 +50,8 @@ class DeployProjectTest {
     private final FakeManifestCatalog manifests = new FakeManifestCatalog();
     private final FakeProcessExecutor processExecutor = new FakeProcessExecutor();
     private final FakeHealthChecker healthChecker = new FakeHealthChecker();
+    private final FakeProjectEnvStore projectEnvStore = new FakeProjectEnvStore();
+    private final SecretStore secretStore = new IdentitySecretStore();
     private final RecordAudit recordAudit = mock(RecordAudit.class);
     private final RecordActivity recordActivity = mock(RecordActivity.class);
     private final UserDirectory users = mock(UserDirectory.class);
@@ -221,7 +227,7 @@ class DeployProjectTest {
     }
 
     @Test
-    void recordsCommitShaFromGitHubBranchHeadWhenLinked() throws Exception {
+void recordsCommitShaFromGitHubBranchHeadWhenLinked() throws Exception {
         writeLabManifest(null);
         projects.upsert(
                 manifests.loadRequired("lab").manifest(),
@@ -243,6 +249,8 @@ class DeployProjectTest {
                 progress,
                 processExecutor,
                 healthChecker,
+                projectEnvStore,
+                secretStore,
                 recordAudit,
                 recordActivity,
                 users,
@@ -255,6 +263,26 @@ class DeployProjectTest {
         assertThat(deployments.deployments.get(started.id()).commitSha()).isEqualTo("deadbeef");
     }
 
+    @Test
+    void injectsProjectEnvIntoProcessAndRedactsSecretFromLogs() throws Exception {
+        writeLabManifest(null);
+        Instant now = Instant.parse("2026-09-18T10:00:00Z");
+        projectEnvStore.put("lab", new StoredProjectEnvVar(
+                UUID.randomUUID(), "lab", "API_KEY", "super-secret", true, now, now));
+        projectEnvStore.put("lab", new StoredProjectEnvVar(
+                UUID.randomUUID(), "lab", "NODE_ENV", "production", false, now, now));
+        processExecutor.exitCode = 0;
+        processExecutor.lines = List.of("using API_KEY=super-secret");
+
+        Deployment started = useCase.execute("lab", "admin");
+
+        assertThat(processExecutor.lastEnvironment)
+                .containsEntry("API_KEY", "super-secret")
+                .containsEntry("NODE_ENV", "production");
+        assertThat(hubLines.get(started.id())).contains("using API_KEY=***");
+        assertThat(hubLines.get(started.id()).toString()).doesNotContain("super-secret");
+    }
+
     private DeployProject useCaseWithExecutor(Executor executor) {
         return new DeployProject(
                 manifests,
@@ -263,6 +291,8 @@ class DeployProjectTest {
                 progress,
                 processExecutor,
                 healthChecker,
+                projectEnvStore,
+                secretStore,
                 recordAudit,
                 recordActivity,
                 users,
@@ -308,9 +338,16 @@ class DeployProjectTest {
     static final class FakeProcessExecutor implements ProcessExecutor {
         int exitCode = 0;
         List<String> lines = List.of();
+        Map<String, String> lastEnvironment = Map.of();
 
         @Override
-        public int run(Path workingDirectory, List<String> argv, Consumer<String> onLine, Duration timeout) {
+        public int run(
+                Path workingDirectory,
+                List<String> argv,
+                Map<String, String> environment,
+                Consumer<String> onLine,
+                Duration timeout) {
+            lastEnvironment = environment == null ? Map.of() : Map.copyOf(environment);
             lines.forEach(onLine);
             return exitCode;
         }
@@ -324,6 +361,55 @@ class DeployProjectTest {
         public boolean check(String url, Duration timeout) {
             called = true;
             return result;
+        }
+    }
+
+    static final class FakeProjectEnvStore implements ProjectEnvStore {
+        private final Map<String, List<StoredProjectEnvVar>> byProject = new ConcurrentHashMap<>();
+
+        void put(String projectId, StoredProjectEnvVar envVar) {
+            byProject.computeIfAbsent(projectId, key -> new CopyOnWriteArrayList<>()).add(envVar);
+        }
+
+        @Override
+        public List<StoredProjectEnvVar> listByProject(String projectId) {
+            return List.copyOf(byProject.getOrDefault(projectId, List.of()));
+        }
+
+        @Override
+        public Optional<StoredProjectEnvVar> findByProjectAndName(String projectId, String name) {
+            return listByProject(projectId).stream().filter(v -> v.name().equals(name)).findFirst();
+        }
+
+        @Override
+        public Optional<StoredProjectEnvVar> findById(UUID id) {
+            return byProject.values().stream().flatMap(List::stream).filter(v -> v.id().equals(id)).findFirst();
+        }
+
+        @Override
+        public StoredProjectEnvVar upsert(StoredProjectEnvVar envVar) {
+            put(envVar.projectId(), envVar);
+            return envVar;
+        }
+
+        @Override
+        public void delete(String projectId, String name) {
+            byProject.computeIfPresent(projectId, (key, list) -> {
+                list.removeIf(v -> v.name().equals(name));
+                return list;
+            });
+        }
+    }
+
+    static final class IdentitySecretStore implements SecretStore {
+        @Override
+        public String encrypt(String plaintext) {
+            return plaintext;
+        }
+
+        @Override
+        public String decrypt(String ciphertext) {
+            return ciphertext;
         }
     }
 }

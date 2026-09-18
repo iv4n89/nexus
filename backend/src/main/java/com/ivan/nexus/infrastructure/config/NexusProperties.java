@@ -11,6 +11,7 @@ public class NexusProperties {
     private final Secrets secrets = new Secrets();
     private final Backup backup = new Backup();
     private final Security security = new Security();
+    private final Terminal terminal = new Terminal();
 
     public Docker getDocker() {
         return docker;
@@ -38,6 +39,10 @@ public class NexusProperties {
 
     public Security getSecurity() {
         return security;
+    }
+
+    public Terminal getTerminal() {
+        return terminal;
     }
 
     public static class Docker {
@@ -257,6 +262,27 @@ public class NexusProperties {
             public void setCron(String cron) {
                 this.cron = cron;
             }
+        }
+    }
+
+    public static class Terminal {
+        private boolean enabled = false;
+        private int sessionTimeoutMinutes = 15;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getSessionTimeoutMinutes() {
+            return sessionTimeoutMinutes;
+        }
+
+        public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) {
+            this.sessionTimeoutMinutes = sessionTimeoutMinutes;
         }
     }
 }
