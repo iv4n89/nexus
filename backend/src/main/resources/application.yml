@@ -58,6 +58,7 @@ nexus:
     client-id: ${NEXUS_GITHUB_CLIENT_ID:}
     client-secret: ${NEXUS_GITHUB_CLIENT_SECRET:}
     redirect-uri: ${NEXUS_GITHUB_REDIRECT_URI:}
+    webhook-secret: ${NEXUS_GITHUB_WEBHOOK_SECRET:}
   secrets:
     key: ${NEXUS_SECRETS_KEY:}
   backup:
@@ -82,6 +83,7 @@ nexus:
   terminal:
     enabled: ${NEXUS_TERMINAL_ENABLED:false}
     session-timeout-minutes: ${NEXUS_TERMINAL_TIMEOUT_MINUTES:15}
+    allowed-origins: []
   caddy:
     enabled: ${NEXUS_CADDY_ENABLED:false}
     sites-path: ${NEXUS_CADDY_SITES_PATH:/opt/nexus/caddy/sites}

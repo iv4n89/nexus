@@ -3,6 +3,7 @@ package com.ivan.nexus.interfaces.env;
 import com.ivan.nexus.application.env.DeleteProjectEnv;
 import com.ivan.nexus.application.env.ListProjectEnv;
 import com.ivan.nexus.application.env.ProjectEnvVarView;
+import com.ivan.nexus.application.env.RotateProjectEnv;
 import com.ivan.nexus.application.env.UpsertProjectEnv;
 import com.ivan.nexus.infrastructure.security.ClientIp;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,14 +26,17 @@ import java.util.UUID;
 public class ProjectEnvController {
     private final ListProjectEnv listProjectEnv;
     private final UpsertProjectEnv upsertProjectEnv;
+    private final RotateProjectEnv rotateProjectEnv;
     private final DeleteProjectEnv deleteProjectEnv;
 
     public ProjectEnvController(
             ListProjectEnv listProjectEnv,
             UpsertProjectEnv upsertProjectEnv,
+            RotateProjectEnv rotateProjectEnv,
             DeleteProjectEnv deleteProjectEnv) {
         this.listProjectEnv = listProjectEnv;
         this.upsertProjectEnv = upsertProjectEnv;
+        this.rotateProjectEnv = rotateProjectEnv;
         this.deleteProjectEnv = deleteProjectEnv;
     }
 
@@ -56,6 +61,22 @@ public class ProjectEnvController {
         return EnvVarResponse.from(view);
     }
 
+    @PostMapping("/{name}/rotate")
+    public EnvVarResponse rotate(
+            @PathVariable String id,
+            @PathVariable String name,
+            @RequestBody RotateEnvRequest request,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        ProjectEnvVarView view = rotateProjectEnv.execute(
+                id,
+                name,
+                request.value(),
+                authentication.getName(),
+                ClientIp.resolve(httpRequest));
+        return EnvVarResponse.from(view);
+    }
+
     @DeleteMapping("/{name}")
     public void delete(
             @PathVariable String id,
@@ -66,6 +87,9 @@ public class ProjectEnvController {
     }
 
     public record UpsertEnvRequest(String name, String value, boolean secret) {
+    }
+
+    public record RotateEnvRequest(String value) {
     }
 
     public record EnvVarResponse(

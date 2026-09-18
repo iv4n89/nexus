@@ -42,6 +42,12 @@ public class ManagedProjectEntity {
     @Column(name = "github_branch", length = 255)
     private String githubBranch;
 
+    @Column(name = "autodeploy_enabled", nullable = false)
+    private boolean autodeployEnabled;
+
+    @Column(name = "github_last_remote_sha", length = 64)
+    private String githubLastRemoteSha;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -117,6 +123,14 @@ public class ManagedProjectEntity {
 
     public String getGithubBranch() {
         return githubBranch;
+    }
+
+    public boolean isAutodeployEnabled() {
+        return autodeployEnabled;
+    }
+
+    public String getGithubLastRemoteSha() {
+        return githubLastRemoteSha;
     }
 
     public Instant getCreatedAt() {
