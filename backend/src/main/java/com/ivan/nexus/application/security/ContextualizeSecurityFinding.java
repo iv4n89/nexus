@@ -1,10 +1,10 @@
 package com.ivan.nexus.application.security;
 
 import com.ivan.nexus.domain.security.SecurityFinding;
-import org.springframework.http.HttpStatus;
+import com.ivan.nexus.domain.shared.DomainException;
+import com.ivan.nexus.domain.shared.NexusErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -27,7 +27,8 @@ public class ContextualizeSecurityFinding {
         SecurityFinding finding = findings
                 .findById(findingId)
                 .filter(f -> projectId.equals(f.projectId()))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Finding not found"));
+                .orElseThrow(() -> new DomainException(
+                        NexusErrorCode.SECURITY_FINDING_NOT_FOUND, "Finding not found"));
 
         String prompt = buildPrompt(finding);
         String summary = llmClient.summarize(prompt);
