@@ -1,7 +1,9 @@
 package com.ivan.nexus.interfaces.project;
 
 import com.ivan.nexus.application.github.GetProjectGitHubStatus;
+import com.ivan.nexus.application.github.ProjectGitHubLink;
 import com.ivan.nexus.application.github.ProjectGitHubStatusView;
+import com.ivan.nexus.application.github.UpdateProjectGitHubSettings;
 import com.ivan.nexus.application.log.GetRecentErrors;
 import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.application.project.ContainerInventory;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -26,8 +29,12 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -50,6 +57,9 @@ class ProjectControllerTest {
 
     @MockitoBean
     GetProjectGitHubStatus getProjectGitHubStatus;
+
+    @MockitoBean
+    UpdateProjectGitHubSettings updateProjectGitHubSettings;
 
     @BeforeEach
     void setUpManifestCatalog() {
@@ -92,7 +102,7 @@ class ProjectControllerTest {
     @WithMockUser(roles = "VIEWER")
     void returnsGitHubStatusForLinkedProject() throws Exception {
         given(getProjectGitHubStatus.execute("lab")).willReturn(new ProjectGitHubStatusView(
-                "lab", "octo", "lab-repo", "main", "abc", "abc", true));
+                "lab", "octo", "lab-repo", "main", "abc", "abc", true, false));
 
         mockMvc.perform(get("/api/projects/lab/github-status"))
                 .andExpect(status().isOk())
@@ -102,7 +112,23 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.branch").value("main"))
                 .andExpect(jsonPath("$.remoteHeadSha").value("abc"))
                 .andExpect(jsonPath("$.deployedCommitSha").value("abc"))
-                .andExpect(jsonPath("$.upToDate").value(true));
+                .andExpect(jsonPath("$.upToDate").value(true))
+                .andExpect(jsonPath("$.autodeployEnabled").value(false));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void patchesGitHubAutodeploySetting() throws Exception {
+        given(updateProjectGitHubSettings.execute(eq("lab"), eq(true), eq("user"), anyString()))
+                .willReturn(new ProjectGitHubLink("lab", "octo", "lab-repo", "main", true, null));
+
+        mockMvc.perform(patch("/api/projects/lab/github")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"autodeployEnabled\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projectId").value("lab"))
+                .andExpect(jsonPath("$.autodeployEnabled").value(true));
     }
 
     @Test

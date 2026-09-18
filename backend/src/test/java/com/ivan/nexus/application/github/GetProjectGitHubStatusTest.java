@@ -36,7 +36,7 @@ class GetProjectGitHubStatusTest {
     @Test
     void comparesRemoteHeadAgainstLatestSuccessfulCommit() {
         when(projects.findGitHubLink("lab")).thenReturn(Optional.of(
-                new ProjectGitHubLink("lab", "octo", "lab-repo", "main")));
+                ProjectGitHubLink.of("lab", "octo", "lab-repo", "main")));
         when(accessToken.execute()).thenReturn("token");
         when(gitHubClient.getBranchHead("token", "octo", "lab-repo", "main")).thenReturn("abc123");
         when(deployments.findProjectHistoryNewestFirst("lab")).thenReturn(List.of(
@@ -52,12 +52,13 @@ class GetProjectGitHubStatusTest {
         assertThat(view.owner()).isEqualTo("octo");
         assertThat(view.repo()).isEqualTo("lab-repo");
         assertThat(view.branch()).isEqualTo("main");
+        assertThat(view.autodeployEnabled()).isFalse();
     }
 
     @Test
     void reportsBehindWhenRemoteDiffers() {
         when(projects.findGitHubLink("lab")).thenReturn(Optional.of(
-                new ProjectGitHubLink("lab", "octo", "lab-repo", "main")));
+                ProjectGitHubLink.of("lab", "octo", "lab-repo", "main")));
         when(accessToken.execute()).thenReturn("token");
         when(gitHubClient.getBranchHead("token", "octo", "lab-repo", "main")).thenReturn("newsha");
         when(deployments.findProjectHistoryNewestFirst("lab")).thenReturn(List.of(
@@ -67,6 +68,20 @@ class GetProjectGitHubStatusTest {
 
         assertThat(view.upToDate()).isFalse();
         assertThat(view.deployedCommitSha()).isEqualTo("oldsha");
+    }
+
+    @Test
+    void prefersWebhookSyncedRemoteShaOverApi() {
+        when(projects.findGitHubLink("lab")).thenReturn(Optional.of(
+                new ProjectGitHubLink("lab", "octo", "lab-repo", "main", true, "webhook-sha")));
+        when(deployments.findProjectHistoryNewestFirst("lab")).thenReturn(List.of(
+                deployment(DeploymentStatus.SUCCESS, "oldsha")));
+
+        ProjectGitHubStatusView view = useCase.execute("lab");
+
+        assertThat(view.remoteHeadSha()).isEqualTo("webhook-sha");
+        assertThat(view.autodeployEnabled()).isTrue();
+        assertThat(view.upToDate()).isFalse();
     }
 
     @Test

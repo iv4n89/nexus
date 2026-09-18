@@ -35,7 +35,8 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
+                .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
+                .ignoringRequestMatchers("/api/github/webhook"))
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .addFilterBefore(new LoginRateLimitFilter(), UsernamePasswordAuthenticationFilter.class)
@@ -43,6 +44,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/github/webhook").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/github/oauth/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/github/connection").hasRole("ADMIN")
                 .requestMatchers("/api/terminal/**").hasRole("ADMIN")
