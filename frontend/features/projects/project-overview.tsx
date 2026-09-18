@@ -18,6 +18,7 @@ import type {
   Container,
   DeployAccepted,
   Deployment,
+  IncidentTimelineItem,
   ProjectDetail,
   ProjectMetrics,
   RecentError,
@@ -99,6 +100,11 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
   const alerts = useQuery({
     queryKey: ['alerts', 'ACTIVE'],
     queryFn: () => api<Alert[]>(alertsPath('ACTIVE')),
+    refetchInterval: 30_000,
+  })
+  const timeline = useQuery({
+    queryKey: ['projects', projectId, 'timeline'],
+    queryFn: () => api<IncidentTimelineItem[]>(`/api/projects/${projectId}/timeline?limit=30`),
     refetchInterval: 30_000,
   })
   const acknowledge = useMutation({
@@ -323,6 +329,37 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
         {acknowledge.isError ? (
           <p className="mt-2 text-sm text-[#ff4d4f]">{acknowledge.error.message}</p>
         ) : null}
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Timeline</h2>
+        {timeline.isPending ? (
+          <p className="text-sm text-[#888]">Loading…</p>
+        ) : timeline.isError ? (
+          <p className="text-sm text-[#ff4d4f]">{timeline.error.message}</p>
+        ) : (timeline.data ?? []).length === 0 ? (
+          <p className="text-sm text-[#888]">No recent events</p>
+        ) : (
+          <ul>
+            {(timeline.data ?? []).map((item) => (
+              <li
+                key={`${item.source}-${item.refId}`}
+                className="border-b border-[#2a2a2a] py-3 last:border-b-0"
+              >
+                <p className="font-mono text-sm text-[#888]">{formatClock(item.at)}</p>
+                <p className="mt-1 text-sm">
+                  <span className="text-[#888]">{item.source}</span>
+                  {' · '}
+                  {item.kind}
+                </p>
+                <p className="mt-1 break-all text-sm text-[#888]">
+                  {item.message}
+                  {item.serviceId ? ` · ${item.serviceId}` : ''}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section>
