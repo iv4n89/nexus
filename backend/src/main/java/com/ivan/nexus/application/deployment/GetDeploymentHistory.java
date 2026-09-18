@@ -1,6 +1,5 @@
 package com.ivan.nexus.application.deployment;
 
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -8,15 +7,15 @@ import java.util.List;
 
 @Service
 public class GetDeploymentHistory {
-    private final DeploymentJpaRepository deployments;
+    private final DeploymentStore deployments;
 
-    public GetDeploymentHistory(DeploymentJpaRepository deployments) {
+    public GetDeploymentHistory(DeploymentStore deployments) {
         this.deployments = deployments;
     }
 
     @Transactional(readOnly = true)
     public List<DeploymentView> execute(String projectId) {
-        return deployments.findByProjectIdOrderByCreatedAtDesc(projectId).stream()
+        return deployments.findProjectHistoryNewestFirst(projectId).stream()
                 .map(DeploymentView::from)
                 .toList();
     }

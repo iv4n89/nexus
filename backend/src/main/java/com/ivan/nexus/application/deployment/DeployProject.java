@@ -7,9 +7,6 @@ import com.ivan.nexus.application.manifest.ManifestCatalog;
 import com.ivan.nexus.application.user.UserDirectory;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectJpaRepository;
-import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -22,9 +19,9 @@ public class DeployProject {
 
     public DeployProject(
             ManifestCatalog manifests,
-            ManagedProjectJpaRepository projects,
-            DeploymentJpaRepository deployments,
-            DeploymentStreamHub hub,
+            ManagedProjectStore projects,
+            DeploymentStore deployments,
+            DeploymentProgress progress,
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
             RecordAudit recordAudit,
@@ -33,9 +30,9 @@ public class DeployProject {
             @Qualifier("deploymentExecutor") Executor sseExecutor) {
         this.manifests = manifests;
         this.runner = new DeploymentCommandRunner(
-                new ManagedProjectUpsert(projects),
+                projects,
                 deployments,
-                hub,
+                progress,
                 processExecutor,
                 healthChecker,
                 recordAudit,

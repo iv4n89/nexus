@@ -1,10 +1,13 @@
 package com.ivan.nexus.application.deployment;
 
+import com.ivan.nexus.domain.deployment.Deployment;
+import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -16,9 +19,9 @@ class RequireDeploymentTest {
 
     @Test
     void unknownDeploymentIsNotFound() {
-        DeploymentJpaRepository deployments = mock(DeploymentJpaRepository.class);
+        DeploymentStore deployments = mock(DeploymentStore.class);
         UUID id = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
-        when(deployments.existsById(id)).thenReturn(false);
+        when(deployments.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> new RequireDeployment(deployments).execute(id))
                 .isInstanceOf(DomainException.class)
@@ -28,9 +31,11 @@ class RequireDeploymentTest {
 
     @Test
     void existingDeploymentDoesNotThrow() {
-        DeploymentJpaRepository deployments = mock(DeploymentJpaRepository.class);
+        DeploymentStore deployments = mock(DeploymentStore.class);
         UUID id = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
-        when(deployments.existsById(id)).thenReturn(true);
+        when(deployments.findById(id)).thenReturn(Optional.of(new Deployment(
+                id, "lab", DeploymentStatus.RUNNING, Instant.now(), null,
+                "admin", null, null, null, null, "deploy")));
 
         assertThatCode(() -> new RequireDeployment(deployments).execute(id)).doesNotThrowAnyException();
     }

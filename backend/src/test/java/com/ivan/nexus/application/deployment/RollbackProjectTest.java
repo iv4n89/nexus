@@ -11,11 +11,6 @@ import com.ivan.nexus.domain.deployment.DeploymentStatus;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
-import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectEntity;
-import com.ivan.nexus.infrastructure.persistence.project.ManagedProjectJpaRepository;
-import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -23,7 +18,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,20 +52,18 @@ class RollbackProjectTest {
     private final UserDirectory users = mock(UserDirectory.class);
     private final UUID adminId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-    private final Map<String, ManagedProjectEntity> projectStore = new ConcurrentHashMap<>();
-    private final Map<UUID, DeploymentEntity> deploymentStore = new ConcurrentHashMap<>();
     private final Map<UUID, List<String>> hubLines = new ConcurrentHashMap<>();
 
-    private ManagedProjectJpaRepository projects;
-    private DeploymentJpaRepository deployments;
-    private DeploymentStreamHub hub;
+    private FakeManagedProjectStore projects;
+    private FakeDeploymentStore deployments;
+    private DeploymentProgress progress;
     private RollbackProject useCase;
 
     @BeforeEach
     void setUp() {
-        projects = mockProjects();
-        deployments = mockDeployments();
-        hub = mockHub();
+        projects = new FakeManagedProjectStore();
+        deployments = new FakeDeploymentStore();
+        progress = mockProgress();
 
         when(users.findIdByUsername("admin")).thenReturn(Optional.of(adminId));
 
@@ -86,7 +78,7 @@ class RollbackProjectTest {
                 .isInstanceOf(DomainException.class)
                 .satisfies(ex -> assertThat(((DomainException) ex).getCode())
                         .isEqualTo(NexusErrorCode.OPERATION_NOT_ALLOWED));
-        assertThat(deploymentStore).isEmpty();
+        assertThat(deployments.deployments).isEmpty();
     }
 
     @Test
@@ -97,7 +89,7 @@ class RollbackProjectTest {
                 .isInstanceOf(DomainException.class)
                 .satisfies(ex -> assertThat(((DomainException) ex).getCode())
                         .isEqualTo(NexusErrorCode.OPERATION_NOT_ALLOWED));
-        assertThat(deploymentStore).isEmpty();
+        assertThat(deployments.deployments).isEmpty();
     }
 
     @Test
@@ -110,12 +102,12 @@ class RollbackProjectTest {
         Deployment started = useCase.execute("lab", "admin");
 
         assertThat(started.status()).isEqualTo(DeploymentStatus.RUNNING);
-        DeploymentEntity stored = deploymentStore.get(started.id());
-        assertThat(stored.getStatus()).isEqualTo(DeploymentStatus.SUCCESS);
-        assertThat(stored.getHealthOk()).isTrue();
-        assertThat(stored.getExitCode()).isZero();
-        assertThat(stored.getFinishedAt()).isNotNull();
-        assertThat(stored.getMetadata()).containsEntry("kind", "rollback");
+        Deployment stored = deployments.deployments.get(started.id());
+        assertThat(stored.status()).isEqualTo(DeploymentStatus.SUCCESS);
+        assertThat(stored.healthOk()).isTrue();
+        assertThat(stored.exitCode()).isZero();
+        assertThat(stored.finishedAt()).isNotNull();
+        assertThat(stored.kind()).isEqualTo("rollback");
         assertThat(processExecutor.lastArgv.getFirst()).endsWith("rollback.sh");
         assertThat(hubLines.get(started.id())).contains(
                 "rollback started",
@@ -143,7 +135,7 @@ class RollbackProjectTest {
                 isNull(),
                 isNull(),
                 any());
-        verify(hub).complete(started.id());
+        verify(progress).complete(started.id());
     }
 
     @Test
@@ -165,7 +157,7 @@ class RollbackProjectTest {
                 manifests,
                 projects,
                 deployments,
-                hub,
+                progress,
                 processExecutor,
                 healthChecker,
                 recordAudit,
@@ -174,46 +166,15 @@ class RollbackProjectTest {
                 executor);
     }
 
-    private ManagedProjectJpaRepository mockProjects() {
-        ManagedProjectJpaRepository repo = mock(ManagedProjectJpaRepository.class);
-        when(repo.findById(any())).thenAnswer(invocation ->
-                Optional.ofNullable(projectStore.get(invocation.getArgument(0))));
-        when(repo.save(any())).thenAnswer(invocation -> {
-            ManagedProjectEntity entity = invocation.getArgument(0);
-            projectStore.put(entity.getId(), entity);
-            return entity;
-        });
-        return repo;
-    }
-
-    private DeploymentJpaRepository mockDeployments() {
-        DeploymentJpaRepository repo = mock(DeploymentJpaRepository.class);
-        when(repo.findById(any())).thenAnswer(invocation ->
-                Optional.ofNullable(deploymentStore.get(invocation.getArgument(0))));
-        when(repo.save(any())).thenAnswer(invocation -> {
-            DeploymentEntity entity = invocation.getArgument(0);
-            deploymentStore.put(entity.getId(), entity);
-            return entity;
-        });
-        when(repo.existsByProjectIdAndStatusIn(any(), any())).thenAnswer(invocation -> {
-            String projectId = invocation.getArgument(0);
-            Collection<DeploymentStatus> statuses = invocation.getArgument(1);
-            return deploymentStore.values().stream()
-                    .anyMatch(entity -> entity.getProjectId().equals(projectId)
-                            && statuses.contains(entity.getStatus()));
-        });
-        return repo;
-    }
-
-    private DeploymentStreamHub mockHub() {
-        DeploymentStreamHub mockHub = mock(DeploymentStreamHub.class);
+    private DeploymentProgress mockProgress() {
+        DeploymentProgress mockProgress = mock(DeploymentProgress.class);
         doAnswer(invocation -> {
             UUID id = invocation.getArgument(0);
             String line = invocation.getArgument(1);
             hubLines.computeIfAbsent(id, key -> new CopyOnWriteArrayList<>()).add(line);
             return null;
-        }).when(mockHub).append(any(), any());
-        return mockHub;
+        }).when(mockProgress).append(any(), any());
+        return mockProgress;
     }
 
     private void writeLabManifest(String rollbackCommand, String healthUrl) throws Exception {

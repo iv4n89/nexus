@@ -7,14 +7,9 @@ import com.ivan.nexus.domain.activity.ActivityType;
 import com.ivan.nexus.domain.audit.AuditAction;
 import com.ivan.nexus.domain.deployment.Deployment;
 import com.ivan.nexus.domain.deployment.DeploymentStatus;
-import com.ivan.nexus.domain.deployment.DeploymentTransitions;
 import com.ivan.nexus.domain.manifest.ProjectManifest;
 import com.ivan.nexus.domain.shared.DomainException;
 import com.ivan.nexus.domain.shared.NexusErrorCode;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentEntity;
-import com.ivan.nexus.infrastructure.persistence.deployment.DeploymentJpaRepository;
-import com.ivan.nexus.infrastructure.sse.DeploymentStreamHub;
-import org.springframework.dao.DataIntegrityViolationException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,12 +25,10 @@ import java.util.concurrent.Executor;
 final class DeploymentCommandRunner {
     static final Duration SCRIPT_TIMEOUT = Duration.ofMinutes(15);
     private static final Duration DEFAULT_HEALTH_TIMEOUT = Duration.ofSeconds(5);
-    private static final List<DeploymentStatus> IN_PROGRESS =
-            List.of(DeploymentStatus.PENDING, DeploymentStatus.RUNNING);
 
-    private final ManagedProjectUpsert projectUpsert;
-    private final DeploymentJpaRepository deployments;
-    private final DeploymentStreamHub hub;
+    private final ManagedProjectStore projects;
+    private final DeploymentStore deployments;
+    private final DeploymentProgress progress;
     private final ProcessExecutor processExecutor;
     private final HealthChecker healthChecker;
     private final RecordAudit recordAudit;
@@ -44,18 +37,18 @@ final class DeploymentCommandRunner {
     private final Executor sseExecutor;
 
     DeploymentCommandRunner(
-            ManagedProjectUpsert projectUpsert,
-            DeploymentJpaRepository deployments,
-            DeploymentStreamHub hub,
+            ManagedProjectStore projects,
+            DeploymentStore deployments,
+            DeploymentProgress progress,
             ProcessExecutor processExecutor,
             HealthChecker healthChecker,
             RecordAudit recordAudit,
             RecordActivity recordActivity,
             UserDirectory users,
             Executor sseExecutor) {
-        this.projectUpsert = projectUpsert;
+        this.projects = projects;
         this.deployments = deployments;
-        this.hub = hub;
+        this.progress = progress;
         this.processExecutor = processExecutor;
         this.healthChecker = healthChecker;
         this.recordAudit = recordAudit;
@@ -72,38 +65,18 @@ final class DeploymentCommandRunner {
             String command,
             String kind,
             AuditAction auditAction) {
-        if (deployments.existsByProjectIdAndStatusIn(projectId, IN_PROGRESS)) {
+        if (deployments.hasActiveDeployment(projectId)) {
             throw new DomainException(NexusErrorCode.DEPLOYMENT_IN_PROGRESS, "Deployment already in progress");
         }
 
         Path workingDirectory = Path.of(manifest.project().workingDirectory()).toAbsolutePath().normalize();
-        projectUpsert.upsertProject(manifest, workingDirectory, manifestPath);
+        Path normalizedManifestPath = manifestPath.toAbsolutePath().normalize();
+        projects.upsert(manifest, workingDirectory, normalizedManifestPath);
 
         UUID id = UUID.randomUUID();
-        Map<String, Object> metadata = new HashMap<>();
-        metadata.put("kind", kind);
-        DeploymentEntity entity = new DeploymentEntity(
-                id,
-                projectId,
-                DeploymentStatus.PENDING,
-                null,
-                null,
-                username,
-                null,
-                null,
-                null,
-                null,
-                metadata);
-        try {
-            deployments.save(entity);
-        } catch (DataIntegrityViolationException ex) {
-            throw new DomainException(NexusErrorCode.DEPLOYMENT_IN_PROGRESS, "Deployment already in progress");
-        }
-        entity.applyStatus(DeploymentTransitions.next(entity.getStatus(), DeploymentStatus.RUNNING));
-        entity.setStartedAt(Instant.now());
-        deployments.save(entity);
+        deployments.createPending(id, projectId, username, kind);
+        Deployment snapshot = deployments.markRunning(id, Instant.now());
 
-        Deployment snapshot = toDomain(entity);
         sseExecutor.execute(() -> runAsync(id, manifest, workingDirectory, command, kind, auditAction, username));
         return snapshot;
     }
@@ -116,12 +89,12 @@ final class DeploymentCommandRunner {
             String kind,
             AuditAction auditAction,
             String username) {
-        DeploymentEntity entity = deployments.findById(id).orElseThrow();
+        Deployment deployment = deployments.findById(id).orElseThrow();
         List<String> summaryLines = new ArrayList<>();
         Copy copy = Copy.forKind(kind);
         try {
             emit(id, summaryLines, copy.started);
-            record(ActivityType.DEPLOYMENT_STARTED, entity, copy.started, kind);
+            record(ActivityType.DEPLOYMENT_STARTED, deployment, copy.started, kind);
 
             List<String> tokens = List.of(command.trim().split("\\s+"));
             Path executable = workingDirectory.resolve(tokens.getFirst()).normalize();
@@ -129,7 +102,7 @@ final class DeploymentCommandRunner {
                     || !Files.isRegularFile(executable)
                     || !Files.isExecutable(executable)) {
                 emit(id, summaryLines, "Command is not an executable file under the project directory: " + executable);
-                finish(entity, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
+                finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
                 return;
             }
 
@@ -142,9 +115,9 @@ final class DeploymentCommandRunner {
                     argv,
                     line -> emit(id, summaryLines, line),
                     SCRIPT_TIMEOUT);
-            entity.setExitCode(exit);
+            deployments.recordExitCode(id, exit);
             if (exit != 0) {
-                finish(entity, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
+                finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
                 return;
             }
 
@@ -156,27 +129,27 @@ final class DeploymentCommandRunner {
                         ? DEFAULT_HEALTH_TIMEOUT
                         : Duration.ofSeconds(seconds);
                 boolean ok = healthChecker.check(healthUrl, timeout);
-                entity.setHealthOk(ok);
+                deployments.recordHealthResult(id, ok);
                 if (ok) {
                     emit(id, summaryLines, "health check OK");
-                    finish(entity, summaryLines, DeploymentStatus.SUCCESS, username, kind, auditAction, copy);
+                    finish(deployment, summaryLines, DeploymentStatus.SUCCESS, username, kind, auditAction, copy);
                 } else {
                     emit(id, summaryLines, "health check FAILED");
-                    record(ActivityType.HEALTH_CHECK_FAILED, entity, "health check failed", kind);
-                    finish(entity, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
+                    record(ActivityType.HEALTH_CHECK_FAILED, deployment, "health check failed", kind);
+                    finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
                 }
                 return;
             }
 
-            finish(entity, summaryLines, DeploymentStatus.SUCCESS, username, kind, auditAction, copy);
+            finish(deployment, summaryLines, DeploymentStatus.SUCCESS, username, kind, auditAction, copy);
         } catch (RuntimeException ex) {
             emit(id, summaryLines, copy.kindLabel + " error: " + ex.getMessage());
-            finish(entity, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
+            finish(deployment, summaryLines, DeploymentStatus.FAILED, username, kind, auditAction, copy);
         }
     }
 
     private void finish(
-            DeploymentEntity entity,
+            Deployment deployment,
             List<String> summaryLines,
             DeploymentStatus status,
             String username,
@@ -184,51 +157,38 @@ final class DeploymentCommandRunner {
             AuditAction auditAction,
             Copy copy) {
         if (status == DeploymentStatus.SUCCESS) {
-            emit(entity.getId(), summaryLines, "DEPLOYMENT SUCCESS");
-            record(ActivityType.DEPLOYMENT_SUCCESS, entity, copy.successful, kind);
+            emit(deployment.id(), summaryLines, "DEPLOYMENT SUCCESS");
+            record(ActivityType.DEPLOYMENT_SUCCESS, deployment, copy.successful, kind);
         } else {
-            emit(entity.getId(), summaryLines, "DEPLOYMENT FAILED");
-            record(ActivityType.DEPLOYMENT_FAILED, entity, copy.failed, kind);
+            emit(deployment.id(), summaryLines, "DEPLOYMENT FAILED");
+            record(ActivityType.DEPLOYMENT_FAILED, deployment, copy.failed, kind);
         }
-        entity.applyStatus(DeploymentTransitions.next(entity.getStatus(), status));
-        entity.setFinishedAt(Instant.now());
-        entity.setOutputSummary(DeploymentSummary.summarize(summaryLines));
-        deployments.save(entity);
-        hub.complete(entity.getId());
+        deployments.finish(
+                deployment.id(),
+                status,
+                Instant.now(),
+                DeploymentSummary.summarize(summaryLines));
+        progress.complete(deployment.id());
         UUID userId = users.findIdByUsername(username).orElseThrow();
         recordAudit.execute(
                 userId,
                 auditAction,
-                entity.getProjectId(),
+                deployment.projectId(),
                 null,
                 null,
-                Map.of("deploymentId", entity.getId().toString(), "status", status.name()));
+                Map.of("deploymentId", deployment.id().toString(), "status", status.name()));
     }
 
     private void emit(UUID id, List<String> summaryLines, String line) {
         summaryLines.add(line);
-        hub.append(id, line);
+        progress.append(id, line);
     }
 
-    private void record(ActivityType type, DeploymentEntity entity, String message, String kind) {
+    private void record(ActivityType type, Deployment deployment, String message, String kind) {
         Map<String, Object> metadata = new HashMap<>();
-        metadata.put("deploymentId", entity.getId().toString());
+        metadata.put("deploymentId", deployment.id().toString());
         metadata.put("kind", kind);
-        recordActivity.execute(type, entity.getProjectId(), null, message, metadata);
-    }
-
-    static Deployment toDomain(DeploymentEntity entity) {
-        return new Deployment(
-                entity.getId(),
-                entity.getProjectId(),
-                entity.getStatus(),
-                entity.getStartedAt(),
-                entity.getFinishedAt(),
-                entity.getTriggeredBy(),
-                entity.getCommitSha(),
-                entity.getExitCode(),
-                entity.getOutputSummary(),
-                entity.getHealthOk());
+        recordActivity.execute(type, deployment.projectId(), null, message, metadata);
     }
 
     private record Copy(String kindLabel, String started, String successful, String failed) {

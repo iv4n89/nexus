@@ -13,5 +13,6 @@ public record Deployment(
         String commitSha,
         Integer exitCode,
         String outputSummary,
-        Boolean healthOk) {
+        Boolean healthOk,
+        String kind) {
 }

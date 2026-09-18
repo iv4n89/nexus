@@ -44,19 +44,17 @@ Local development: `next dev` rewrites `/api/:path*` to `http://localhost:8080`.
 Hexagonal / clean-architecture packages:
 
 ```text
-domain
-    ↓
-application
-    ↓
-interfaces
-    ↓
-infrastructure
+interfaces ─────────────────> application ──> domain
+    │                              ↑             ↑
+    └─ deployment SSE transport ─> infrastructure
 ```
 
-- **domain** — projects, deployments, manifests, alerts, activity, audit. No Spring, Docker, or HTTP types.
-- **application** — use cases (discover, deploy, rollback, evaluate alerts, retain history).
-- **interfaces** — REST and SSE controllers, error envelope.
-- **infrastructure** — docker-java, JPA/Flyway, ProcessBuilder executor, scheduler.
+- **domain** — projects, deployments, manifests, alerts, activity, and audit. It depends only on the JDK.
+- **application** — use cases and outbound ports. It depends on the domain and JDK, with Spring orchestration annotations allowed (`@Service`, scheduling/configuration conditions, injection qualifiers, and transaction boundaries). It does not depend on interface or infrastructure adapters, persistence APIs, serialization libraries, or adapter SDKs.
+- **infrastructure** — implements application ports with docker-java, JPA/Flyway, database drivers, `ProcessBuilder`, and SSE progress delivery.
+- **interfaces** — REST/error-envelope adapters invoke application use cases and domain-facing views. One explicit outer-layer transport collaboration remains: `DeploymentController` creates the `SseEmitter` and subscribes it directly with infrastructure `DeploymentStreamHub`.
+
+The same `DeploymentStreamHub` implements the application-owned `DeploymentProgress` port for append/completion output while retaining replay, live-subscriber callbacks, and transport completion. This interface-to-infrastructure SSE connection is an outer-layer transport exception; the core invariant is that domain and application never depend outward. `HexagonalArchitectureTest` enforces positive allowlists: domain may use only domain/JDK classes, while every `com.ivan.nexus.application..` class may use only application/domain/JDK, SLF4J, and the narrowly listed Spring orchestration annotation packages. A synthetic application fixture with an unknown test-only SDK dependency proves the global allowlist rejects unapproved libraries.
 
 Schema changes go through Flyway only (`ddl-auto: validate`).
 

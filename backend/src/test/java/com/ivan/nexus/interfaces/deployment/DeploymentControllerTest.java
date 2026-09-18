@@ -147,7 +147,18 @@ class DeploymentControllerTest {
     }
 
     private static Deployment deployment(UUID id, DeploymentStatus status) {
-        return new Deployment(id, "lab", status, Instant.parse("2026-01-01T00:00:00Z"), null, "admin", null, null, null, null);
+        return new Deployment(
+                id,
+                "lab",
+                status,
+                Instant.parse("2026-01-01T00:00:00Z"),
+                null,
+                "admin",
+                null,
+                null,
+                null,
+                null,
+                "deploy");
     }
 
     private static DeploymentView view(UUID id, String projectId, DeploymentStatus status) {
