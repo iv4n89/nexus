@@ -214,9 +214,19 @@ public class NexusProperties {
 
     public static class Security {
         private final Trivy trivy = new Trivy();
+        private final NpmAudit npmAudit = new NpmAudit();
+        private final Llm llm = new Llm();
 
         public Trivy getTrivy() {
             return trivy;
+        }
+
+        public NpmAudit getNpmAudit() {
+            return npmAudit;
+        }
+
+        public Llm getLlm() {
+            return llm;
         }
 
         public static class Trivy {
@@ -275,6 +285,39 @@ public class NexusProperties {
 
             public void setCron(String cron) {
                 this.cron = cron;
+            }
+        }
+
+        public static class NpmAudit {
+            private boolean enabled;
+            private String executable = "npm";
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public String getExecutable() {
+                return executable;
+            }
+
+            public void setExecutable(String executable) {
+                this.executable = executable;
+            }
+        }
+
+        public static class Llm {
+            private boolean enabled;
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
             }
         }
     }
