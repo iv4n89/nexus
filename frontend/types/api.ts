@@ -174,6 +174,15 @@ export type ActivityEvent = {
   metadata: Record<string, unknown>
 }
 
+export type IncidentTimelineItem = {
+  at: string
+  kind: string
+  source: 'ACTIVITY' | 'ALERT' | string
+  message: string
+  serviceId: string | null
+  refId: string
+}
+
 export type DatabaseInstance = {
   id: string
   service: string
