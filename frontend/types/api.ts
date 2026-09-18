@@ -20,6 +20,20 @@ export type ProjectDetail = Project & {
   recentErrors?: RecentError[]
 }
 
+export type ProjectHealth = {
+  projectId: string
+  projectStatus: string
+  containersRunning: number
+  containersTotal: number
+  lastDeploymentStatus: string | null
+  lastDeploymentAt: string | null
+  openAlertsCount: number
+  openSecurityFindingsCount: number | null
+  backupsAvailable: boolean
+  lastBackupSuccessAt: string | null
+  domainsCount: number | null
+}
+
 export type RecentError = {
   serviceId: string
   sampleMessage: string
@@ -142,6 +156,11 @@ export type ActivityType =
   | 'ALERT_CREATED'
   | 'ALERT_RESOLVED'
   | 'HEALTH_CHECK_FAILED'
+  | 'GITHUB_CONNECTED'
+  | 'GITHUB_DISCONNECTED'
+  | 'SECURITY_SCAN_COMPLETED'
+  | 'DOMAIN_ADDED'
+  | 'DOMAIN_REMOVED'
 
 export type ActivityEvent = {
   id: string
