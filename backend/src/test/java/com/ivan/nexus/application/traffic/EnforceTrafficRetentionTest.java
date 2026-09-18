@@ -2,7 +2,6 @@ package com.ivan.nexus.application.traffic;
 
 import com.ivan.nexus.domain.traffic.TrafficMinuteBucket;
 import com.ivan.nexus.domain.traffic.TrafficSnapshot;
-import com.ivan.nexus.infrastructure.config.NexusProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,15 +21,13 @@ class EnforceTrafficRetentionTest {
     private static final Instant NOW = Instant.parse("2026-09-18T12:00:00Z");
 
     private FakeTrafficStore store;
-    private NexusProperties properties;
     private EnforceTrafficRetention retention;
 
     @BeforeEach
     void setUp() {
         store = new FakeTrafficStore();
-        properties = new NexusProperties();
         Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-        retention = new EnforceTrafficRetention(store, properties, clock);
+        retention = new EnforceTrafficRetention(store, clock);
     }
 
     @Test
