@@ -57,6 +57,14 @@ nexus:
     redirect-uri: ${NEXUS_GITHUB_REDIRECT_URI:}
   secrets:
     key: ${NEXUS_SECRETS_KEY:}
+  security:
+    trivy:
+      enabled: ${NEXUS_TRIVY_ENABLED:false}
+      scheduler-enabled: ${NEXUS_TRIVY_SCHEDULER_ENABLED:false}
+      executable: ${NEXUS_TRIVY_EXECUTABLE:trivy}
+      mode: ${NEXUS_TRIVY_MODE:fs}
+      image-ref: ${NEXUS_TRIVY_IMAGE_REF:}
+      cron: ${NEXUS_TRIVY_CRON:0 0 4 * * *}
   terminal:
     enabled: ${NEXUS_TERMINAL_ENABLED:false}
     session-timeout-minutes: ${NEXUS_TERMINAL_TIMEOUT_MINUTES:15}
