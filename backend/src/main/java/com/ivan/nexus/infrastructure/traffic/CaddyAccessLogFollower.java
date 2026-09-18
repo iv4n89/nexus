@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 @Component
@@ -41,9 +43,9 @@ public class CaddyAccessLogFollower {
     private final TrafficIngestor ingestor;
     private final String configuredContainer;
 
-    private volatile boolean running;
+    private final AtomicReference<AutoCloseable> currentFollow = new AtomicReference<>();
+    private final AtomicBoolean running = new AtomicBoolean();
     private volatile Thread worker;
-    private volatile AutoCloseable currentFollow;
 
     public CaddyAccessLogFollower(
             DockerClient dockerClient,
@@ -62,7 +64,7 @@ public class CaddyAccessLogFollower {
 
     @PostConstruct
     void start() {
-        running = true;
+        running.set(true);
         worker = new Thread(this::runLoop, THREAD_NAME);
         worker.setDaemon(true);
         worker.start();
@@ -70,15 +72,23 @@ public class CaddyAccessLogFollower {
 
     @PreDestroy
     void stop() {
-        running = false;
+        running.set(false);
         closeFollow();
         Thread thread = worker;
         if (thread != null) {
             thread.interrupt();
+            try {
+                thread.join(TimeUnit.SECONDS.toMillis(5));
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
     void handleLine(String line) {
+        if (!running.get()) {
+            return;
+        }
         try {
             parser.parse(line).ifPresent(event -> {
                 ResolveTrafficTarget.ResolvedTarget target = resolve.execute(event.host());
@@ -122,9 +132,12 @@ public class CaddyAccessLogFollower {
 
     private void runLoop() {
         long backoffMs = BACKOFF_MIN_MS;
-        while (running && !Thread.currentThread().isInterrupted()) {
+        while (running.get() && !Thread.currentThread().isInterrupted()) {
             try {
                 Optional<String> containerId = resolveContainerId();
+                if (!running.get()) {
+                    break;
+                }
                 if (containerId.isEmpty()) {
                     log.warn("Caddy container not found; retrying in {} ms", backoffMs);
                     sleep(backoffMs);
@@ -134,12 +147,17 @@ public class CaddyAccessLogFollower {
                 int since = (int) Instant.now().getEpochSecond();
                 CountDownLatch completed = new CountDownLatch(1);
                 try {
-                    currentFollow = logProvider.follow(
+                    AutoCloseable handle = logProvider.follow(
                             containerId.get(),
                             0,
                             since,
                             this::handleLine,
                             completed::countDown);
+                    currentFollow.set(handle);
+                    if (!running.get()) {
+                        closeFollow();
+                        break;
+                    }
                     backoffMs = BACKOFF_MIN_MS;
                     completed.await();
                 } catch (DomainException ex) {
@@ -179,8 +197,7 @@ public class CaddyAccessLogFollower {
     }
 
     private void closeFollow() {
-        AutoCloseable follow = currentFollow;
-        currentFollow = null;
+        AutoCloseable follow = currentFollow.getAndSet(null);
         if (follow == null) {
             return;
         }

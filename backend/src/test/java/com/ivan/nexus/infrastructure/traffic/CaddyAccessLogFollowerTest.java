@@ -98,10 +98,35 @@ class CaddyAccessLogFollowerTest {
         String line = """
                 {"request":{"host":"app.example.com"},"status":200,"size":1234,"duration":0.025}
                 """;
+        CaddyAccessLogFollower follower = follower("");
+        follower.start();
+        try {
+            follower.handleLine(line);
+            verify(ingestor).ingestRaw("lab", "web", "app.example.com", 200, 1234L, 25L);
+        } finally {
+            follower.stop();
+        }
+    }
 
-        follower("").handleLine(line);
+    @Test
+    void handleLineAfterStopDoesNotIngest() {
+        given(resolve.execute("app.example.com"))
+                .willReturn(new ResolveTrafficTarget.ResolvedTarget("lab", "web", "app.example.com"));
+        String line = """
+                {"request":{"host":"app.example.com"},"status":200,"size":1234,"duration":0.025}
+                """;
+        CaddyAccessLogFollower follower = follower("");
+        follower.start();
+        try {
+            follower.handleLine(line);
+            verify(ingestor).ingestRaw("lab", "web", "app.example.com", 200, 1234L, 25L);
 
-        verify(ingestor).ingestRaw("lab", "web", "app.example.com", 200, 1234L, 25L);
+            follower.stop();
+            follower.handleLine(line);
+            verify(ingestor, times(1)).ingestRaw("lab", "web", "app.example.com", 200, 1234L, 25L);
+        } finally {
+            follower.stop();
+        }
     }
 
     @Test
@@ -112,11 +137,15 @@ class CaddyAccessLogFollowerTest {
                 .when(ingestor)
                 .ingestRaw(anyString(), anyString(), anyString(), anyInt(), anyLong(), anyLong());
         CaddyAccessLogFollower follower = follower("");
-
-        assertDoesNotThrow(() -> follower.handleLine(
-                "{\"request\":{\"host\":\"app.example.com\"},\"status\":200,\"size\":1,\"duration\":0.01}"));
-        assertDoesNotThrow(() -> follower.handleLine("INFO serving"));
-        verify(ingestor, times(1)).ingestRaw("lab", "web", "app.example.com", 200, 1L, 10L);
+        follower.start();
+        try {
+            assertDoesNotThrow(() -> follower.handleLine(
+                    "{\"request\":{\"host\":\"app.example.com\"},\"status\":200,\"size\":1,\"duration\":0.01}"));
+            assertDoesNotThrow(() -> follower.handleLine("INFO serving"));
+            verify(ingestor, times(1)).ingestRaw("lab", "web", "app.example.com", 200, 1L, 10L);
+        } finally {
+            follower.stop();
+        }
     }
 
     @Test
