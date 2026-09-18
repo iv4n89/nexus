@@ -63,3 +63,11 @@ nexus:
     local-path: ${NEXUS_BACKUP_LOCAL_PATH:/var/lib/nexus/backups}
     pg-dump-executable: ${NEXUS_PG_DUMP_EXECUTABLE:pg_dump}
     cron: ${NEXUS_BACKUP_CRON:0 0 2 * * *}
+  security:
+    trivy:
+      enabled: ${NEXUS_TRIVY_ENABLED:false}
+      scheduler-enabled: ${NEXUS_TRIVY_SCHEDULER_ENABLED:false}
+      executable: ${NEXUS_TRIVY_EXECUTABLE:trivy}
+      mode: ${NEXUS_TRIVY_MODE:fs}
+      image-ref: ${NEXUS_TRIVY_IMAGE_REF:}
+      cron: ${NEXUS_TRIVY_CRON:0 0 4 * * *}
