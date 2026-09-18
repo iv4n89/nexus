@@ -13,6 +13,8 @@ public interface DomainStore {
 
     List<SiteDomain> findByProjectId(String projectId);
 
+    List<SiteDomain> findAll();
+
     void delete(UUID id);
 
     Optional<SiteDomain> findByHostname(String hostname);

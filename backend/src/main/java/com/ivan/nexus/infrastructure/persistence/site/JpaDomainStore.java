@@ -34,6 +34,11 @@ public class JpaDomainStore implements DomainStore {
     }
 
     @Override
+    public List<SiteDomain> findAll() {
+        return repository.findAll().stream().map(JpaDomainStore::toDomain).toList();
+    }
+
+    @Override
     public void delete(UUID id) {
         repository.deleteById(id);
     }

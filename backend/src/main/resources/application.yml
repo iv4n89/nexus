@@ -80,6 +80,11 @@ nexus:
       image-ref: ${NEXUS_TRIVY_IMAGE_REF:}
       # H4: security scans at 04:00 UTC
       cron: ${NEXUS_TRIVY_CRON:0 0 4 * * *}
+npm-audit:
+      enabled: ${NEXUS_NPM_AUDIT_ENABLED:false}
+      executable: ${NEXUS_NPM_EXECUTABLE:npm}
+    llm:
+      enabled: ${NEXUS_SECURITY_LLM_ENABLED:false}
   # H1: deploy pipeline orchestration — all flags OFF by default
   automation:
     security-gate-enabled: ${NEXUS_AUTOMATION_SECURITY_GATE:false}
@@ -92,3 +97,6 @@ nexus:
   caddy:
     enabled: ${NEXUS_CADDY_ENABLED:false}
     sites-path: ${NEXUS_CADDY_SITES_PATH:/opt/nexus/caddy/sites}
+    scheduler-enabled: ${NEXUS_CADDY_SCHEDULER_ENABLED:false}
+    cron: ${NEXUS_CADDY_CRON:0 0 5 * * *}
+    https-probe-enabled: ${NEXUS_CADDY_HTTPS_PROBE_ENABLED:true}

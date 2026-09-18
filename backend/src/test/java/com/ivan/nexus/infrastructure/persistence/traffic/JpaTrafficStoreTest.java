@@ -30,7 +30,7 @@ class JpaTrafficStoreTest {
     void savePersistsNewBucket() {
         TrafficHourlyBucket bucket = TrafficHourlyBucket.empty(
                         UUID.randomUUID(), "lab", "web", Instant.parse("2026-09-18T10:00:00Z"))
-                .ingest(200, 12, 33);
+                .ingest(200, 12, 33, "/ok");
         when(repository.findById(bucket.id())).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -38,6 +38,7 @@ class JpaTrafficStoreTest {
 
         assertThat(saved.requests()).isEqualTo(1);
         assertThat(saved.bytesOut()).isEqualTo(12);
+        assertThat(saved.topEndpoints()).hasSize(1);
         verify(repository).save(any(TrafficHourlyEntity.class));
     }
 
@@ -46,7 +47,7 @@ class JpaTrafficStoreTest {
         Instant from = Instant.parse("2026-09-18T09:00:00Z");
         Instant to = Instant.parse("2026-09-18T12:00:00Z");
         TrafficHourlyBucket bucket = TrafficHourlyBucket.empty(UUID.randomUUID(), "lab", "", from)
-                .ingest(200, 5, 10);
+                .ingest(200, 5, 10, "/x");
         when(repository.findByProjectIdAndBucketStartGreaterThanEqualOrderByBucketStartAsc("lab", from))
                 .thenReturn(List.of(new TrafficHourlyEntity(bucket)));
 
@@ -54,6 +55,7 @@ class JpaTrafficStoreTest {
 
         assertThat(snapshot.requests()).isEqualTo(1);
         assertThat(snapshot.bytesOut()).isEqualTo(5);
-        assertThat(snapshot.latencyAvg()).isEqualTo(10.0);
+        assertThat(snapshot.latencyAvgMs()).isEqualTo(10.0);
+        assertThat(snapshot.topEndpoints()).hasSize(1);
     }
 }
