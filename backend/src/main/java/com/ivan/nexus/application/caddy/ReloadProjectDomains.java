@@ -1,11 +1,13 @@
 package com.ivan.nexus.application.caddy;
 
 import com.ivan.nexus.application.site.DomainStore;
+import com.ivan.nexus.domain.site.CertStatus;
 import com.ivan.nexus.domain.site.SiteDomain;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -34,7 +36,18 @@ public class ReloadProjectDomains {
         List<SiteDomain> projectDomains = domains.findByProjectId(projectId);
         caddyConfigWriter.writeProjectSites(projectId, projectDomains);
         for (SiteDomain domain : projectDomains) {
-            certificateManager.ensureCertificate(domain);
+            CertStatus status = certificateManager.ensureCertificate(domain);
+            if (status != domain.certStatus()) {
+                domains.save(new SiteDomain(
+                        domain.id(),
+                        domain.projectId(),
+                        domain.hostname(),
+                        domain.serviceName(),
+                        domain.targetPort(),
+                        domain.createdAt(),
+                        Instant.now(),
+                        status));
+            }
         }
     }
 }

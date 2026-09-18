@@ -294,6 +294,9 @@ public class NexusProperties {
     public static class Caddy {
         private boolean enabled = false;
         private String sitesPath = "/opt/nexus/caddy/sites";
+        private boolean schedulerEnabled = false;
+        private String cron = "0 0 5 * * *";
+        private boolean httpsProbeEnabled = true;
 
         public boolean isEnabled() {
             return enabled;
@@ -309,6 +312,30 @@ public class NexusProperties {
 
         public void setSitesPath(String sitesPath) {
             this.sitesPath = sitesPath;
+        }
+
+        public boolean isSchedulerEnabled() {
+            return schedulerEnabled;
+        }
+
+        public void setSchedulerEnabled(boolean schedulerEnabled) {
+            this.schedulerEnabled = schedulerEnabled;
+        }
+
+        public String getCron() {
+            return cron;
+        }
+
+        public void setCron(String cron) {
+            this.cron = cron;
+        }
+
+        public boolean isHttpsProbeEnabled() {
+            return httpsProbeEnabled;
+        }
+
+        public void setHttpsProbeEnabled(boolean httpsProbeEnabled) {
+            this.httpsProbeEnabled = httpsProbeEnabled;
         }
     }
 }

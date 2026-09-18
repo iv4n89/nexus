@@ -36,6 +36,11 @@ public final class FakeDomainStore implements DomainStore {
     }
 
     @Override
+    public List<SiteDomain> findAll() {
+        return List.copyOf(byId.values());
+    }
+
+    @Override
     public void delete(UUID id) {
         byId.remove(id);
     }

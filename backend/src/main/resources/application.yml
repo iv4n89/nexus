@@ -77,3 +77,6 @@ nexus:
   caddy:
     enabled: ${NEXUS_CADDY_ENABLED:false}
     sites-path: ${NEXUS_CADDY_SITES_PATH:/opt/nexus/caddy/sites}
+    scheduler-enabled: ${NEXUS_CADDY_SCHEDULER_ENABLED:false}
+    cron: ${NEXUS_CADDY_CRON:0 0 5 * * *}
+    https-probe-enabled: ${NEXUS_CADDY_HTTPS_PROBE_ENABLED:true}

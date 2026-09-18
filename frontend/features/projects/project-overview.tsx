@@ -9,6 +9,7 @@ import { alertsPath } from '@/features/alerts/api'
 import { me } from '@/features/auth/api'
 import { RollbackDialog } from '@/features/deployments/rollback-dialog'
 import { ErrorList, logsHref } from '@/features/logs/error-list'
+import { ProjectDomainsSection } from '@/features/projects/project-domains-section'
 import { api } from '@/lib/api'
 import { containersForProject, displayName, projectLabel, serviceLabel } from '@/lib/docker'
 import { formatBytes, formatClock, formatElapsed, formatPercent, healthOkLabel } from '@/lib/format'
@@ -131,6 +132,7 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
   const canDeploy = auth.data?.role === 'ADMIN' && project.data.deployable
   const canRollback = canDeploy
   const canAcknowledge = auth.data?.role === 'ADMIN'
+  const canEditDomains = auth.data?.role === 'ADMIN'
   const recentErrors = errors.data ?? project.data.recentErrors ?? []
   const projectAlerts = (alerts.data ?? []).filter((alert) => alert.projectId === projectId)
   const currentDeployment = history.data?.[0]
@@ -288,6 +290,8 @@ export function ProjectOverview({ projectId }: { projectId: string }) {
           <p className="text-sm text-[#888]">No health data</p>
         )}
       </section>
+
+      <ProjectDomainsSection projectId={projectId} canEdit={canEditDomains} />
 
       <section>
         <h2 className="mb-4 text-xs tracking-[0.25em] text-[#888]">Services</h2>
