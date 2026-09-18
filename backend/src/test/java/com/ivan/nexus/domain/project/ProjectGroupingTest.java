@@ -49,6 +49,7 @@ class ProjectGroupingTest {
         assertEquals(
                 "/opt/nexus",
                 ProjectGrouping.composeWorkingDir(Map.of(
-                        "com.docker.compose.project.working_dir", "/opt/nexus")));
+                        "com.docker.compose.project.config_files",
+                        "/opt/nexus/docker-compose.yml")));
     }
 }

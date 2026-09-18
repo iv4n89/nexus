@@ -223,6 +223,53 @@ class DiscoverProjectDatabasesTest {
     }
 
     @Test
+    void inspectsDigestListedImageWhenServiceLooksLikeDatabase() {
+        ContainerInspect postgres = inspect(
+                "aaaaaaaaaaaa0000",
+                "nexus-postgres-1",
+                "postgres:16-alpine",
+                Map.of(
+                        "com.docker.compose.project", "nexus",
+                        "com.docker.compose.service", "postgres"),
+                Map.of("POSTGRES_PASSWORD", "p", "POSTGRES_DB", "nexus"),
+                List.of(new PublishedPort(5432, 5432, "127.0.0.1")),
+                List.of());
+        ContainerSnapshot listed = new ContainerSnapshot(
+                postgres.id(),
+                postgres.name(),
+                "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "Up",
+                "running",
+                null,
+                Instant.parse("2026-01-01T00:00:00Z"),
+                postgres.labels(),
+                List.of(),
+                0,
+                Instant.parse("2026-01-01T00:00:01Z"));
+        ContainerInventory inventory = new ContainerInventory() {
+            @Override
+            public List<ContainerSnapshot> listAll() {
+                return List.of(listed);
+            }
+
+            @Override
+            public Optional<ContainerSnapshot> findById(String containerId) {
+                return Optional.of(listed);
+            }
+
+            @Override
+            public Optional<ContainerInspect> inspect(String containerId) {
+                return Optional.of(postgres);
+            }
+        };
+
+        List<DatabaseInstance> instances = discover(inventory).execute("nexus");
+        assertEquals(1, instances.size());
+        assertEquals(DatabaseEngine.POSTGRES, instances.getFirst().engine());
+        assertEquals(DatabaseStatus.READY, instances.getFirst().status());
+    }
+
+    @Test
     void resolveReusesRecentDiscoveryInsteadOfInspectingAgain() {
         CountingInventory inventory = countingInventory(
                 inspect(

@@ -35,4 +35,17 @@ class DomainHostExtractorTest {
                 Set.of("a.example.com", "b.example.com"));
         assertThat(merged.keySet()).containsExactly("a.example.com", "b.example.com");
     }
+
+    @Test
+    void extractsHostFromCaddySiteBlock() {
+        assertThat(DomainHostExtractor.fromCaddy("""
+                # comment
+                0nexus.duckdns.org {
+                	encode {
+                		gzip
+                	}
+                }
+                """))
+                .containsExactly("0nexus.duckdns.org");
+    }
 }

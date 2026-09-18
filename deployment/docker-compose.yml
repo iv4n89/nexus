@@ -59,6 +59,9 @@ services:
       NEXUS_DOTENV_HOST_OPT_MOUNT: /host-opt
       NEXUS_VERSION: ${NEXUS_VERSION:-0.0.1-SNAPSHOT}
       DOCKER_HOST: unix:///var/run/docker.sock
+    # Host project .env files are mode 600/root. The JVM already has docker.sock
+    # (host-root equivalent); run as root so those files are readable.
+    user: "0:0"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /srv/projects:/srv/projects
