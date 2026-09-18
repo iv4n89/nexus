@@ -7,6 +7,8 @@ public class NexusProperties {
     private final Docker docker = new Docker();
     private final Manifest manifest = new Manifest();
     private final Retention retention = new Retention();
+    private final GitHub github = new GitHub();
+    private final Secrets secrets = new Secrets();
 
     public Docker getDocker() {
         return docker;
@@ -18,6 +20,14 @@ public class NexusProperties {
 
     public Retention getRetention() {
         return retention;
+    }
+
+    public GitHub getGithub() {
+        return github;
+    }
+
+    public Secrets getSecrets() {
+        return secrets;
     }
 
     public static class Docker {
@@ -80,6 +90,48 @@ public class NexusProperties {
 
         public void setCron(String cron) {
             this.cron = cron;
+        }
+    }
+
+    public static class GitHub {
+        private String clientId = "";
+        private String clientSecret = "";
+        private String redirectUri = "";
+
+        public String getClientId() {
+            return clientId;
+        }
+
+        public void setClientId(String clientId) {
+            this.clientId = clientId;
+        }
+
+        public String getClientSecret() {
+            return clientSecret;
+        }
+
+        public void setClientSecret(String clientSecret) {
+            this.clientSecret = clientSecret;
+        }
+
+        public String getRedirectUri() {
+            return redirectUri;
+        }
+
+        public void setRedirectUri(String redirectUri) {
+            this.redirectUri = redirectUri;
+        }
+    }
+
+    public static class Secrets {
+        private String key = "";
+
+        public String getKey() {
+            return key;
+        }
+
+        public void setKey(String key) {
+            this.key = key;
         }
     }
 }
