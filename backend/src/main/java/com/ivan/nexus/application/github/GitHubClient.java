@@ -3,8 +3,7 @@ package com.ivan.nexus.application.github;
 import java.util.List;
 
 /**
- * Outbound port for GitHub OAuth and identity. Repository listing is reserved
- * for Phase B2 ({@link #listRepositories(String)}).
+ * Outbound port for GitHub OAuth, identity, and repository metadata.
  */
 public interface GitHubClient {
     String buildAuthorizeUrl(String state);
@@ -13,9 +12,7 @@ public interface GitHubClient {
 
     GitHubIdentity getAuthenticatedUser(String accessToken);
 
-    /**
-     * Lists repositories visible to the authenticated user.
-     * Not implemented in Phase B1.
-     */
     List<GitHubRepositorySummary> listRepositories(String accessToken);
+
+    List<GitHubBranchSummary> listBranches(String accessToken, String owner, String repo);
 }
