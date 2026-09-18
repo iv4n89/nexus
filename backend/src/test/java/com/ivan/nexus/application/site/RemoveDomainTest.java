@@ -43,7 +43,7 @@ class RemoveDomainTest {
         UUID id = UUID.randomUUID();
         given(domains.findById(id)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> new RemoveDomain(domains, users, recordAudit, recordActivity)
+        assertThatThrownBy(() -> new RemoveDomain(domains, users, recordAudit, recordActivity, Optional.empty())
                 .execute("lab", id, "admin", "10.0.0.1"))
                 .isInstanceOf(DomainException.class)
                 .satisfies(ex -> assertThat(((DomainException) ex).getCode())
@@ -56,7 +56,7 @@ class RemoveDomainTest {
         UUID id = UUID.randomUUID();
         given(domains.findById(id)).willReturn(Optional.of(domain(id, "other")));
 
-        assertThatThrownBy(() -> new RemoveDomain(domains, users, recordAudit, recordActivity)
+        assertThatThrownBy(() -> new RemoveDomain(domains, users, recordAudit, recordActivity, Optional.empty())
                 .execute("lab", id, "admin", "10.0.0.1"))
                 .isInstanceOf(DomainException.class)
                 .satisfies(ex -> assertThat(((DomainException) ex).getCode())
@@ -70,7 +70,7 @@ class RemoveDomainTest {
         given(domains.findById(id)).willReturn(Optional.of(domain(id, "lab")));
         given(users.findIdByUsername("admin")).willReturn(Optional.empty());
 
-        new RemoveDomain(domains, users, recordAudit, recordActivity)
+        new RemoveDomain(domains, users, recordAudit, recordActivity, Optional.empty())
                 .execute("lab", id, "admin", "10.0.0.1");
 
         var order = inOrder(domains, users, recordAudit, recordActivity);

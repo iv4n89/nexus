@@ -42,7 +42,7 @@ class AddDomainTest {
 
     @Test
     void rejectsInvalidHostname() {
-        AddDomain addDomain = new AddDomain(domains, users, recordAudit, recordActivity);
+        AddDomain addDomain = new AddDomain(domains, users, recordAudit, recordActivity, Optional.empty());
 
         assertThatThrownBy(() -> addDomain.execute("lab", "bad_host", "api", 8080, "admin", "10.0.0.1"))
                 .isInstanceOf(DomainException.class)
@@ -55,7 +55,7 @@ class AddDomainTest {
     void rejectsDuplicateHostname() {
         given(domains.findByHostname("app.example.com")).willReturn(Optional.of(existing()));
 
-        AddDomain addDomain = new AddDomain(domains, users, recordAudit, recordActivity);
+        AddDomain addDomain = new AddDomain(domains, users, recordAudit, recordActivity, Optional.empty());
 
         assertThatThrownBy(() -> addDomain.execute("lab", "App.Example.COM", "api", 8080, "admin", "10.0.0.1"))
                 .isInstanceOf(DomainException.class)
@@ -70,7 +70,7 @@ class AddDomainTest {
         given(domains.save(any())).willAnswer(invocation -> invocation.getArgument(0));
         given(users.findIdByUsername("admin")).willReturn(Optional.of(UUID.fromString("11111111-1111-1111-1111-111111111111")));
 
-        SiteDomain result = new AddDomain(domains, users, recordAudit, recordActivity)
+        SiteDomain result = new AddDomain(domains, users, recordAudit, recordActivity, Optional.empty())
                 .execute("lab", "App.Example.COM.", "api", 8080, "admin", "10.0.0.1");
 
         assertThat(result.hostname()).isEqualTo("app.example.com");

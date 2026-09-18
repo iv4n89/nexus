@@ -74,3 +74,6 @@ nexus:
   terminal:
     enabled: ${NEXUS_TERMINAL_ENABLED:false}
     session-timeout-minutes: ${NEXUS_TERMINAL_TIMEOUT_MINUTES:15}
+  caddy:
+    enabled: ${NEXUS_CADDY_ENABLED:false}
+    sites-path: ${NEXUS_CADDY_SITES_PATH:/opt/nexus/caddy/sites}

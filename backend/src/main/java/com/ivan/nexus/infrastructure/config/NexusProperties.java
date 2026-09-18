@@ -12,6 +12,7 @@ public class NexusProperties {
     private final Backup backup = new Backup();
     private final Security security = new Security();
     private final Terminal terminal = new Terminal();
+    private final Caddy caddy = new Caddy();
 
     public Docker getDocker() {
         return docker;
@@ -43,6 +44,10 @@ public class NexusProperties {
 
     public Terminal getTerminal() {
         return terminal;
+    }
+
+    public Caddy getCaddy() {
+        return caddy;
     }
 
     public static class Docker {
@@ -283,6 +288,27 @@ public class NexusProperties {
 
         public void setSessionTimeoutMinutes(int sessionTimeoutMinutes) {
             this.sessionTimeoutMinutes = sessionTimeoutMinutes;
+        }
+    }
+
+    public static class Caddy {
+        private boolean enabled = false;
+        private String sitesPath = "/opt/nexus/caddy/sites";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getSitesPath() {
+            return sitesPath;
+        }
+
+        public void setSitesPath(String sitesPath) {
+            this.sitesPath = sitesPath;
         }
     }
 }
