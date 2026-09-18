@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface LogErrorFingerprintJpaRepository extends JpaRepository<LogErrorFingerprintEntity, UUID> {
+interface LogErrorFingerprintJpaRepository extends JpaRepository<LogErrorFingerprintEntity, UUID> {
     Optional<LogErrorFingerprintEntity> findByProjectIdAndServiceIdAndFingerprint(
             String projectId, String serviceId, String fingerprint);
 

@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface AlertEventJpaRepository extends JpaRepository<AlertEventEntity, UUID> {
+interface AlertEventJpaRepository extends JpaRepository<AlertEventEntity, UUID> {
 
     @EntityGraph(attributePaths = "rule")
     List<AlertEventEntity> findByStatusInOrderByOpenedAtDesc(Collection<AlertStatus> statuses);

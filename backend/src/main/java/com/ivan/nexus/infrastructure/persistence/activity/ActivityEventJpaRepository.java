@@ -7,7 +7,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-public interface ActivityEventJpaRepository extends JpaRepository<ActivityEventEntity, UUID> {
+interface ActivityEventJpaRepository extends JpaRepository<ActivityEventEntity, UUID> {
     List<ActivityEventEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     long deleteByCreatedAtBefore(Instant cutoff);
