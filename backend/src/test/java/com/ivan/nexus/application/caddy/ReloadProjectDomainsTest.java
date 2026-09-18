@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
@@ -47,5 +48,27 @@ class ReloadProjectDomainsTest {
         InOrder order = inOrder(caddyConfigWriter, certificateManager);
         order.verify(caddyConfigWriter).writeProjectSites(eq("pantry"), eq(List.of(domain)));
         order.verify(certificateManager).ensureCertificate(domain);
+        assertThat(domains.findById(domain.id()).orElseThrow().certStatus()).isEqualTo(CertStatus.PENDING);
+    }
+
+    @Test
+    void persistsCertificateStatusWhenChanged() {
+        FakeDomainStore domains = new FakeDomainStore();
+        Instant now = Instant.parse("2026-09-18T10:00:00Z");
+        SiteDomain domain = new SiteDomain(
+                UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                "pantry",
+                "pantry.example.com",
+                "frontend",
+                3000,
+                now,
+                now,
+                CertStatus.PENDING);
+        domains.save(domain);
+        given(certificateManager.ensureCertificate(domain)).willReturn(CertStatus.ACTIVE);
+
+        new ReloadProjectDomains(domains, caddyConfigWriter, certificateManager).execute("pantry");
+
+        assertThat(domains.findById(domain.id()).orElseThrow().certStatus()).isEqualTo(CertStatus.ACTIVE);
     }
 }
