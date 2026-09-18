@@ -57,3 +57,6 @@ nexus:
     redirect-uri: ${NEXUS_GITHUB_REDIRECT_URI:}
   secrets:
     key: ${NEXUS_SECRETS_KEY:}
+  caddy:
+    enabled: ${NEXUS_CADDY_ENABLED:false}
+    sites-path: ${NEXUS_CADDY_SITES_PATH:/opt/nexus/caddy/sites}

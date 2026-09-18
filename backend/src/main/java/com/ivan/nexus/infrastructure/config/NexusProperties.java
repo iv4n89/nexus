@@ -9,6 +9,7 @@ public class NexusProperties {
     private final Retention retention = new Retention();
     private final GitHub github = new GitHub();
     private final Secrets secrets = new Secrets();
+    private final Caddy caddy = new Caddy();
 
     public Docker getDocker() {
         return docker;
@@ -28,6 +29,10 @@ public class NexusProperties {
 
     public Secrets getSecrets() {
         return secrets;
+    }
+
+    public Caddy getCaddy() {
+        return caddy;
     }
 
     public static class Docker {
@@ -132,6 +137,27 @@ public class NexusProperties {
 
         public void setKey(String key) {
             this.key = key;
+        }
+    }
+
+    public static class Caddy {
+        private boolean enabled = false;
+        private String sitesPath = "/opt/nexus/caddy/sites";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getSitesPath() {
+            return sitesPath;
+        }
+
+        public void setSitesPath(String sitesPath) {
+            this.sitesPath = sitesPath;
         }
     }
 }
