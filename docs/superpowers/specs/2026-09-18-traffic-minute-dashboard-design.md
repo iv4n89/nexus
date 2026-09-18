@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-18  
 **Status:** approved (conversation)  
+**Implementation plan:** `docs/superpowers/plans/2026-09-18-traffic-minute-dashboard.md`  
 **Roadmap:** V1.7 Traffic Analytics (`Nexus_Product_Roadmapnew.md`)  
 **Parent decisions:** HTTP from Caddy access logs; minute aggregates for 7 days; volume 3× median + 5xx spike; ingest via `docker.sock` log follow of the Caddy container; single grain (no dual hourly+minute write); UI matches existing Nexus (black, `#f5f5f5`, `#2a2a2a`, `#ff4d4f` for errors/alerts).
 
