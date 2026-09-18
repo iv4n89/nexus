@@ -19,6 +19,9 @@ spring:
     open-in-view: false
   flyway:
     locations: classpath:db/migration
+    # Allow parallel feature branches that land migrations out of numeric order.
+    out-of-order: true
+
 management:
   endpoints:
     web:
